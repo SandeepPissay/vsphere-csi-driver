@@ -42,16 +42,18 @@ spec:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
         - name: vsphere-csi-controller
-          image: gcr.io/cloud-provider-vsphere/vsphere-csi:v0.1.1
+          image: your-docker-repository/vsphere-csi:latest
           env:
             - name: CSI_ENDPOINT
               value: unix:///var/lib/csi/sockets/pluginproxy/csi.sock
+            - name: X_CSI_VSPHERE_APINAME
+              value: "CNS"
             - name: X_CSI_MODE
               value: "controller"
             - name: X_CSI_SPEC_REQ_VALIDATION
               value: "false"
-#            - name: X_CSI_DEBUG
-#              value: "true"
+            - name: X_CSI_DEBUG
+              value: "true"
           imagePullPolicy: "Always"
           volumeMounts:
             - mountPath: /etc/cloud
@@ -59,9 +61,17 @@ spec:
               readOnly: true
             - mountPath: /var/lib/csi/sockets/pluginproxy/
               name: socket-dir
+        - name: vsphere-syncer
+          image: your-docker-repository/syncer:latest
+          imagePullPolicy: "Always"
+          volumeMounts:
+            - mountPath: /etc/cloud
+              name: vsphere-config-volume
+              readOnly: true
       volumes:
         - name: vsphere-config-volume
           configMap:
-            name: csi-config
+            name: cloud-config
         - name: socket-dir
           emptyDir: {}
+  

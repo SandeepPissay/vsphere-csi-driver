@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Kubernetes Authors.
+Copyright 2019 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,16 +14,25 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package types
+package block
 
 import (
-	"github.com/container-storage-interface/spec/lib/go/csi"
+	cspvolume "gitlab.eng.vmware.com/hatchway/common-csp/pkg/volume"
+	cnsvsphere "gitlab.eng.vmware.com/hatchway/common-csp/pkg/vsphere"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/common/config"
 )
 
-// CnsController is the interface for the CSI Controller Server plus extra methods
-// required to support CNS API backend
-type CnsController interface {
-	csi.ControllerServer
-	Init(config *config.Config) error
+type Manager struct {
+	VcenterConfig  *cnsvsphere.VirtualCenterConfig
+	CnsConfig      *config.Config
+	VolumeManager  cspvolume.Manager
+	VcenterManager cnsvsphere.VirtualCenterManager
+}
+
+type CreateVolumeSpec struct {
+	Name              string
+	StoragePolicyName string
+	StoragePolicyID   string
+	Datastore         string
+	CapacityMB        uint64
 }

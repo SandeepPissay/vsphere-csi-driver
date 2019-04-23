@@ -65,11 +65,14 @@ include hack/make/login-to-image-registry.mk
 
 # Define the images.
 IMAGE_CSI := $(REGISTRY)/vsphere-csi
-.PHONY: print-image
+IMAGE_SYNCER := $(REGISTRY)/syncer
+.PHONY: print-csi-image print-syncer-image
 
 # Printing the image version is defined early so Go modules aren't forced.
-print-image:
+print-csi-image:
 	@echo $(IMAGE_CSI):$(VERSION)
+print-syncer-image:
+	@echo $(IMAGE_SYNCER):$(VERSION)
 
 ################################################################################
 ##                                BUILD DIRS                                  ##
@@ -89,6 +92,8 @@ GOARCH ?= amd64
 
 LDFLAGS := $(shell cat hack/make/ldflags.txt)
 LDFLAGS_CSI := $(LDFLAGS) -X "$(MOD_NAME)/pkg/csi/service.version=$(VERSION)"
+LDFLAGS_SYNCER := $(LDFLAGS)
+
 
 # The CSI binary.
 CSI_BIN_NAME := vsphere-csi
@@ -103,8 +108,21 @@ $(CSI_BIN): $(CSI_BIN_SRCS)
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags '$(LDFLAGS_CSI)' -o $(abspath $@) $<
 	@touch $@
 
+# The Syncer binary.
+SYNCER_BIN_NAME := syncer
+SYNCER_BIN := $(BIN_OUT)/$(SYNCER_BIN_NAME).$(GOOS)_$(GOARCH)
+build-syncer: $(SYNCER_BIN)
+ifndef SYNCER_BIN_SRCS
+SYNCER_BIN_SRCS := cmd/$(SYNCER_BIN_NAME)/main.go go.mod go.sum
+SYNCER_BIN_SRCS += $(addsuffix /*.go,$(shell go list -f '{{ join .Deps "\n" }}' ./cmd/$(SYNCER_BIN_NAME) | grep $(MOD_NAME) | sed 's~$(MOD_NAME)~.~'))
+export SYNCER_BIN_SRCS
+endif
+$(SYNCER_BIN): $(SYNCER_BIN_SRCS)
+	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags '$(LDFLAGS_SYNCER)' -o $(abspath $@) $<
+	@touch $@
+
 # The default build target.
-build build-bins: $(CSI_BIN)
+build build-bins: $(CSI_BIN) $(SYNCER_BIN)
 build-with-docker:
 	hack/make.sh
 
@@ -126,7 +144,24 @@ $(DIST_CSI_ZIP): $(CSI_BIN)
 	zip -j $(abspath $@) README.md LICENSE "$${_temp_dir}/$(CSI_BIN_NAME)" && \
 	rm -fr "$${_temp_dir}"
 
-dist: dist-csi-tgz dist-csi-zip
+dist-csi: dist-csi-tgz dist-csi-zip
+
+DIST_SYNCER_NAME := vsphere-syncer-$(VERSION)
+DIST_SYNCER_TGZ := $(BUILD_OUT)/dist/$(DIST_SYNCER_NAME)-$(GOOS)_$(GOARCH).tar.gz
+dist-syncer-tgz: $(DIST_SYNCER_TGZ)
+$(DIST_SYNCER_TGZ): $(SYNCER_BIN)
+	_temp_dir=$$(mktemp -d) && cp $< "$${_temp_dir}/$(SYNCER_BIN_NAME)" && \
+	tar czf $(abspath $@) README.md LICENSE -C "$${_temp_dir}" "$(SYNCER_BIN_NAME)" && \
+	rm -fr "$${_temp_dir}"
+DIST_SYNCER_ZIP := $(BUILD_OUT)/dist/$(DIST_SYNCER_NAME)-$(GOOS)_$(GOARCH).zip
+dist-syncer-zip: $(DIST_SYNCER_ZIP)
+$(DIST_SYNCER_ZIP): $(SYNCER_BIN)
+	_temp_dir=$$(mktemp -d) && cp $< "$${_temp_dir}/$(SYNCER_BIN_NAME)" && \
+	zip -j $(abspath $@) README.md LICENSE "$${_temp_dir}/$(SYNCER_BIN_NAME)" && \
+	rm -fr "$${_temp_dir}"
+dist-syncer: dist-syncer-tgz dist-syncer-zip
+
+dist: dist-csi dist-syncer
 
 ################################################################################
 ##                                DEPLOY                                      ##
@@ -138,6 +173,7 @@ deploy:
 	$(MAKE) build-bins
 	$(MAKE) unit-test
 	$(MAKE) build-images
+	$(MAKE) integration-test
 	$(MAKE) push-images
 
 ################################################################################
@@ -146,9 +182,10 @@ deploy:
 .PHONY: clean
 clean:
 	@rm -f Dockerfile*
-	rm -f $(CSI_BIN) vsphere-csi-*.tar.gz vsphere-csi-*.zip \
-		image-*.tar image-*.d $(DIST_OUT)/* $(BIN_OUT)/* $(ARTIFACTS)/*
-	GO111MODULE=off go clean -i -x . ./cmd/$(CSI_BIN_NAME)
+	rm -f	$(CSI_BIN) vsphere-csi-*.tar.gz vsphere-csi-*.zip \
+			$(SYNCER_BIN) vsphere-syncer-*.tar.gz vsphere-syncer-*.zip \
+			image-*.tar image-*.d $(DIST_OUT)/* $(BIN_OUT)/* $(ARTIFACTS)/*
+	GO111MODULE=off go clean -i -x . ./cmd/$(CSI_BIN_NAME) ./cmd/$(SYNCER_BIN_NAME)
 
 .PHONY: clean-d
 clean-d:
@@ -218,12 +255,35 @@ endif # ifndef X_BUILD_DISABLED
 ifndef PKGS_WITH_TESTS
 export PKGS_WITH_TESTS := $(sort $(shell find . -name "*_test.go" -type f -exec dirname \{\} \;))
 endif
-TEST_FLAGS ?= -v
+TEST_FLAGS ?= -v -count=1
 .PHONY: unit build-unit-tests
 unit unit-test:
 	env -u VSPHERE_SERVER -u VSPHERE_PASSWORD -u VSPHERE_USER go test $(TEST_FLAGS) $(PKGS_WITH_TESTS)
 build-unit-tests:
 	$(foreach pkg,$(PKGS_WITH_TESTS),go test $(TEST_FLAGS) -c $(pkg); )
+
+.PHONY: integration-unit-tests
+integration-unit-tests:
+ifndef VSPHERE_VCENTER
+	$(error Requires VSPHERE_VCENTER from a deployed testbed to run integration-unit-tests)
+endif
+ifndef VSPHERE_USER
+	$(error Requires VSPHERE_USER from a deployed testbed to run integration-unit-tests)
+endif
+ifndef VSPHERE_PASSWORD
+	$(error Requires VSPHERE_PASSWORD from a deployed testbed to run integration-unit-tests)
+endif
+ifndef VSPHERE_DATACENTER
+	$(error Requires VSPHERE_DATACENTER from a deployed testbed to run integration-unit-tests)
+endif
+ifndef VSPHERE_DATASTORE
+	$(error Requires VSPHERE_DATASTORE from a deployed testbed to run integration-unit-tests)
+endif
+ifndef VSPHERE_INSECURE
+	$(error Requires VSPHERE_INSECURE from a deployed testbed to run integration-unit-tests)
+endif
+	go test $(TEST_FLAGS) -tags=integration-unit -run "TestCompleteControllerFlow" ./pkg/csi/service/block/vanilla
+
 
 # The default test target.
 .PHONY: test build-tests
@@ -284,7 +344,21 @@ $(IMAGE_CSI_D): $(CSI_BIN) | $(DOCKER_SOCK)
 	@rm -f cluster/images/csi/vsphere-csi && touch $@
 endif
 
-build-images images: build-csi-image
+IMAGE_SYNCER_D := image-syncer-$(VERSION).d
+build-syncer-image syncer-image: $(IMAGE_SYNCER_D)
+$(IMAGE_SYNCER): $(IMAGE_SYNCER_D)
+ifneq ($(GOOS),linux)
+$(IMAGE_SYNCER_D):
+	$(error Please set GOOS=linux for building $@)
+else
+$(IMAGE_SYNCER_D): $(SYNCER_BIN) | $(DOCKER_SOCK)
+	cp -f $< cluster/images/syncer/vsphere-syncer
+	docker build -t $(IMAGE_SYNCER):$(VERSION) cluster/images/syncer
+	docker tag $(IMAGE_SYNCER):$(VERSION) $(IMAGE_SYNCER):latest
+	@rm -f cluster/images/syncer/vsphere-syncer && touch $@
+endif
+
+build-images images: build-csi-image build-syncer-image
 
 ################################################################################
 ##                                  PUSH IMAGES                               ##
@@ -294,9 +368,13 @@ push-csi-image upload-csi-image: upload-$(IMAGE_CSI)
 push-$(IMAGE_CSI) upload-$(IMAGE_CSI): $(IMAGE_CSI_D) login-to-image-registry | $(DOCKER_SOCK)
 	docker push $(IMAGE_CSI):$(VERSION)
 	docker push $(IMAGE_CSI):latest
-
+.PHONY: push-$(IMAGE_SYNCER) upload-$(IMAGE_SYNCER)
+push-syncer-image upload-syncer-image: upload-$(IMAGE_SYNCER)
+push-$(IMAGE_SYNCER) upload-$(IMAGE_SYNCER): $(IMAGE_SYNCER_D) login-to-image-registry | $(DOCKER_SOCK)
+	docker push $(IMAGE_SYNCER):$(VERSION)
+	docker push $(IMAGE_SYNCER):latest
 .PHONY: push-images upload-images
-push-images upload-images: upload-csi-image
+push-images upload-images: upload-csi-image upload-syncer-image
 
 ################################################################################
 ##                               PRINT VERISON                                ##

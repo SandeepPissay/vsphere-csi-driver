@@ -19,18 +19,17 @@ package service
 import (
 	"context"
 	"flag"
-	"fmt"
+	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/block/vanilla"
+
 	"net"
 	"os"
+	cnsconfig "sigs.k8s.io/vsphere-csi-driver/pkg/common/config"
 	"strings"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/rexray/gocsi"
 	csictx "github.com/rexray/gocsi/context"
 	log "github.com/sirupsen/logrus"
-	vcfg "k8s.io/cloud-provider-vsphere/pkg/common/config"
-
-	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/fcd"
 	vTypes "sigs.k8s.io/vsphere-csi-driver/pkg/csi/types"
 )
 
@@ -38,10 +37,10 @@ const (
 	// Name is the name of this CSI SP.
 	Name = "vsphere.csi.vmware.com"
 
-	// APIFCD is the FCD API
-	APIFCD = "FCD"
+	// APICNS is the CNS API
+	APICNS = "CNS"
 
-	defaultAPI = APIFCD
+	defaultAPI = APICNS
 )
 
 var (
@@ -58,8 +57,8 @@ type Service interface {
 }
 
 type service struct {
-	mode string
-	cs   vTypes.Controller
+	mode  string
+	cnscs vTypes.CnsController
 }
 
 // New returns a new Service.
@@ -73,12 +72,8 @@ func (s *service) GetController() csi.ControllerServer {
 	if api == "" {
 		api = defaultAPI
 	}
-
-	if strings.EqualFold(APIFCD, api) {
-		s.cs = fcd.New()
-	}
-
-	return s.cs
+	s.cnscs = vanilla.New()
+	return s.cnscs
 }
 
 func (s *service) BeforeServe(
@@ -110,22 +105,18 @@ func (s *service) BeforeServe(
 
 	if !strings.EqualFold(s.mode, "node") {
 		// Controller service is needed
-		if s.cs == nil {
-			return fmt.Errorf("Invalid API: %s", api)
-		}
 
 		cfgPath = csictx.Getenv(ctx, vTypes.EnvCloudConfig)
 		if cfgPath == "" {
 			cfgPath = vTypes.DefaultCloudConfigPath
 		}
 
-		var cfg *vcfg.Config
-
+		var cfg *cnsconfig.Config
 		//Read in the vsphere.conf if it exists
 		if _, err := os.Stat(cfgPath); os.IsNotExist(err) {
 			// config from Env var only
-			cfg = &vcfg.Config{}
-			if err := vcfg.FromEnv(cfg); err != nil {
+			cfg = &cnsconfig.Config{}
+			if err := cnsconfig.FromEnv(cfg); err != nil {
 				return err
 			}
 		} else {
@@ -134,18 +125,16 @@ func (s *service) BeforeServe(
 				log.Errorf("Failed to open %s. Err: %v", cfgPath, err)
 				return err
 			}
-			cfg, err = vcfg.ReadConfig(config)
+			cfg, err = cnsconfig.ReadConfig(config)
 			if err != nil {
 				log.Errorf("Failed to parse config. Err: %v", err)
 				return err
 			}
 		}
-
-		if err := s.cs.Init(cfg); err != nil {
+		if err := s.cnscs.Init(cfg); err != nil {
 			log.WithError(err).Error("Failed to init controller")
 			return err
 		}
 	}
-
 	return nil
 }

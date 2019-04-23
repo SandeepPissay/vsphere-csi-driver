@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Kubernetes Authors.
+Copyright 2019 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,16 +14,19 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package types
+package main
 
 import (
-	"github.com/container-storage-interface/spec/lib/go/csi"
-	"sigs.k8s.io/vsphere-csi-driver/pkg/common/config"
+	"k8s.io/klog"
+	"os"
+	metadatasyncer "sigs.k8s.io/vsphere-csi-driver/pkg/syncer"
 )
 
-// CnsController is the interface for the CSI Controller Server plus extra methods
-// required to support CNS API backend
-type CnsController interface {
-	csi.ControllerServer
-	Init(config *config.Config) error
+// main is ignored when this package is built as a go plug-in.
+func main() {
+	metadataSyncer := metadatasyncer.New()
+	if err := metadataSyncer.Init(); err != nil {
+		klog.Errorf("Error initializing Metadata Syncer")
+		os.Exit(1)
+	}
 }
