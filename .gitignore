@@ -17,6 +17,7 @@
 
 # Ignore the binaries copied into the staging areas.
 /cluster/images/csi/vsphere-csi*
+/cluster/images/syncer/vsphere-syncer*
 
 # Ignore vendor at the root of the project.
 /vendor
@@ -29,3 +30,4 @@
 
 # binaries
 /vsphere-csi
+/vsphere-syncer

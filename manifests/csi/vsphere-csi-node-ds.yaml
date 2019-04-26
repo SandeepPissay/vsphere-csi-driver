@@ -37,7 +37,7 @@ spec:
             - name: registration-dir
               mountPath: /registration/
         - name: vsphere-csi-node
-          image: gcr.io/cloud-provider-vsphere/vsphere-csi:v0.1.1
+          image: your-docker-repository/vsphere-csi:latest
           env:
           - name: CSI_ENDPOINT
             value: unix:///csi/csi.sock
@@ -45,8 +45,10 @@ spec:
             value: "node"
           - name: X_CSI_SPEC_REQ_VALIDATION
             value: "false"
-#          - name: X_CSI_DEBUG
-#           value: "true"
+          - name: X_CSI_DEBUG
+            value: "true"
+          - name: X_CSI_VSPHERE_APINAME
+            value: "CNS"
           imagePullPolicy: "Always"
           securityContext:
             privileged: true

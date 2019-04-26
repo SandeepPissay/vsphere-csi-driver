@@ -30,8 +30,6 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-
-	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/fcd"
 )
 
 const (
@@ -740,13 +738,13 @@ func getDiskID(volID string, pubCtx map[string]string) (string, error) {
 
 	var diskID string
 
-	if api == APIFCD {
-		if _, ok := pubCtx[fcd.AttributeFirstClassDiskPage83Data]; !ok {
+	if api == APICNS {
+		if _, ok := pubCtx["page83data"]; !ok {
 			return "", status.Errorf(codes.InvalidArgument,
 				"Attribute: %s required in publish context",
-				fcd.AttributeFirstClassDiskPage83Data)
+				"page83data")
 		}
-		diskID = pubCtx[fcd.AttributeFirstClassDiskPage83Data]
+		diskID = pubCtx["page83data"]
 	} else {
 		diskID = volID
 	}
