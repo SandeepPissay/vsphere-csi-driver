@@ -74,13 +74,14 @@ func validateCreateVolumeRequest(req *csi.CreateVolumeRequest) error {
 	params := req.GetParameters()
 	// Validate volume parameters
 	if params != nil {
-		for paramName, _ := range params {
-			if paramName != block.DatastoreType {
+		for paramName, paramValue := range params {
+			if paramName == block.AttributeDiskParentType && paramValue != block.DatastoreType {
 				msg := fmt.Sprintf("volume parameter %s is not a valid parameter.", paramName)
 				return status.Error(codes.InvalidArgument, msg)
 			}
 		}
 	}
+
 	// Volume Name
 	volName := req.GetName()
 	if len(volName) == 0 {
