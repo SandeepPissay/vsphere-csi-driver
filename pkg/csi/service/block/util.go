@@ -22,8 +22,6 @@ import (
 	volumestypes "gitlab.eng.vmware.com/hatchway/common-csp/pkg/volume/types"
 	cnsvsphere "gitlab.eng.vmware.com/hatchway/common-csp/pkg/vsphere"
 	"golang.org/x/net/context"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"k8s.io/api/core/v1"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/klog"
@@ -98,19 +96,6 @@ func GetVirtualCenterConfig(cfg *config.Config) (*cnsvsphere.VirtualCenterConfig
 		DatacenterPaths: strings.Split(cfg.VirtualCenter[host].Datacenters, ","),
 	}
 	return vcConfig, nil
-}
-
-func ValidateVolumeParameters(params map[string]string) error {
-	// Validate volume parameters
-	if params != nil {
-		for paramName, paramValue := range params {
-			if paramName == AttributeDiskParentType && paramValue != DatastoreType {
-				msg := fmt.Sprintf("ddvolume parameter %s is not a valid parameter.", paramName)
-				return status.Error(codes.InvalidArgument, msg)
-			}
-		}
-	}
-	return nil
 }
 
 // GetVcenterIPs returns list of vCenter IPs from VSphereConfig
