@@ -18,6 +18,7 @@ package vanilla
 
 import (
 	"fmt"
+
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/vmware/govmomi/units"
 	cspvolume "gitlab.eng.vmware.com/hatchway/common-csp/pkg/volume"
@@ -48,9 +49,15 @@ var (
 	}
 )
 
+type NodeManagerInterface interface {
+	Initialize(serviceAccount string) error
+	GetSharedDatastoresInK8SCluster(ctx context.Context) ([]*cnsvsphere.DatastoreInfo, error)
+	GetNodeByName(nodeName string) (*cnsvsphere.VirtualMachine, error)
+}
+
 type controller struct {
 	manager *block.Manager
-	nodes   Nodes
+	nodeMgr NodeManagerInterface
 }
 
 // New creates a CNS controller
@@ -93,10 +100,10 @@ func (c *controller) Init(config *config.Config) error {
 		klog.Errorf("checkAPI failed err=%v", err)
 		return err
 	}
-	c.nodes = Nodes{}
-	err = c.nodes.init(config.Global.ServiceAccount)
+	c.nodeMgr = &Nodes{}
+	err = c.nodeMgr.Initialize(config.Global.ServiceAccount)
 	if err != nil {
-		klog.Errorf("Failed to initialize nodes. err=%v", err)
+		klog.Errorf("Failed to initialize nodeMgr. err=%v", err)
 	}
 	return nil
 }
@@ -128,7 +135,7 @@ func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 		Datastore:  datastoreName,
 	}
 	// Get shared datastores for the Kubernetes cluster
-	sharedDatastores, err := c.nodes.GetSharedDatastoresInK8SCluster(ctx)
+	sharedDatastores, err := c.nodeMgr.GetSharedDatastoresInK8SCluster(ctx)
 	volumeId, err := block.CreateVolumeUtil(ctx, c.manager, &createVolumeSpec, sharedDatastores)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to create volume. Error: %+v", err)
@@ -175,7 +182,7 @@ func (c *controller) ControllerPublishVolume(ctx context.Context, req *csi.Contr
 	if err != nil {
 		return nil, err
 	}
-	node, err := c.nodes.cspnodemanager.GetNodeByName(req.NodeId)
+	node, err := c.nodeMgr.GetNodeByName(req.NodeId)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to find VirtualMachine for node:%q. Error: %v", req.NodeId, err)
 		klog.Error(msg)
@@ -208,7 +215,7 @@ func (c *controller) ControllerUnpublishVolume(ctx context.Context, req *csi.Con
 		klog.Error(msg)
 		return nil, status.Errorf(codes.Internal, msg)
 	}
-	node, err := c.nodes.cspnodemanager.GetNodeByName(req.NodeId)
+	node, err := c.nodeMgr.GetNodeByName(req.NodeId)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to find VirtualMachine for node:%q. Error: %v", req.NodeId, err)
 		klog.Error(msg)

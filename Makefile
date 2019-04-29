@@ -262,25 +262,25 @@ unit unit-test:
 build-unit-tests:
 	$(foreach pkg,$(PKGS_WITH_TESTS),go test $(TEST_FLAGS) -c $(pkg); )
 
-.PHONY: integration-unit-tests
-integration-unit-tests:
+.PHONY: integration-unit-test
+integration-unit-test:
 ifndef VSPHERE_VCENTER
-	$(error Requires VSPHERE_VCENTER from a deployed testbed to run integration-unit-tests)
+	$(error Requires VSPHERE_VCENTER from a deployed testbed to run integration-unit-test)
 endif
 ifndef VSPHERE_USER
-	$(error Requires VSPHERE_USER from a deployed testbed to run integration-unit-tests)
+	$(error Requires VSPHERE_USER from a deployed testbed to run integration-unit-test)
 endif
 ifndef VSPHERE_PASSWORD
-	$(error Requires VSPHERE_PASSWORD from a deployed testbed to run integration-unit-tests)
+	$(error Requires VSPHERE_PASSWORD from a deployed testbed to run integration-unit-test)
 endif
 ifndef VSPHERE_DATACENTER
-	$(error Requires VSPHERE_DATACENTER from a deployed testbed to run integration-unit-tests)
+	$(error Requires VSPHERE_DATACENTER from a deployed testbed to run integration-unit-test)
 endif
 ifndef VSPHERE_DATASTORE
-	$(error Requires VSPHERE_DATASTORE from a deployed testbed to run integration-unit-tests)
+	$(error Requires VSPHERE_DATASTORE from a deployed testbed to run integration-unit-test)
 endif
 ifndef VSPHERE_INSECURE
-	$(error Requires VSPHERE_INSECURE from a deployed testbed to run integration-unit-tests)
+	$(error Requires VSPHERE_INSECURE from a deployed testbed to run integration-unit-test)
 endif
 	go test $(TEST_FLAGS) -tags=integration-unit -run "TestCompleteControllerFlow" ./pkg/csi/service/block/vanilla
 
