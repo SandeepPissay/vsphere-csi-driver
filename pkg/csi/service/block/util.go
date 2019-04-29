@@ -18,8 +18,12 @@ package block
 
 import (
 	"errors"
+	"fmt"
+	volumestypes "gitlab.eng.vmware.com/hatchway/common-csp/pkg/volume/types"
 	cnsvsphere "gitlab.eng.vmware.com/hatchway/common-csp/pkg/vsphere"
 	"golang.org/x/net/context"
+	"k8s.io/api/core/v1"
+	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/klog"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/common/config"
 	"strconv"
@@ -94,3 +98,39 @@ func GetVirtualCenterConfig(cfg *config.Config) (*cnsvsphere.VirtualCenterConfig
 	return vcConfig, nil
 }
 
+// GetVcenterIPs returns list of vCenter IPs from VSphereConfig
+func GetVcenterIPs(cfg *config.Config) ([]string, error) {
+	var err error
+	vCenterIPs := make([]string, 0)
+	for key := range cfg.VirtualCenter {
+		vCenterIPs = append(vCenterIPs, key)
+	}
+	if len(vCenterIPs) == 0 {
+		err = errors.New("Unable get vCenter Hosts from VSphereConfig")
+	}
+	return vCenterIPs, err
+}
+
+func GetEntityMetaData(entityName string, namespace string, entityType string,
+	labels map[string]string, deleteFlag bool) volumestypes.EntityMetaData {
+	entityMetadata := volumestypes.EntityMetaData{}
+	entityMetadata.EntityName = entityName
+	entityMetadata.Namespace = namespace
+	entityMetadata.EntityType = entityType
+	entityMetadata.DeleteFlag = deleteFlag
+	if labels != nil {
+		entityMetadata.Labels = labels
+	}
+	return entityMetadata
+}
+
+func GetPersistentVolume(pvc *v1.PersistentVolumeClaim, pvLister corelisters.PersistentVolumeLister) (*v1.PersistentVolume, error) {
+	volumeName := pvc.Spec.VolumeName
+	pv, err := pvLister.Get(volumeName)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to find PV %q in PV informer cache with error : %v", volumeName, err)
+	}
+
+	return pv.DeepCopy(), nil
+}
