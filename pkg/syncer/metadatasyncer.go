@@ -192,6 +192,7 @@ func PVUpdated(oldObj, newObj interface{}, metadataSyncer *metadataSyncInformer)
 	}
 
 	newLabels := newPv.GetLabels()
+<<<<<<< HEAD
 	if oldPv.Status.Phase == v1.VolumeAvailable && reflect.DeepEqual(newLabels, oldPv.GetLabels()) {
 		klog.V(5).Infof("PVUpdate: PV labels have not changed")
 		return
