@@ -82,7 +82,6 @@ func validateCreateVolumeRequest(req *csi.CreateVolumeRequest) error {
 			}
 		}
 	}
-
 	// Volume Name
 	volName := req.GetName()
 	if len(volName) == 0 {
