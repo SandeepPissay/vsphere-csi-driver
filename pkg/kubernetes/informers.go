@@ -22,6 +22,7 @@ import (
 	"k8s.io/client-go/informers"
 
 	clientset "k8s.io/client-go/kubernetes"
+	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/sample-controller/pkg/signals"
 )
@@ -91,8 +92,14 @@ func (im *InformerManager) AddPodListener(add func(obj interface{}), update func
 	})
 }
 
+func (im *InformerManager) GetPVLister() corelisters.PersistentVolumeLister {
+	return im.informerFactory.Core().V1().PersistentVolumes().Lister()
+}
+
+
 // Listen starts the Informers
 func (im *InformerManager) Listen() (stopCh <-chan struct{}) {
 	go im.informerFactory.Start(im.stopCh)
 	return im.stopCh
 }
+
