@@ -192,19 +192,18 @@ func PVUpdated(oldObj, newObj interface{}, metadataSyncer *metadataSyncInformer)
 	}
 
 	newLabels := newPv.GetLabels()
-	if oldPv.Status.Phase == v1.VolumeAvailable && newPv.Status.Phase == v1.VolumeAvailable && reflect.DeepEqual(newLabels, oldPv.GetLabels()) {
+	if oldPv.Status.Phase == v1.VolumeAvailable && reflect.DeepEqual(newLabels, oldPv.GetLabels()) {
 		klog.V(5).Infof("PVUpdate: PV labels have not changed")
 		return
 	}
 
 	var metadataList []volumestypes.EntityMetaData
+	pvMetadata := block.GetEntityMetaData(newPv.Name, newPv.Namespace,
+		string(cnstypes.CnsKubernetesEntityTypePV),
+		newPv.Labels, false)
+	metadataList = append(metadataList, pvMetadata)
 
-	if (oldPv.Status.Phase == v1.VolumeAvailable && newPv.Status.Phase == v1.VolumeAvailable) || newPv.Spec.StorageClassName != "" {
-		pvMetadata := block.GetEntityMetaData(newPv.Name, newPv.Namespace,
-			string(cnstypes.CnsKubernetesEntityTypePV),
-			newPv.Labels, false)
-		metadataList = append(metadataList, pvMetadata)
-
+	if oldPv.Status.Phase == v1.VolumeAvailable || newPv.Spec.StorageClassName != "" {
 		updateSpec := &volumestypes.UpdateSpec{
 			VolumeID: &volumestypes.VolumeID{
 				ID: newPv.Spec.CSI.VolumeHandle,
@@ -217,11 +216,6 @@ func PVUpdated(oldObj, newObj interface{}, metadataSyncer *metadataSyncInformer)
 		volumes.GetManager(vc).UpdateVolumeMetadata(updateSpec)
 		return
 	} else {
-		pvMetadata := block.GetEntityMetaData(oldPv.Name, newPv.Namespace,
-			string(cnstypes.CnsKubernetesEntityTypePV),
-			newPv.Labels, false)
-		metadataList = append(metadataList, pvMetadata)
-
 		createSpec := &volumestypes.CreateSpec{
 			Name: oldPv.Name,
 			BackingInfo: &volumestypes.BlockBackingInfo{
@@ -270,22 +264,15 @@ func PVDeleted(obj interface{}, metadataSyncer *metadataSyncInformer) {
 	}
 	if pv.Spec.ClaimRef == nil || (pv.Spec.PersistentVolumeReclaimPolicy != v1.PersistentVolumeReclaimDelete) {
 		deleteSpec.DeleteDisk = false
-		err = volumes.GetManager(vc).DeleteVolume(deleteSpec)
-		if err != nil {
-			klog.Errorf("PVDelete: Failed to delete disk %s with error %+v", deleteSpec.VolumeID.ID, err)
-			return
-		}
 	} else {
 		// We set delete disk=true for the case where PV status is failed and kubernetes has deleted the volume after timing out
 		// In this case, the syncer will remove the volume from VC
 		deleteSpec.DeleteDisk = true
-		err = volumes.GetManager(vc).DeleteVolume(deleteSpec)
-		//e := errors.New("ServerFaultCode: NotFound\n")
-		if err != nil {
-			klog.Warningf("PVDelete: Failed to delete disk %s with error %+v", deleteSpec.VolumeID.ID, err)
-			return
-		}
-
+	}
+	err = volumes.GetManager(vc).DeleteVolume(deleteSpec)
+	if err != nil {
+		klog.Errorf("PVDelete: Failed to delete disk %s with error %+v", deleteSpec.VolumeID.ID, err)
+		return
 	}
 
 }
