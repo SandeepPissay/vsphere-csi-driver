@@ -108,7 +108,7 @@ func CreateVolumeUtil(ctx context.Context, manager *Manager, spec *CreateVolumeS
 				Capacity: spec.CapacityMB,
 			},
 		},
-		ContainerCluster: getContainerCluster(manager.CnsConfig.Global.ClusterID, manager.CnsConfig.VirtualCenter[vc.Config.Host].User),
+		ContainerCluster: GetContainerCluster(manager.CnsConfig.Global.ClusterID, manager.CnsConfig.VirtualCenter[vc.Config.Host].User),
 	}
 	if spec.StoragePolicyID != "" {
 		profileSpec := &vim25types.VirtualMachineDefinedProfileSpec{
@@ -196,7 +196,7 @@ func getDatastoreMoRefs(datastores []*vsphere.DatastoreInfo) []vim25types.Manage
 }
 
 // Helper function to create ContainerCluster object
-func getContainerCluster(clusterid string, username string) cnsvolumetypes.ContainerCluster {
+func GetContainerCluster(clusterid string, username string) cnsvolumetypes.ContainerCluster {
 	return cnsvolumetypes.ContainerCluster{
 		ClusterID:   clusterid,
 		ClusterType: cnstypes.CnsClusterTypeKubernetes,

@@ -72,15 +72,11 @@ func checkAPI(version string) error {
 func validateCreateVolumeRequest(req *csi.CreateVolumeRequest) error {
 	// Get create params
 	params := req.GetParameters()
-	// Validate volume parameters
-	if params != nil {
-		for paramName, _ := range params {
-			if paramName != block.DatastoreType {
-				msg := fmt.Sprintf("volume parameter %s is not a valid parameter.", paramName)
-				return status.Error(codes.InvalidArgument, msg)
-			}
-		}
+	err  := block.ValidateVolumeParameters(params)
+	if err != nil {
+		return err
 	}
+
 	// Volume Name
 	volName := req.GetName()
 	if len(volName) == 0 {
