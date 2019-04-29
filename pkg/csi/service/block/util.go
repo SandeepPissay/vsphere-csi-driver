@@ -93,3 +93,4 @@ func GetVirtualCenterConfig(cfg *config.Config) (*cnsvsphere.VirtualCenterConfig
 	}
 	return vcConfig, nil
 }
+
