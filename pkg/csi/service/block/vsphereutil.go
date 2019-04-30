@@ -19,6 +19,7 @@ package block
 import (
 	"errors"
 	"fmt"
+
 	"github.com/davecgh/go-spew/spew"
 	vim25types "github.com/vmware/govmomi/vim25/types"
 	cnstypes "gitlab.eng.vmware.com/hatchway/common-csp/cns/types"

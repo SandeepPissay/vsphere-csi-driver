@@ -18,6 +18,7 @@ package vanilla
 
 import (
 	"fmt"
+
 	cspnode "gitlab.eng.vmware.com/hatchway/common-csp/pkg/node"
 	"gitlab.eng.vmware.com/hatchway/common-csp/pkg/vsphere"
 	"golang.org/x/net/context"
@@ -33,7 +34,7 @@ type Nodes struct {
 	informMgr      *k8s.InformerManager
 }
 
-func (nodes *Nodes) init(serviceAccount string) error {
+func (nodes *Nodes) Initialize(serviceAccount string) error {
 	nodes.cspnodemanager = cspnode.GetManager()
 	// Create the kubernetes client
 	k8sclient, err := k8s.NewClient(serviceAccount)
@@ -89,6 +90,10 @@ func (nodes *Nodes) nodeDelete(obj interface{}) {
 	if err != nil {
 		klog.Warningf("Failed to unregister node:%q. err=%v", node.Name, err)
 	}
+}
+
+func (nodes *Nodes) GetNodeByName(nodeName string) (*vsphere.VirtualMachine, error) {
+	return nodes.cspnodemanager.GetNodeByName(nodeName)
 }
 
 func (nodes *Nodes) GetSharedDatastoresInK8SCluster(ctx context.Context) ([]*vsphere.DatastoreInfo, error) {

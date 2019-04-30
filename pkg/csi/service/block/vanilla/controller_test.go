@@ -19,16 +19,22 @@ package vanilla
 import (
 	"context"
 	"crypto/tls"
+	"log"
+	"testing"
+
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/vmware/govmomi/find"
+	"github.com/vmware/govmomi/object"
+	"github.com/vmware/govmomi/property"
 	"github.com/vmware/govmomi/simulator"
+	"github.com/vmware/govmomi/vim25"
+	"github.com/vmware/govmomi/vim25/mo"
 	cnssim "gitlab.eng.vmware.com/hatchway/common-csp/cns/simulator"
 	cnstypes "gitlab.eng.vmware.com/hatchway/common-csp/cns/types"
 	cspvolume "gitlab.eng.vmware.com/hatchway/common-csp/pkg/volume"
 	cnsvsphere "gitlab.eng.vmware.com/hatchway/common-csp/pkg/vsphere"
-	"log"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/common/config"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/block"
-	"testing"
 )
 
 const (
@@ -94,6 +100,40 @@ func configFromEnvOrSim() (*config.Config, func()) {
 	return cfg, func() {}
 }
 
+type FakeNodeManager struct {
+	client              *vim25.Client
+	sharedDatastoreName string
+}
+
+func (f *FakeNodeManager) Initialize(serviceAccount string) error {
+	return nil
+}
+
+func (f *FakeNodeManager) GetSharedDatastoresInK8SCluster(ctx context.Context) ([]*cnsvsphere.DatastoreInfo, error) {
+	finder := find.NewFinder(f.client, false)
+	dc, _ := finder.DefaultDatacenter(ctx)
+	finder.SetDatacenter(dc)
+	ds, _ := finder.Datastore(ctx, f.sharedDatastoreName)
+
+	var dsMo mo.Datastore
+	pc := property.DefaultCollector(f.client)
+	properties := []string{"info"}
+	_ = pc.RetrieveOne(ctx, ds.Reference(), properties, &dsMo)
+
+	return []*cnsvsphere.DatastoreInfo{
+		&cnsvsphere.DatastoreInfo{
+			&cnsvsphere.Datastore{
+				object.NewDatastore(nil, ds.Reference()),
+				nil},
+			dsMo.Info.GetDatastoreInfo(),
+		},
+	}, nil
+}
+
+func (f *FakeNodeManager) GetNodeByName(nodeName string) (*cnsvsphere.VirtualMachine, error) {
+	return nil, nil
+}
+
 func TestCompleteControllerFlow(t *testing.T) {
 	config, cleanup := configFromEnvOrSim()
 	defer cleanup()
@@ -129,11 +169,10 @@ func TestCompleteControllerFlow(t *testing.T) {
 	}
 	c := &controller{
 		manager: manager,
-	}
-	err = c.nodes.init("")
-	if err != nil {
-		t.Fatalf("Failed to initialize nodes. err=%v", err)
-		t.Fatal(err)
+		nodeMgr: &FakeNodeManager{
+			client:              vcenter.Client.Client,
+			sharedDatastoreName: config.Global.Datastore,
+		},
 	}
 
 	// Create
