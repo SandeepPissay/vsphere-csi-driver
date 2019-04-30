@@ -28,7 +28,7 @@ require (
 	github.com/sirupsen/logrus v1.4.1
 	github.com/spf13/pflag v1.0.3 // indirect
 	github.com/vmware/govmomi v0.0.0-20190305012137-36c75a143faa
-	gitlab.eng.vmware.com/hatchway/common-csp v0.0.0-20190416063956-a022f06a94a9
+	gitlab.eng.vmware.com/hatchway/common-csp v0.0.0-20190430210429-385a9dfd37f9
 	golang.org/x/net v0.0.0-20190415214537-1da14a5a36f2
 	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4 // indirect
 	google.golang.org/grpc v1.19.0

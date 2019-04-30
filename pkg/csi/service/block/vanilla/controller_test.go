@@ -25,6 +25,8 @@ import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/vmware/govmomi/find"
 	"github.com/vmware/govmomi/object"
+	"github.com/vmware/govmomi/pbm"
+	pbmsim "github.com/vmware/govmomi/pbm/simulator"
 	"github.com/vmware/govmomi/property"
 	"github.com/vmware/govmomi/simulator"
 	"github.com/vmware/govmomi/vim25"
@@ -66,6 +68,9 @@ func configFromSimWithTLS(tlsConfig *tls.Config, insecureAllowed bool) (*config.
 
 	// CNS Service simulator
 	model.Service.RegisterSDK(cnssim.New())
+
+	// PBM Service simulator
+	model.Service.RegisterSDK(pbmsim.New())
 
 	sharedDatastore := simulator.Map.Any("Datastore").(*simulator.Datastore)
 	cfg.Global.Datastore = sharedDatastore.Name
@@ -132,6 +137,134 @@ func (f *FakeNodeManager) GetSharedDatastoresInK8SCluster(ctx context.Context) (
 
 func (f *FakeNodeManager) GetNodeByName(nodeName string) (*cnsvsphere.VirtualMachine, error) {
 	return nil, nil
+}
+
+func TestCreateVolumeWithStoragePolicy(t *testing.T) {
+	config, cleanup := configFromEnvOrSim()
+	defer cleanup()
+
+	// CNS based CSI requires a valid cluster name
+	config.Global.ClusterID = testClusterName
+
+	// Create context
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	vcenterconfig, err := block.GetVirtualCenterConfig(config)
+	if err != nil {
+		t.Errorf("Failed to get VirtualCenterConfig.")
+		t.Fatal(err)
+	}
+	vcManager := cnsvsphere.GetVirtualCenterManager()
+	vcenter, err := vcManager.RegisterVirtualCenter(vcenterconfig)
+	if err != nil {
+		t.Fatal("Failed to register VC with virtualCenterManager.")
+		t.Fatal(err)
+	}
+	err = vcenter.Connect(ctx)
+	defer vcenter.Disconnect(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager := &block.Manager{
+		VcenterConfig:  vcenterconfig,
+		CnsConfig:      config,
+		VolumeManager:  cspvolume.GetManager(vcenter),
+		VcenterManager: cnsvsphere.GetVirtualCenterManager(),
+	}
+	c := &controller{
+		manager: manager,
+		nodeMgr: &FakeNodeManager{
+			client:              vcenter.Client.Client,
+			sharedDatastoreName: config.Global.Datastore,
+		},
+	}
+
+	// Create
+	params := make(map[string]string, 0)
+	params[block.AttributeDiskParentType] = string(block.DatastoreType)
+	params[block.AttributeDiskParentName] = config.Global.Datastore
+
+	// PBM simulator defaults
+	if config.Global.StoragePolicyName == "" {
+		config.Global.StoragePolicyName = "vSAN Default Storage Policy"
+	}
+	params[block.AttributeStoragePolicyType] = string(block.StoragePolicyType)
+	params[block.AttributeStoragePolicyName] = config.Global.StoragePolicyName
+
+	capabilities := []*csi.VolumeCapability{
+		&csi.VolumeCapability{
+			AccessMode: &csi.VolumeCapability_AccessMode{
+				Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
+			},
+		},
+	}
+
+	reqCreate := &csi.CreateVolumeRequest{
+		Name: testVolumeName,
+		CapacityRange: &csi.CapacityRange{
+			RequiredBytes: 1 * block.GbInBytes,
+		},
+		Parameters:         params,
+		VolumeCapabilities: capabilities,
+	}
+
+	respCreate, err := c.CreateVolume(ctx, reqCreate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	volID := respCreate.Volume.VolumeId
+
+	// Varify the volume has been create with corresponding storage policy ID
+	pc, err := pbm.NewClient(ctx, vcenter.Client.Client)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	profileId, err := pc.ProfileIDByName(ctx, config.Global.StoragePolicyName)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	queryFilter := cnstypes.CnsQueryFilter{
+		VolumeIds: []cnstypes.CnsVolumeId{
+			cnstypes.CnsVolumeId{
+				Id: volID,
+			},
+		},
+	}
+	queryResult, err := vcenter.QueryVolume(ctx, queryFilter)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(queryResult.Volumes) != 1 && queryResult.Volumes[0].VolumeId.Id != volID {
+		t.Fatalf("Failed to find the newly created volume with ID: %s", volID)
+	}
+
+	if queryResult.Volumes[0].StoragePolicyId != profileId {
+		t.Fatalf("Failed to match volume policy ID: %s", profileId)
+	}
+
+	// Delete
+	reqDelete := &csi.DeleteVolumeRequest{
+		VolumeId: volID,
+	}
+	_, err = c.DeleteVolume(ctx, reqDelete)
+	if err != nil {
+		t.Errorf("DeleteVolume failed: %v", err)
+	}
+
+	// Varify the volume has been deleted
+	queryResult, err = vcenter.QueryVolume(ctx, queryFilter)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(queryResult.Volumes) != 0 {
+		t.Fatalf("Volume should not exist after deletion with ID: %s", volID)
+	}
+
 }
 
 func TestCompleteControllerFlow(t *testing.T) {
