@@ -159,8 +159,8 @@ func TestMetadataSyncInformer(t *testing.T) {
 		cfg:                  config,
 		cnsconfig:            cnsVCenterConfig,
 		virtualcentermanager: cspVirtualCenterManager,
+		vcenter:              cspVirtualCenter,
 	}
-
 	// Create a test volume
 	createSpec := cnsvolumetypes.CreateSpec{
 		Name:       testVolumeName,
@@ -213,20 +213,19 @@ func TestMetadataSyncInformer(t *testing.T) {
 	oldPv := getCSPPersistentVolumeSpec(volumeId.ID, v1.PersistentVolumeReclaimRetain, oldLabel)
 	newPv := getCSPPersistentVolumeSpec(volumeId.ID, v1.PersistentVolumeReclaimRetain, newLabel)
 
-	PVUpdated(oldPv, newPv, metadataSyncer)
+	pvUpdated(oldPv, newPv, metadataSyncer)
 
 	// Verify pv label of volume matches that of updated metadata
 	queryResult, err = cspVirtualCenter.QueryVolume(ctx, queryFilter)
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	queryLabel := queryResult.Volumes[0].Metadata.EntityMetadata[0].GetCnsEntityMetadata().Labels[0].Value
 	if len(queryResult.Volumes) != 1 || queryLabel != testVolumeName {
 		t.Fatalf("update query failed with : %s %s", volumeId, queryLabel)
 	}
 
-	PVDeleted(newPv, metadataSyncer)
+	pvDeleted(newPv, metadataSyncer)
 
 	// Verify PV has been deleted
 	queryResult, err = cspVirtualCenter.QueryVolume(ctx, queryFilter)
@@ -277,4 +276,3 @@ func getCSPPersistentVolumeSpec(volumeHandle string, persistentVolumeReclaimPoli
 	}
 	return pv
 }
-

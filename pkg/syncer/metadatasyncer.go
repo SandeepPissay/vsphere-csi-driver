@@ -97,16 +97,16 @@ func (metadataSyncer *metadataSyncInformer) Init() error {
 	}
 	// Set up kubernetes resource listeners for metadata syncer
 	metadataSyncer.k8sInformerManager = k8s.NewInformer(k8sclient)
-	metadataSyncer.k8sInformerManager.AddPVCListener(nil, PVCUpdated, PVCDeleted)
+	metadataSyncer.k8sInformerManager.AddPVCListener(nil, pvcUpdated, pvcDeleted)
 	metadataSyncer.k8sInformerManager.AddPVListener(
 		nil, // Add
 		func(oldObj interface{}, newObj interface{}) { // Update
-			PVUpdated(oldObj, newObj, metadataSyncer)
+			pvUpdated(oldObj, newObj, metadataSyncer)
 		},
 		func(obj interface{}) { // Delete
-			PVDeleted(obj, metadataSyncer)
+			pvDeleted(obj, metadataSyncer)
 		})
-	metadataSyncer.k8sInformerManager.AddPodListener(nil, PodUpdated, PodDeleted)
+	metadataSyncer.k8sInformerManager.AddPodListener(nil, podUpdated, podDeleted)
 
 	metadataSyncer.PVLister = metadataSyncer.k8sInformerManager.GetPVLister()
 	klog.V(2).Infof("Initialized metadata syncer")
