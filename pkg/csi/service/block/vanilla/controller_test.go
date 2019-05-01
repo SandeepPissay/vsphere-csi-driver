@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/tls"
 	"log"
+	"os"
 	"testing"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
@@ -186,12 +187,11 @@ func TestCreateVolumeWithStoragePolicy(t *testing.T) {
 	params[block.AttributeDiskParentName] = config.Global.Datastore
 
 	// PBM simulator defaults
-	if config.Global.StoragePolicyName == "" {
-		config.Global.StoragePolicyName = "vSAN Default Storage Policy"
-	}
 	params[block.AttributeStoragePolicyType] = string(block.StoragePolicyType)
-	params[block.AttributeStoragePolicyName] = config.Global.StoragePolicyName
-
+	params[block.AttributeStoragePolicyName] = "vSAN Default Storage Policy"
+	if v := os.Getenv("VSPHERE_STORAGE_POLICY_NAME"); v != "" {
+		params[block.AttributeStoragePolicyName] = v
+	}
 	capabilities := []*csi.VolumeCapability{
 		&csi.VolumeCapability{
 			AccessMode: &csi.VolumeCapability_AccessMode{
@@ -221,7 +221,7 @@ func TestCreateVolumeWithStoragePolicy(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	profileId, err := pc.ProfileIDByName(ctx, config.Global.StoragePolicyName)
+	profileId, err := pc.ProfileIDByName(ctx, params[block.AttributeStoragePolicyName])
 	if err != nil {
 		t.Fatal(err)
 	}

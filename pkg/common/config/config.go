@@ -24,8 +24,9 @@ import (
 	"strconv"
 	"strings"
 
-	gcfg "gopkg.in/gcfg.v1"
 	"k8s.io/klog"
+
+	"gopkg.in/gcfg.v1"
 )
 
 const (
@@ -100,9 +101,6 @@ func FromEnv(cfg *Config) error {
 	}
 	if v := os.Getenv("VSPHERE_DATASTORE"); v != "" {
 		cfg.Global.Datastore = v
-	}
-	if v := os.Getenv("VSPHERE_STORAGE_POLICY_NAME"); v != "" {
-		cfg.Global.StoragePolicyName = v
 	}
 	if v := os.Getenv("VSPHERE_VCENTER_PORT"); v != "" {
 		cfg.Global.VCenterPort = v

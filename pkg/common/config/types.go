@@ -23,8 +23,6 @@ type Config struct {
 		VCenterIP string
 		// Datastore to create volume
 		Datastore string
-		// Storage policy name to use
-		StoragePolicyName string
 		// Kubernetes Cluster ID
 		ClusterID string `gcfg:"cluster-id"`
 		// vCenter username.
