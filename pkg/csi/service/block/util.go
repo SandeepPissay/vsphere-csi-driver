@@ -111,6 +111,7 @@ func GetVcenterIPs(cfg *config.Config) ([]string, error) {
 	return vCenterIPs, err
 }
 
+// Function to create EnityMetaData object from given parameters
 func GetEntityMetaData(entityName string, namespace string, entityType string,
 	labels map[string]string, deleteFlag bool) volumestypes.EntityMetaData {
 	entityMetadata := volumestypes.EntityMetaData{}
@@ -124,6 +125,7 @@ func GetEntityMetaData(entityName string, namespace string, entityType string,
 	return entityMetadata
 }
 
+// Function to return a Persistent Volume object attached to the PVC given in parameters
 func GetPersistentVolume(pvc *v1.PersistentVolumeClaim, pvLister corelisters.PersistentVolumeLister) (*v1.PersistentVolume, error) {
 	volumeName := pvc.Spec.VolumeName
 	pv, err := pvLister.Get(volumeName)
