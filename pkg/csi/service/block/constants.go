@@ -34,9 +34,15 @@ const (
 	AttributeDiskParentType = "parent_type"
 	// AttributeDiskParentName is a Kubernetes volume label.
 	AttributeDiskParentName = "parent_name"
+	// AttributeStoragePolicyType is a Kubernetes volume label.
+	AttributeStoragePolicyType = "policy_type"
+	// AttributeStoragePolicyType is a Kubernetes volume label.
+	AttributeStoragePolicyName = "policy_name"
 
 	// DatastoreType is the permitted value for AttributeDiskParentType
 	DatastoreType = "Datastore"
+	//StoragePolicyType is the permitted value for AtrributeStoragePolicyType
+	StoragePolicyType = "StoragePolicy"
 
 	//ProviderID Prefix
 	ProviderPrefix = "vsphere://"

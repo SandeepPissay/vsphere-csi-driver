@@ -18,12 +18,13 @@ package block
 
 import (
 	"errors"
+	"strconv"
+	"strings"
+
 	cnsvsphere "gitlab.eng.vmware.com/hatchway/common-csp/pkg/vsphere"
 	"golang.org/x/net/context"
 	"k8s.io/klog"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/common/config"
-	"strconv"
-	"strings"
 )
 
 // GetVCenter returns VirtualCenter object from specified Manager object.
@@ -93,4 +94,3 @@ func GetVirtualCenterConfig(cfg *config.Config) (*cnsvsphere.VirtualCenterConfig
 	}
 	return vcConfig, nil
 }
-

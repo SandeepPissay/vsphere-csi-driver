@@ -258,7 +258,7 @@ endif
 TEST_FLAGS ?= -v -count=1
 .PHONY: unit build-unit-tests
 unit unit-test:
-	env -u VSPHERE_SERVER -u VSPHERE_PASSWORD -u VSPHERE_USER go test $(TEST_FLAGS) $(PKGS_WITH_TESTS)
+	env -u VSPHERE_SERVER -u VSPHERE_PASSWORD -u VSPHERE_USER -u VSPHERE_STORAGE_POLICY_NAME go test $(TEST_FLAGS) $(PKGS_WITH_TESTS)
 build-unit-tests:
 	$(foreach pkg,$(PKGS_WITH_TESTS),go test $(TEST_FLAGS) -c $(pkg); )
 
@@ -282,7 +282,7 @@ endif
 ifndef VSPHERE_INSECURE
 	$(error Requires VSPHERE_INSECURE from a deployed testbed to run integration-unit-test)
 endif
-	go test $(TEST_FLAGS) -tags=integration-unit -run "TestCompleteControllerFlow" ./pkg/csi/service/block/vanilla
+	go test $(TEST_FLAGS) -tags=integration-unit ./pkg/csi/service/block/vanilla
 
 
 # The default test target.

@@ -129,10 +129,17 @@ func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 	if req.Parameters[block.AttributeDiskParentType] == string(block.DatastoreType) {
 		datastoreName = req.Parameters[block.AttributeDiskParentName]
 	}
+
+	var storagePolicyName string
+	if req.Parameters[block.AttributeStoragePolicyType] == string(block.StoragePolicyType) {
+		storagePolicyName = req.Parameters[block.AttributeStoragePolicyName]
+	}
+
 	var createVolumeSpec = block.CreateVolumeSpec{
-		CapacityMB: uint64(volSizeMB),
-		Name:       req.Name,
-		Datastore:  datastoreName,
+		CapacityMB:        uint64(volSizeMB),
+		Name:              req.Name,
+		Datastore:         datastoreName,
+		StoragePolicyName: storagePolicyName,
 	}
 	// Get shared datastores for the Kubernetes cluster
 	sharedDatastores, err := c.nodeMgr.GetSharedDatastoresInK8SCluster(ctx)

@@ -210,6 +210,8 @@ github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2 h1:eY9dn8+vbi4tKz5
 github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2/go.mod h1:UETIi67q53MR2AWcXfiuqkDkRtnGDLqkBTpCHuJHxtU=
 gitlab.eng.vmware.com/hatchway/common-csp v0.0.0-20190416063956-a022f06a94a9 h1:vreLa/toqQ0yHJIOayywe90jgDF9PUDD7LQXnLshre8=
 gitlab.eng.vmware.com/hatchway/common-csp v0.0.0-20190416063956-a022f06a94a9/go.mod h1:ajhKEtBCVObjOIrJVO3P1wAtDXjJytVXUDoEI7LbzZI=
+gitlab.eng.vmware.com/hatchway/common-csp v0.0.0-20190430210429-385a9dfd37f9 h1:0C2ZL/Xn6p9ibzOhi2oo9QdJXZaNMpAzdV0NS3TUwL8=
+gitlab.eng.vmware.com/hatchway/common-csp v0.0.0-20190430210429-385a9dfd37f9/go.mod h1:ajhKEtBCVObjOIrJVO3P1wAtDXjJytVXUDoEI7LbzZI=
 go.etcd.io/bbolt v1.3.2 h1:Z/90sZLPOeCy2PwprqkFa25PdkusRzaj9P8zm/KNyvk=
 go.etcd.io/bbolt v1.3.2/go.mod h1:IbVyRI1SCnLcuJnV2u8VeU0CEYM7e686BmAb1XKL+uU=
 go.uber.org/atomic v1.3.2 h1:2Oa65PReHzfn29GpvgsYwloV9AVFHPDk8tYxt2c2tr4=
