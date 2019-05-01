@@ -18,13 +18,12 @@ package block
 
 import (
 	"errors"
-	"strconv"
-	"strings"
-
-	cnsvsphere "gitlab.eng.vmware.com/hatchway/common-csp/pkg/vsphere"
 	"golang.org/x/net/context"
 	"k8s.io/klog"
+	cnsvsphere "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vsphere"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/common/config"
+	"strconv"
+	"strings"
 )
 
 // GetVCenter returns VirtualCenter object from specified Manager object.

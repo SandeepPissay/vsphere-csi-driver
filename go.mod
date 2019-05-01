@@ -13,6 +13,7 @@ require (
 	github.com/gogo/protobuf v1.2.1 // indirect
 	github.com/google/btree v1.0.0 // indirect
 	github.com/google/gofuzz v1.0.0 // indirect
+	github.com/google/uuid v0.0.0-20170306145142-6a5e28554805
 	github.com/googleapis/gnostic v0.2.0 // indirect
 	github.com/gregjones/httpcache v0.0.0-20190212212710-3befbb6ad0cc // indirect
 	github.com/hashicorp/golang-lru v0.5.1 // indirect
@@ -28,7 +29,6 @@ require (
 	github.com/sirupsen/logrus v1.4.1
 	github.com/spf13/pflag v1.0.3 // indirect
 	github.com/vmware/govmomi v0.0.0-20190305012137-36c75a143faa
-	gitlab.eng.vmware.com/hatchway/common-csp v0.0.0-20190430210429-385a9dfd37f9
 	golang.org/x/net v0.0.0-20190415214537-1da14a5a36f2
 	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4 // indirect
 	google.golang.org/grpc v1.19.0

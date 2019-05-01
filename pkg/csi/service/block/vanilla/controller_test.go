@@ -31,12 +31,15 @@ import (
 	pbmsim "github.com/vmware/govmomi/pbm/simulator"
 	"github.com/vmware/govmomi/property"
 	"github.com/vmware/govmomi/simulator"
+
 	"github.com/vmware/govmomi/vim25"
 	"github.com/vmware/govmomi/vim25/mo"
-	cnssim "gitlab.eng.vmware.com/hatchway/common-csp/cns/simulator"
-	cnstypes "gitlab.eng.vmware.com/hatchway/common-csp/cns/types"
-	cspvolume "gitlab.eng.vmware.com/hatchway/common-csp/pkg/volume"
-	cnsvsphere "gitlab.eng.vmware.com/hatchway/common-csp/pkg/vsphere"
+
+	cnssim "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vmomi/simulator"
+	cnstypes "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vmomi/types"
+	cspvolume "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/volume"
+	cnsvsphere "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vsphere"
+
 	"sigs.k8s.io/vsphere-csi-driver/pkg/common/config"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/block"
 )
@@ -128,7 +131,7 @@ func (f *FakeNodeManager) GetSharedDatastoresInK8SCluster(ctx context.Context) (
 	_ = pc.RetrieveOne(ctx, ds.Reference(), properties, &dsMo)
 
 	return []*cnsvsphere.DatastoreInfo{
-		&cnsvsphere.DatastoreInfo{
+		{
 			&cnsvsphere.Datastore{
 				object.NewDatastore(nil, ds.Reference()),
 				nil},
@@ -218,7 +221,7 @@ func TestCreateVolumeWithStoragePolicy(t *testing.T) {
 		params[block.AttributeStoragePolicyName] = v
 	}
 	capabilities := []*csi.VolumeCapability{
-		&csi.VolumeCapability{
+		{
 			AccessMode: &csi.VolumeCapability_AccessMode{
 				Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
 			},
@@ -253,7 +256,7 @@ func TestCreateVolumeWithStoragePolicy(t *testing.T) {
 
 	queryFilter := cnstypes.CnsQueryFilter{
 		VolumeIds: []cnstypes.CnsVolumeId{
-			cnstypes.CnsVolumeId{
+			{
 				Id: volID,
 			},
 		},
@@ -303,7 +306,7 @@ func TestCompleteControllerFlow(t *testing.T) {
 	params[block.AttributeDiskParentType] = string(block.DatastoreType)
 	params[block.AttributeDiskParentName] = ct.config.Global.Datastore
 	capabilities := []*csi.VolumeCapability{
-		&csi.VolumeCapability{
+		{
 			AccessMode: &csi.VolumeCapability_AccessMode{
 				Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
 			},
@@ -328,7 +331,7 @@ func TestCompleteControllerFlow(t *testing.T) {
 	// Varify the volume has been created
 	queryFilter := cnstypes.CnsQueryFilter{
 		VolumeIds: []cnstypes.CnsVolumeId{
-			cnstypes.CnsVolumeId{
+			{
 				Id: volID,
 			},
 		},

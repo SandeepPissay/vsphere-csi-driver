@@ -32,7 +32,7 @@ type metadataSyncInformer struct {
 	k8sInformerManager *k8s.InformerManager
 }
 
-// Returns uninitialized metadataSyncInformer
+// New Returns uninitialized metadataSyncInformer
 func New() *metadataSyncInformer {
 	return &metadataSyncInformer{}
 }

@@ -21,12 +21,12 @@ import (
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/vmware/govmomi/units"
-	cspvolume "gitlab.eng.vmware.com/hatchway/common-csp/pkg/volume"
-	cnsvsphere "gitlab.eng.vmware.com/hatchway/common-csp/pkg/vsphere"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"k8s.io/klog"
+	cspvolume "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/volume"
+	cnsvsphere "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vsphere"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/common/config"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/block"
 	csitypes "sigs.k8s.io/vsphere-csi-driver/pkg/csi/types"
@@ -136,14 +136,14 @@ func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 	}
 
 	var createVolumeSpec = block.CreateVolumeSpec{
-		CapacityMB:        uint64(volSizeMB),
+		CapacityMB:        volSizeMB,
 		Name:              req.Name,
 		Datastore:         datastoreName,
 		StoragePolicyName: storagePolicyName,
 	}
 	// Get shared datastores for the Kubernetes cluster
 	sharedDatastores, err := c.nodeMgr.GetSharedDatastoresInK8SCluster(ctx)
-	volumeId, err := block.CreateVolumeUtil(ctx, c.manager, &createVolumeSpec, sharedDatastores)
+	volumeID, err := block.CreateVolumeUtil(ctx, c.manager, &createVolumeSpec, sharedDatastores)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to create volume. Error: %+v", err)
 		klog.Errorf(msg)
@@ -153,7 +153,7 @@ func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 	attributes[block.AttributeDiskType] = block.DiskTypeString
 	resp := &csi.CreateVolumeResponse{
 		Volume: &csi.Volume{
-			VolumeId:      volumeId,
+			VolumeId:      volumeID,
 			CapacityBytes: int64(units.FileSize(volSizeMB * block.MbInBytes)),
 			VolumeContext: attributes,
 		},
