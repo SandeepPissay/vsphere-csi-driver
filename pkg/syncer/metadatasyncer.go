@@ -175,7 +175,7 @@ func pvUpdated(oldObj, newObj interface{}, metadataSyncer *metadataSyncInformer)
 
 	// Check if vsphere volume
 	if newPv.Spec.CSI.Driver != csidriver {
-		klog.V(5).Infof("PVUpdate: PV is not a vsphere volume: %+v", newPv)
+		klog.V(3).Infof("PVUpdate: PV is not a vsphere volume: %+v", newPv)
 		return
 	}
 	if newPv.Status.Phase == v1.VolumePending || newPv.Status.Phase == v1.VolumeFailed {
@@ -184,7 +184,7 @@ func pvUpdated(oldObj, newObj interface{}, metadataSyncer *metadataSyncInformer)
 	}
 	newLabels := newPv.GetLabels()
 	if oldPv.Status.Phase == v1.VolumeAvailable && reflect.DeepEqual(newLabels, oldPv.GetLabels()) {
-		klog.V(5).Infof("PVUpdate: PV labels have not changed")
+		klog.V(3).Infof("PVUpdate: PV labels have not changed")
 		return
 	}
 
@@ -233,11 +233,11 @@ func pvDeleted(obj interface{}, metadataSyncer *metadataSyncInformer) {
 		klog.Warningf("PVDeleted: unrecognized object %+v", obj)
 		return
 	}
-	klog.V(5).Infof("PVDelete: Deleting PV: %+v", pv)
+	klog.V(4).Infof("PVDelete: Deleting PV: %+v", pv)
 
 	// Check if vsphere volume
 	if pv.Spec.CSI.Driver != csidriver {
-		klog.V(5).Infof("PVDelete: Not a vsphere volume: %+v", pv)
+		klog.V(3).Infof("PVDelete: Not a vsphere volume: %+v", pv)
 		return
 	}
 	deleteSpec := &volumestypes.DeleteSpec{
