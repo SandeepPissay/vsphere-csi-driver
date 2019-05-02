@@ -19,11 +19,6 @@ package vanilla
 import (
 	"context"
 	"crypto/tls"
-	"log"
-	"os"
-	"sync"
-	"testing"
-
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/vmware/govmomi/find"
 	"github.com/vmware/govmomi/object"
@@ -31,14 +26,16 @@ import (
 	pbmsim "github.com/vmware/govmomi/pbm/simulator"
 	"github.com/vmware/govmomi/property"
 	"github.com/vmware/govmomi/simulator"
-
 	"github.com/vmware/govmomi/vim25"
 	"github.com/vmware/govmomi/vim25/mo"
-
+	"log"
+	"os"
 	cnssim "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vmomi/simulator"
 	cnstypes "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vmomi/types"
 	cspvolume "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/volume"
 	cnsvsphere "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vsphere"
+	"sync"
+	"testing"
 
 	"sigs.k8s.io/vsphere-csi-driver/pkg/common/config"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/block"
@@ -76,10 +73,6 @@ func configFromSimWithTLS(tlsConfig *tls.Config, insecureAllowed bool) (*config.
 
 	// PBM Service simulator
 	model.Service.RegisterSDK(pbmsim.New())
-
-	sharedDatastore := simulator.Map.Any("Datastore").(*simulator.Datastore)
-	cfg.Global.Datastore = sharedDatastore.Name
-
 	cfg.Global.InsecureFlag = insecureAllowed
 
 	cfg.Global.VCenterIP = s.URL.Hostname()
@@ -185,14 +178,20 @@ func getControllerTest(t *testing.T) *controllerTest {
 			VolumeManager:  cspvolume.GetManager(vcenter),
 			VcenterManager: cnsvsphere.GetVirtualCenterManager(),
 		}
+
+		var sharedDatastoreName string
+		if v := os.Getenv("VSPHERE_DATASTORE"); v != "" {
+			sharedDatastoreName = v
+		} else {
+			sharedDatastoreName = simulator.Map.Any("Datastore").(*simulator.Datastore).Info.GetDatastoreInfo().Name
+		}
 		c := &controller{
 			manager: manager,
 			nodeMgr: &FakeNodeManager{
 				client:              vcenter.Client.Client,
-				sharedDatastoreName: config.Global.Datastore,
+				sharedDatastoreName: sharedDatastoreName,
 			},
 		}
-
 		controllerTestInstance = &controllerTest{
 			controller: c,
 			config:     config,
@@ -211,11 +210,11 @@ func TestCreateVolumeWithStoragePolicy(t *testing.T) {
 
 	// Create
 	params := make(map[string]string, 0)
-	params[block.AttributeDiskParentType] = string(block.DatastoreType)
-	params[block.AttributeDiskParentName] = ct.config.Global.Datastore
+	if v := os.Getenv("VSPHERE_DATASTORE"); v != "" {
+		params[block.AttributeDatastoreName] = v
+	}
 
 	// PBM simulator defaults
-	params[block.AttributeStoragePolicyType] = string(block.StoragePolicyType)
 	params[block.AttributeStoragePolicyName] = "vSAN Default Storage Policy"
 	if v := os.Getenv("VSPHERE_STORAGE_POLICY_NAME"); v != "" {
 		params[block.AttributeStoragePolicyName] = v
@@ -303,8 +302,9 @@ func TestCompleteControllerFlow(t *testing.T) {
 
 	// Create
 	params := make(map[string]string, 0)
-	params[block.AttributeDiskParentType] = string(block.DatastoreType)
-	params[block.AttributeDiskParentName] = ct.config.Global.Datastore
+	if v := os.Getenv("VSPHERE_DATASTORE"); v != "" {
+		params[block.AttributeDatastoreName] = v
+	}
 	capabilities := []*csi.VolumeCapability{
 		{
 			AccessMode: &csi.VolumeCapability_AccessMode{

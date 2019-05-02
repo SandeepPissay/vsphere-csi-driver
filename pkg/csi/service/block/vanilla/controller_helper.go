@@ -75,8 +75,8 @@ func validateCreateVolumeRequest(req *csi.CreateVolumeRequest) error {
 	params := req.GetParameters()
 	// Validate volume parameters
 	if params != nil {
-		for paramName, paramValue := range params {
-			if paramName == block.AttributeDiskParentType && paramValue != block.DatastoreType {
+		for paramName := range params {
+			if !(paramName == block.AttributeDatastoreName || paramName == block.AttributeStoragePolicyName) {
 				msg := fmt.Sprintf("volume parameter %s is not a valid parameter.", paramName)
 				return status.Error(codes.InvalidArgument, msg)
 			}

@@ -18,15 +18,15 @@ package simulator
 
 import (
 	"context"
-	"testing"
-
 	"github.com/davecgh/go-spew/spew"
+	"github.com/google/uuid"
 	"github.com/vmware/govmomi"
 	"github.com/vmware/govmomi/simulator"
 	vim25types "github.com/vmware/govmomi/vim25/types"
 	cnstypes "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vmomi/types"
 	cnsvolume "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/volume"
 	cnsvsphere "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vsphere"
+	"testing"
 )
 
 func TestSimulator(t *testing.T) {
@@ -81,6 +81,11 @@ func TestSimulator(t *testing.T) {
 			},
 			BackingObjectDetails: &cnstypes.CnsBackingObjectDetails{
 				CapacityInMb: 1024,
+			},
+			Profile: []vim25types.BaseVirtualMachineProfileSpec{
+				&vim25types.VirtualMachineDefinedProfileSpec{
+					ProfileId: uuid.New().String(),
+				},
 			},
 		},
 	}

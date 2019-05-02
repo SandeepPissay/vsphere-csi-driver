@@ -22,6 +22,7 @@ import (
 	"github.com/vmware/govmomi/simulator"
 	"github.com/vmware/govmomi/vim25/soap"
 	vim25types "github.com/vmware/govmomi/vim25/types"
+	"reflect"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vmomi/methods"
 	cnstypes "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vmomi/types"
 	cnsvsphere "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vsphere"
@@ -63,6 +64,12 @@ func (m *CnsVolumeManager) CnsCreateVolume(ctx context.Context, req *cnstypes.Cn
 					m.volumes[datastore.Self] = volumes
 				}
 
+				var policyId string
+				if createSpec.Profile != nil && createSpec.Profile[0] != nil &&
+					reflect.TypeOf(createSpec.Profile[0]) == reflect.TypeOf(&vim25types.VirtualMachineDefinedProfileSpec{}) {
+					policyId = interface{}(createSpec.Profile[0]).(*vim25types.VirtualMachineDefinedProfileSpec).ProfileId
+				}
+
 				newVolume := &cnstypes.CnsVolume{
 					VolumeId: cnstypes.CnsVolumeId{
 						Id: uuid.New().String(),
@@ -74,7 +81,7 @@ func (m *CnsVolumeManager) CnsCreateVolume(ctx context.Context, req *cnstypes.Cn
 					BackingObjectDetails:         *createSpec.BackingObjectDetails.GetCnsBackingObjectDetails(),
 					ComplianceStatus:             "Simulator Compliance Status",
 					DatastoreAccessibilityStatus: "Simulator Datastore Accessibility Status",
-					StoragePolicyId:              "Simulator Storage Policy ID",
+					StoragePolicyId:              policyId,
 				}
 
 				volumes[newVolume.VolumeId] = newVolume

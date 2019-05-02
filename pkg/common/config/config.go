@@ -99,9 +99,6 @@ func FromEnv(cfg *Config) error {
 	if v := os.Getenv("VSPHERE_VCENTER"); v != "" {
 		cfg.Global.VCenterIP = v
 	}
-	if v := os.Getenv("VSPHERE_DATASTORE"); v != "" {
-		cfg.Global.Datastore = v
-	}
 	if v := os.Getenv("VSPHERE_VCENTER_PORT"); v != "" {
 		cfg.Global.VCenterPort = v
 	}

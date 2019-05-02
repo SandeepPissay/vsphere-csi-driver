@@ -126,14 +126,10 @@ func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 	volSizeMB := int64(block.RoundUpSize(volSizeBytes, block.GbInBytes)) * 1024
 
 	var datastoreName string
-	if req.Parameters[block.AttributeDiskParentType] == string(block.DatastoreType) {
-		datastoreName = req.Parameters[block.AttributeDiskParentName]
-	}
+	datastoreName = req.Parameters[block.AttributeDatastoreName]
 
 	var storagePolicyName string
-	if req.Parameters[block.AttributeStoragePolicyType] == string(block.StoragePolicyType) {
-		storagePolicyName = req.Parameters[block.AttributeStoragePolicyName]
-	}
+	storagePolicyName = req.Parameters[block.AttributeStoragePolicyName]
 
 	var createVolumeSpec = block.CreateVolumeSpec{
 		CapacityMB:        volSizeMB,

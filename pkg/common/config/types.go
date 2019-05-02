@@ -21,8 +21,6 @@ type Config struct {
 	Global struct {
 		//vCenter IP address or FQDN
 		VCenterIP string
-		// Datastore to create volume
-		Datastore string
 		// Kubernetes Cluster ID
 		ClusterID string `gcfg:"cluster-id"`
 		// vCenter username.
@@ -33,7 +31,7 @@ type Config struct {
 		VCenterPort string `gcfg:"port"`
 		// True if vCenter uses self-signed cert.
 		InsecureFlag bool `gcfg:"insecure-flag"`
-		// Datacenter in which VMs are located.
+		// Datacenter in which Node VMs are located.
 		Datacenters string `gcfg:"datacenters"`
 		// The kubernetes service account used to launch the cloud controller manager.
 		// Default: cloud-controller-manager
