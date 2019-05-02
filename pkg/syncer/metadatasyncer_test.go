@@ -102,7 +102,7 @@ func configFromEnvOrSim() (*cnsconfig.Config, func()) {
 	return cfg, func() {}
 }
 
-func TestMetadataSyncInformer(t *testing.T) {
+func TestMetadataSyncPVWorkflows(t *testing.T) {
 	config, cleanup := configFromEnvOrSim()
 	defer cleanup()
 
