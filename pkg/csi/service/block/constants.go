@@ -25,14 +25,19 @@ const (
 
 	// DefaultGbDiskSize is the default disk size in gibibytes.
 	DefaultGbDiskSize = int64(10)
-	// FirstClassDiskTypeString in string form
+
+	// DiskTypeString is the value for the PersistentVolume's attribute "type"
 	DiskTypeString = "vSphere CNS Block Volume"
 
-	// AttributeFirstClassDiskType is a Kubernetes volume label.
+	// AttributeDiskType is a PersistentVolume's attribute.
 	AttributeDiskType = "type"
-	// AttributeDiskParentType is a Kubernetes volume label.
+
+	// AttributeDiskParentType is the type of the PersistentVolume's parameters.
+	// For Example: parent_type: "Datastore"
 	AttributeDiskParentType = "parent_type"
-	// AttributeDiskParentName is a Kubernetes volume label.
+
+	// AttributeDiskParentName is the name for the PersistentVolume's parameter specified with parent_type.
+	// For Example: parent_name: "sharedVmfs-0"
 	AttributeDiskParentName = "parent_name"
 	// AttributeStoragePolicyType is a Kubernetes volume label.
 	AttributeStoragePolicyType = "policy_type"
@@ -44,8 +49,13 @@ const (
 	//StoragePolicyType is the permitted value for AtrributeStoragePolicyType
 	StoragePolicyType = "StoragePolicy"
 
-	//ProviderID Prefix
+	//ProviderPrefix is the prefix used for the ProviderID set on the node
+	// Example: vsphere://4201794a-f26b-8914-d95a-edeb7ecc4a8f
 	ProviderPrefix = "vsphere://"
-	// SCSI Disk Indetifier
+
+	// AttributeFirstClassDiskPage83Data is the SCSI Disk Identifier
 	AttributeFirstClassDiskPage83Data = "page83data"
+
+	// BlockVolumeType is the VolumeType for CNS Volume
+	BlockVolumeType = "BLOCK"
 )

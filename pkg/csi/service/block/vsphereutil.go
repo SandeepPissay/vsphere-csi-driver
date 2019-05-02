@@ -22,14 +22,13 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	vim25types "github.com/vmware/govmomi/vim25/types"
-	cnstypes "gitlab.eng.vmware.com/hatchway/common-csp/cns/types"
-	cnsvolumetypes "gitlab.eng.vmware.com/hatchway/common-csp/pkg/volume/types"
-	"gitlab.eng.vmware.com/hatchway/common-csp/pkg/vsphere"
 	"golang.org/x/net/context"
 	"k8s.io/klog"
+	cnstypes "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vmomi/types"
+	"sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vsphere"
 )
 
-// Helper function to create CNS volume
+// CreateVolumeUtil is the helper function to create CNS volume
 func CreateVolumeUtil(ctx context.Context, manager *Manager, spec *CreateVolumeSpec, sharedDatastores []*vsphere.DatastoreInfo) (string, error) {
 	vc, err := GetVCenter(ctx, manager)
 	if err != nil {
@@ -72,14 +71,14 @@ func CreateVolumeUtil(ctx context.Context, manager *Manager, spec *CreateVolumeS
 			if err != nil {
 				klog.Warningf("Failed to find datastore:%+v in datacenter:%s from VC:%s, Error: %+v", spec.Datastore, datacenter.InventoryPath, vc.Config.Host, err)
 			}
-			var datastoreUrl string
-			datastoreUrl, err = datastoreObj.GetDatastoreUrl(ctx)
+			var datastoreURL string
+			datastoreURL, err = datastoreObj.GetDatastoreURL(ctx)
 			if err != nil {
 				klog.Errorf("Failed to get URL for the datastore:%s , Error: %+v", spec.Datastore, err)
 				return "", err
 			}
 			for _, sharedDatastore := range sharedDatastores {
-				if sharedDatastore.Info.Url == datastoreUrl {
+				if sharedDatastore.Info.Url == datastoreURL {
 					isSharedDatastoreURL = true
 					break
 				}
@@ -101,15 +100,16 @@ func CreateVolumeUtil(ctx context.Context, manager *Manager, spec *CreateVolumeS
 			return "", errors.New(errMsg)
 		}
 	}
-	createSpec := &cnsvolumetypes.CreateSpec{
+	createSpec := &cnstypes.CnsVolumeCreateSpec{
 		Name:       spec.Name,
+		VolumeType: BlockVolumeType,
 		Datastores: datastores,
-		BackingInfo: &cnsvolumetypes.BlockBackingInfo{
-			BackingObjectInfo: cnsvolumetypes.BackingObjectInfo{
-				Capacity: spec.CapacityMB,
-			},
+		BackingObjectDetails: &cnstypes.CnsBackingObjectDetails{
+			CapacityInMb: spec.CapacityMB,
 		},
-		ContainerCluster: getContainerCluster(manager.CnsConfig.Global.ClusterID, manager.CnsConfig.VirtualCenter[vc.Config.Host].User),
+		Metadata: cnstypes.CnsVolumeMetadata{
+			ContainerCluster: getContainerCluster(manager.CnsConfig.Global.ClusterID, manager.CnsConfig.VirtualCenter[vc.Config.Host].User),
+		},
 	}
 	if spec.StoragePolicyID != "" {
 		profileSpec := &vim25types.VirtualMachineDefinedProfileSpec{
@@ -123,67 +123,47 @@ func CreateVolumeUtil(ctx context.Context, manager *Manager, spec *CreateVolumeS
 		klog.Errorf("Failed to create disk %s with error %+v", spec.Name, err)
 		return "", err
 	}
-	return volumeID.ID, nil
+	return volumeID.Id, nil
 }
 
-// Helper function to attach CNS volume to specified vm
+// AttachVolumeUtil is the helper function to attach CNS volume to specified vm
 func AttachVolumeUtil(ctx context.Context, manager *Manager,
 	vm *vsphere.VirtualMachine,
-	volumeId string) (string, error) {
-
-	attachSpec := &cnsvolumetypes.AttachDetachSpec{
-		VolumeID: &cnsvolumetypes.VolumeID{
-			ID: volumeId,
-		},
-		VirtualMachine: vm,
-	}
-	klog.V(4).Infof("vSphere CNS driver is attaching volume %s with attach spec %s", volumeId, spew.Sdump(attachSpec))
-	diskUUID, err := manager.VolumeManager.AttachVolume(attachSpec)
+	volumeID string) (string, error) {
+	klog.V(4).Infof("vSphere CNS driver is attaching volume: %s to node vm: %s", volumeID, vm.InventoryPath)
+	diskUUID, err := manager.VolumeManager.AttachVolume(vm, volumeID)
 	if err != nil {
-		klog.Errorf("Failed to attach disk %s with err %+v", volumeId, err)
+		klog.Errorf("Failed to attach disk %s with err %+v", volumeID, err)
 		return "", err
 	}
-	klog.V(4).Infof("Successfully attached disk %s to VM %v. Disk UUID is %s", volumeId, vm, diskUUID)
+	klog.V(4).Infof("Successfully attached disk %s to VM %v. Disk UUID is %s", volumeID, vm, diskUUID)
 	return diskUUID, nil
 }
 
-// Helper function to detach CNS volume from specified vm
+// DetachVolumeUtil is the helper function to detach CNS volume from specified vm
 func DetachVolumeUtil(ctx context.Context, manager *Manager,
 	vm *vsphere.VirtualMachine,
-	volumeId string) error {
-
-	detachSpec := &cnsvolumetypes.AttachDetachSpec{
-		VolumeID: &cnsvolumetypes.VolumeID{
-			ID: volumeId,
-		},
-		VirtualMachine: vm,
-	}
-	klog.V(4).Infof("vSphere CNS driver is detaching volume %s with detachSpec spec %s", volumeId, spew.Sdump(detachSpec))
-	err := manager.VolumeManager.DetachVolume(detachSpec)
+	volumeID string) error {
+	klog.V(4).Infof("vSphere CNS driver is detaching volume: %s from node vm: %s", volumeID, vm.InventoryPath)
+	err := manager.VolumeManager.DetachVolume(vm, volumeID)
 	if err != nil {
-		klog.Errorf("Failed to detach disk %s with err %+v", volumeId, err)
+		klog.Errorf("Failed to detach disk %s with err %+v", volumeID, err)
 		return err
 	}
-	klog.V(4).Infof("Successfully detached disk %s from VM %v.", volumeId, vm)
+	klog.V(4).Infof("Successfully detached disk %s from VM %v.", volumeID, vm)
 	return nil
 }
 
-// Helper function to delete CNS volume for given volumeId
-func DeleteVolumeUtil(ctx context.Context, manager *Manager, volumeId string, deleteDisk bool) error {
+// DeleteVolumeUtil is the helper function to delete CNS volume for given volumeId
+func DeleteVolumeUtil(ctx context.Context, manager *Manager, volumeID string, deleteDisk bool) error {
 	var err error
-	deleteSpec := &cnsvolumetypes.DeleteSpec{
-		VolumeID: &cnsvolumetypes.VolumeID{
-			ID: volumeId,
-		},
-		DeleteDisk: deleteDisk,
-	}
-	klog.V(4).Infof("vSphere Cloud Provider deleting volume %s with delete spec %s", volumeId, spew.Sdump(deleteSpec))
-	err = manager.VolumeManager.DeleteVolume(deleteSpec)
+	klog.V(4).Infof("vSphere Cloud Provider deleting volume: %s", volumeID)
+	err = manager.VolumeManager.DeleteVolume(volumeID, deleteDisk)
 	if err != nil {
-		klog.Errorf("Failed to delete disk %s with error %+v", volumeId, err)
+		klog.Errorf("Failed to delete disk %s with error %+v", volumeID, err)
 		return err
 	}
-	klog.V(4).Infof("Successfully deleted disk for volumeid: %s", volumeId)
+	klog.V(4).Infof("Successfully deleted disk for volumeid: %s", volumeID)
 	return nil
 }
 
@@ -197,10 +177,10 @@ func getDatastoreMoRefs(datastores []*vsphere.DatastoreInfo) []vim25types.Manage
 }
 
 // Helper function to create ContainerCluster object
-func getContainerCluster(clusterid string, username string) cnsvolumetypes.ContainerCluster {
-	return cnsvolumetypes.ContainerCluster{
-		ClusterID:   clusterid,
-		ClusterType: cnstypes.CnsClusterTypeKubernetes,
+func getContainerCluster(clusterid string, username string) cnstypes.CnsContainerCluster {
+	return cnstypes.CnsContainerCluster{
+		ClusterType: string(cnstypes.CnsClusterTypeKubernetes),
+		ClusterId:   clusterid,
 		VSphereUser: username,
 	}
 }

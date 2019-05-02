@@ -18,24 +18,23 @@ package vanilla
 
 import (
 	"fmt"
-
-	cspnode "gitlab.eng.vmware.com/hatchway/common-csp/pkg/node"
-	"gitlab.eng.vmware.com/hatchway/common-csp/pkg/vsphere"
 	"golang.org/x/net/context"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog"
+	cnsnode "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/node"
+	"sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vsphere"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/block"
 	k8s "sigs.k8s.io/vsphere-csi-driver/pkg/kubernetes"
 )
 
 type Nodes struct {
-	cspnodemanager cspnode.Manager
+	cnsNodeManager cnsnode.Manager
 	informMgr      *k8s.InformerManager
 }
 
 func (nodes *Nodes) Initialize(serviceAccount string) error {
-	nodes.cspnodemanager = cspnode.GetManager()
+	nodes.cnsNodeManager = cnsnode.GetManager()
 	// Create the kubernetes client
 	k8sclient, err := k8s.NewClient(serviceAccount)
 	if err != nil {
@@ -64,7 +63,7 @@ func (nodes *Nodes) Initialize(serviceAccount string) error {
 
 func (nodes *Nodes) registerNode(node *v1.Node) error {
 	nodeUUID := block.GetUUIDFromProviderID(node.Spec.ProviderID)
-	err := nodes.cspnodemanager.RegisterNode(nodeUUID, node.Name, node.GetObjectMeta())
+	err := nodes.cnsNodeManager.RegisterNode(nodeUUID, node.Name, node.GetObjectMeta())
 	return err
 }
 
@@ -74,7 +73,7 @@ func (nodes *Nodes) nodeAdd(obj interface{}) {
 		klog.Warningf("nodeAdd: unrecognized object %+v", obj)
 		return
 	}
-	err := nodes.cspnodemanager.RegisterNode(block.GetUUIDFromProviderID(node.Spec.ProviderID), node.Name, node.GetObjectMeta())
+	err := nodes.cnsNodeManager.RegisterNode(block.GetUUIDFromProviderID(node.Spec.ProviderID), node.Name, node.GetObjectMeta())
 	if err != nil {
 		klog.Warningf("Failed to register node:%q. err=%v", node.Name, err)
 	}
@@ -86,18 +85,20 @@ func (nodes *Nodes) nodeDelete(obj interface{}) {
 		klog.Warningf("nodeDelete: unrecognized object %+v", obj)
 		return
 	}
-	err := nodes.cspnodemanager.UnregisterNode(node.Name)
+	err := nodes.cnsNodeManager.UnregisterNode(node.Name)
 	if err != nil {
 		klog.Warningf("Failed to unregister node:%q. err=%v", node.Name, err)
 	}
 }
 
 func (nodes *Nodes) GetNodeByName(nodeName string) (*vsphere.VirtualMachine, error) {
-	return nodes.cspnodemanager.GetNodeByName(nodeName)
+	return nodes.cnsNodeManager.GetNodeByName(nodeName)
 }
 
+// GetSharedDatastoresInK8SCluster returns list of DatastoreInfo objects for datastores accessible to all
+// kubernetes nodes in the cluster.
 func (nodes *Nodes) GetSharedDatastoresInK8SCluster(ctx context.Context) ([]*vsphere.DatastoreInfo, error) {
-	nodeVMs, err := nodes.cspnodemanager.GetAllNodes()
+	nodeVMs, err := nodes.cnsNodeManager.GetAllNodes()
 	if err != nil {
 		klog.Errorf("Failed to get Nodes from nodeManager with err %+v", err)
 		return nil, err
@@ -108,9 +109,9 @@ func (nodes *Nodes) GetSharedDatastoresInK8SCluster(ctx context.Context) ([]*vsp
 		return make([]*vsphere.DatastoreInfo, 0), fmt.Errorf(errMsg)
 	}
 	var sharedDatastores []*vsphere.DatastoreInfo
-	for _, nodeVm := range nodeVMs {
-		klog.V(4).Infof("Getting accessible datastores for node %s", nodeVm.VirtualMachine)
-		accessibleDatastores, err := nodeVm.GetAllAccessibleDatastores(ctx)
+	for _, nodeVM := range nodeVMs {
+		klog.V(4).Infof("Getting accessible datastores for node %s", nodeVM.VirtualMachine)
+		accessibleDatastores, err := nodeVM.GetAllAccessibleDatastores(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -131,7 +132,7 @@ func (nodes *Nodes) GetSharedDatastoresInK8SCluster(ctx context.Context) ([]*vsp
 			sharedDatastores = sharedAccessibleDatastores
 		}
 		if len(sharedDatastores) == 0 {
-			return nil, fmt.Errorf("No shared datastores found in the Kubernetes cluster for nodeVm: %+v", nodeVm)
+			return nil, fmt.Errorf("No shared datastores found in the Kubernetes cluster for nodeVm: %+v", nodeVM)
 		}
 	}
 	klog.V(3).Infof("sharedDatastores : %+v", sharedDatastores)

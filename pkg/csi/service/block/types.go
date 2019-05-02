@@ -17,22 +17,24 @@ limitations under the License.
 package block
 
 import (
-	cspvolume "gitlab.eng.vmware.com/hatchway/common-csp/pkg/volume"
-	cnsvsphere "gitlab.eng.vmware.com/hatchway/common-csp/pkg/vsphere"
+	cnsvolume "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/volume"
+	cnsvsphere "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vsphere"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/common/config"
 )
 
+// Manager type comprises VirtualCenterConfig, CnsConfig, VolumeManager and VirtualCenterManager
 type Manager struct {
 	VcenterConfig  *cnsvsphere.VirtualCenterConfig
 	CnsConfig      *config.Config
-	VolumeManager  cspvolume.Manager
+	VolumeManager  cnsvolume.Manager
 	VcenterManager cnsvsphere.VirtualCenterManager
 }
 
+// CreateVolumeSpec is the Volume Spec used by CSI driver
 type CreateVolumeSpec struct {
 	Name              string
 	StoragePolicyName string
 	StoragePolicyID   string
 	Datastore         string
-	CapacityMB        uint64
+	CapacityMB        int64
 }

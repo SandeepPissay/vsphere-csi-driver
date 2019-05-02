@@ -58,6 +58,7 @@ func NewClient(name string) (clientset.Interface, error) {
 	return clientset.NewForConfig(newConfig)
 }
 
+// GetAllNodes returns all kubernetes nodes registered with the API server
 func GetAllNodes(k8sclient clientset.Interface) (*v1.NodeList, error) {
 	return k8sclient.CoreV1().Nodes().List(metav1.ListOptions{})
 }
