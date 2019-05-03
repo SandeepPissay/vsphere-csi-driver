@@ -22,6 +22,7 @@ import (
 	"log"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/block"
 	"testing"
+	"os"
 
 	"github.com/vmware/govmomi/simulator"
 	vimtypes "github.com/vmware/govmomi/vim25/types"
@@ -134,25 +135,7 @@ func TestMetadataSyncPVWorkflows(t *testing.T) {
 
 	cspVolumeManager := volume.GetManager(cspVirtualCenter)
 
-	// Create spec for new volume
-	sharedDatastore := simulator.Map.Any("Datastore").(*simulator.Datastore)
-
-	dc, err := cspVirtualCenter.GetDatacenters(ctx)
-	if err != nil || len(dc) == 0 {
-		t.Errorf("Failed to get datacenter for the path: %s. Error: %v", cnsVCenterConfig.DatacenterPaths[0], err)
-		t.Fatal(err)
-		return
-	}
-
-	datastoreObj, err := dc[0].GetDatastoreByName(ctx, sharedDatastore.Name)
-	if err != nil {
-		t.Errorf("Failed to get datastore with name: %s. Error: %v", sharedDatastore.Name, err)
-		t.Fatal(err)
-		return
-	}
-	var dsList []vimtypes.ManagedObjectReference
-	dsList = append(dsList, datastoreObj.Reference())
-
+	// Initialize metadata syncer object
 	var metadataSyncer *metadataSyncInformer
 	metadataSyncer = &metadataSyncInformer{
 		cfg:                  config,
@@ -160,6 +143,31 @@ func TestMetadataSyncPVWorkflows(t *testing.T) {
 		virtualcentermanager: cspVirtualCenterManager,
 		vcenter:              cspVirtualCenter,
 	}
+
+	// Create spec for new volume
+	var sharedDatastore string
+	if v := os.Getenv("VSPHERE_DATASTORE"); v != "" {
+		sharedDatastore = v
+	} else {
+		sharedDatastore = simulator.Map.Any("Datastore").(*simulator.Datastore).Info.GetDatastoreInfo().Name
+	}
+	dc, err := cspVirtualCenter.GetDatacenters(ctx)
+	if err != nil || len(dc) == 0 {
+		t.Errorf("Failed to get datacenter for the path: %s. Error: %v", cnsVCenterConfig.DatacenterPaths[0], err)
+		t.Fatal(err)
+		return
+	}
+
+	datastoreObj, err := dc[0].GetDatastoreByName(ctx, sharedDatastore)
+	if err != nil {
+		t.Errorf("Failed to get datastore with name: %s. Error: %v", sharedDatastore, err)
+		t.Fatal(err)
+		return
+	}
+	var dsList []vimtypes.ManagedObjectReference
+	dsList = append(dsList, datastoreObj.Reference())
+
+
 	createSpec := cnstypes.CnsVolumeCreateSpec{
 		DynamicData: vimtypes.DynamicData{},
 		Name:        testVolumeName,
@@ -188,11 +196,7 @@ func TestMetadataSyncPVWorkflows(t *testing.T) {
 	queryFilter := cnstypes.CnsQueryFilter{
 		VolumeIds: []cnstypes.CnsVolumeId{
 			cnstypes.CnsVolumeId{
-<<<<<<< HEAD
 				Id: volumeId.Id,
-=======
-				Id: volumeId.ID,
->>>>>>> 170c10ff5fbb61daba688c2ee0f8fbdfd4e03adf
 			},
 		},
 	}

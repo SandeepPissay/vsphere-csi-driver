@@ -20,8 +20,6 @@ import (
 	"errors"
 	"github.com/vmware/govmomi/vim25/types"
 	"golang.org/x/net/context"
-	"k8s.io/api/core/v1"
-	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/klog"
 	cnstypes "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vmomi/types"
 	cnsvsphere "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vsphere"
