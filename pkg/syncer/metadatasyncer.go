@@ -260,6 +260,7 @@ func pvDeleted(obj interface{}, metadataSyncer *metadataSyncInformer) {
 	}
 	if err := volumes.GetManager(metadataSyncer.vcenter).DeleteVolume(pv.Spec.CSI.VolumeHandle, deleteDisk); err != nil {
 		klog.Errorf("PVDelete: Failed to delete disk %s with error %+v", pv.Spec.CSI.VolumeHandle, err)
+
 		return
 	}
 

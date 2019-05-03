@@ -70,8 +70,6 @@ func configFromSimWithTLS(tlsConfig *tls.Config, insecureAllowed bool) (*cnsconf
 	// CNS Service simulator
 	model.Service.RegisterSDK(cnssim.New())
 
-	sharedDatastore := simulator.Map.Any("Datastore").(*simulator.Datastore)
-	cfg.Global.Datastore = sharedDatastore.Name
 
 	cfg.Global.InsecureFlag = insecureAllowed
 
@@ -137,7 +135,7 @@ func TestMetadataSyncPVWorkflows(t *testing.T) {
 	cspVolumeManager := volume.GetManager(cspVirtualCenter)
 
 	// Create spec for new volume
-	datastoreName := config.Global.Datastore
+	sharedDatastore := simulator.Map.Any("Datastore").(*simulator.Datastore)
 
 	dc, err := cspVirtualCenter.GetDatacenters(ctx)
 	if err != nil || len(dc) == 0 {
@@ -146,9 +144,9 @@ func TestMetadataSyncPVWorkflows(t *testing.T) {
 		return
 	}
 
-	datastoreObj, err := dc[0].GetDatastoreByName(ctx, datastoreName)
+	datastoreObj, err := dc[0].GetDatastoreByName(ctx, sharedDatastore.Name)
 	if err != nil {
-		t.Errorf("Failed to get datastore with name: %s. Error: %v", datastoreName, err)
+		t.Errorf("Failed to get datastore with name: %s. Error: %v", sharedDatastore.Name, err)
 		t.Fatal(err)
 		return
 	}
@@ -190,7 +188,11 @@ func TestMetadataSyncPVWorkflows(t *testing.T) {
 	queryFilter := cnstypes.CnsQueryFilter{
 		VolumeIds: []cnstypes.CnsVolumeId{
 			cnstypes.CnsVolumeId{
+<<<<<<< HEAD
 				Id: volumeId.Id,
+=======
+				Id: volumeId.ID,
+>>>>>>> 170c10ff5fbb61daba688c2ee0f8fbdfd4e03adf
 			},
 		},
 	}
