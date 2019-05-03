@@ -176,7 +176,7 @@ func getDatastoreMoRefs(datastores []*vsphere.DatastoreInfo) []vim25types.Manage
 	return datastoreMoRefs
 }
 
-// Helper function to create ContainerCluster object
+// GetContainerCluster creates ContainerCluster object from given parameters
 func GetContainerCluster(clusterid string, username string) cnstypes.CnsContainerCluster {
 	return cnstypes.CnsContainerCluster{
 		ClusterType: string(cnstypes.CnsClusterTypeKubernetes),

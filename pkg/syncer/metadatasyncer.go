@@ -23,7 +23,6 @@ import (
 	csictx "github.com/rexray/gocsi/context"
 	"github.com/vmware/govmomi/vim25/types"
 	"k8s.io/api/core/v1"
-	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/klog"
 	"os"
 	"reflect"
@@ -45,7 +44,6 @@ type metadataSyncInformer struct {
 	vcconfig             *cnsvsphere.VirtualCenterConfig
 	k8sInformerManager   *k8s.InformerManager
 	virtualcentermanager cnsvsphere.VirtualCenterManager
-	PVLister             corelisters.PersistentVolumeLister
 	vcenter              *cnsvsphere.VirtualCenter
 }
 
@@ -108,7 +106,6 @@ func (metadataSyncer *metadataSyncInformer) Init() error {
 		})
 	metadataSyncer.k8sInformerManager.AddPodListener(nil, podUpdated, podDeleted)
 
-	metadataSyncer.PVLister = metadataSyncer.k8sInformerManager.GetPVLister()
 	klog.V(2).Infof("Initialized metadata syncer")
 	stopCh := metadataSyncer.k8sInformerManager.Listen()
 	<-(stopCh)
@@ -158,7 +155,7 @@ func pvcDeleted(obj interface{}) {
 	fmt.Printf("Temporary implementation of PVC Delete\n")
 }
 
-// Implementation of PV Update workflow
+// pvUpdated updates volume metadata on VC
 func pvUpdated(oldObj, newObj interface{}, metadataSyncer *metadataSyncInformer) {
 	// Get old and new PV objects
 	oldPv, ok := oldObj.(*v1.PersistentVolume)
@@ -172,7 +169,7 @@ func pvUpdated(oldObj, newObj interface{}, metadataSyncer *metadataSyncInformer)
 		klog.Warningf("PVUpdated: unrecognized new object %+v", newObj)
 		return
 	}
-	klog.V(4).Infof("PVUpdate: Updating PV from %+v to %+v", oldPv, newPv)
+	klog.V(4).Infof("PVUpdate: PV Updated from %+v to %+v", oldPv, newPv)
 
 	// Check if vsphere volume
 	if newPv.Spec.CSI.Driver != csidriver {
@@ -227,27 +224,27 @@ func pvUpdated(oldObj, newObj interface{}, metadataSyncer *metadataSyncInformer)
 			},
 		}
 
-		klog.V(4).Infof("PVUpdate: vSphere Cloud Provider creating volume %s with create spec %+v", oldPv.Name, spew.Sdump(createSpec))
+		klog.V(4).Infof("PVUpdate: vSphere provisioner creating volume %s with create spec %+v", oldPv.Name, spew.Sdump(createSpec))
 		_, err := volumes.GetManager(metadataSyncer.vcenter).CreateVolume(createSpec)
 
 		if err != nil {
-			klog.Errorf("Failed to create disk %s with error %+v", oldPv.Name, err)
+			klog.Errorf("PVUpdate: Failed to create disk %s with error %+v", oldPv.Name, err)
 		}
 	}
 }
 
-// Implementation of PV Delete workflow
+// pvDeleted deletes volume metadata on VC
 func pvDeleted(obj interface{}, metadataSyncer *metadataSyncInformer) {
 	pv, ok := obj.(*v1.PersistentVolume)
 	if pv == nil || !ok {
 		klog.Warningf("PVDeleted: unrecognized object %+v", obj)
 		return
 	}
-	klog.V(4).Infof("PVDelete: Deleting PV: %+v", pv)
+	klog.V(4).Infof("PVDeleted: Deleting PV: %+v", pv)
 
 	// Check if vsphere volume
 	if pv.Spec.CSI.Driver != csidriver {
-		klog.V(3).Infof("PVDelete: Not a vsphere volume: %+v", pv)
+		klog.V(3).Infof("PVDeleted: Not a vsphere volume: %+v", pv)
 		return
 	}
 	var deleteDisk bool
@@ -258,11 +255,12 @@ func pvDeleted(obj interface{}, metadataSyncer *metadataSyncInformer) {
 		// In this case, the syncer will remove the volume from VC
 		deleteDisk = true
 	}
+	klog.V(4).Infof("PVDeleted: vSphere provisioner deleting volume %v with delete disk %v", pv, deleteDisk)
 	if err := volumes.GetManager(metadataSyncer.vcenter).DeleteVolume(pv.Spec.CSI.VolumeHandle, deleteDisk); err != nil {
-		klog.Errorf("PVDelete: Failed to delete disk %s with error %+v", pv.Spec.CSI.VolumeHandle, err)
-
+		klog.Errorf("PVDeleted: Failed to delete disk %s with error %+v", pv.Spec.CSI.VolumeHandle, err)
 		return
 	}
+
 
 }
 

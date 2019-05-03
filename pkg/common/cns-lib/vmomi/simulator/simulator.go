@@ -148,6 +148,7 @@ func (m *CnsVolumeManager) CnsDeleteVolume(ctx context.Context, req *cnstypes.Cn
 	}
 }
 
+// CnsUpdateVolumeMetadata simulates UpdateVolumeMetadata call for simulated vc
 func (m *CnsVolumeManager) CnsUpdateVolumeMetadata(ctx context.Context, req *cnstypes.CnsUpdateVolumeMetadata) soap.HasFault {
 	task := simulator.CreateTask(m, "CnsUpdateVolumeMetadata", func(*simulator.Task) (vim25types.AnyType, vim25types.BaseMethodFault) {
 		if len(req.UpdateSpecs) == 0 {

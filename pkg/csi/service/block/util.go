@@ -109,7 +109,7 @@ func GetVcenterIPs(cfg *config.Config) ([]string, error) {
 	return vCenterIPs, err
 }
 
-// Function to create CnsKubernetesEnityMetaData object from given parameters
+// GetCnsKubernetesEntityMetaData creates a CnsKubernetesEntityMetadataObject object from given parameters
 func GetCnsKubernetesEntityMetaData(entityName string, labels []types.KeyValue, deleteFlag bool, entityType string, namespace string) *cnstypes.CnsKubernetesEntityMetadata {
 	entityMetadata := &cnstypes.CnsKubernetesEntityMetadata{}
 	entityMetadata.EntityName = entityName
