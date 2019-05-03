@@ -155,7 +155,7 @@ func pvcDeleted(obj interface{}) {
 	fmt.Printf("Temporary implementation of PVC Delete\n")
 }
 
-// pvUpdated updates volume metadata on VC
+// pvUpdated updates volume metadata on VC when volume labels on K8S cluster have been updated
 func pvUpdated(oldObj, newObj interface{}, metadataSyncer *metadataSyncInformer) {
 	// Get old and new PV objects
 	oldPv, ok := oldObj.(*v1.PersistentVolume)
@@ -233,7 +233,7 @@ func pvUpdated(oldObj, newObj interface{}, metadataSyncer *metadataSyncInformer)
 	}
 }
 
-// pvDeleted deletes volume metadata on VC
+// pvDeleted deletes volume metadata on VC when volume has been deleted on K8s cluster
 func pvDeleted(obj interface{}, metadataSyncer *metadataSyncInformer) {
 	pv, ok := obj.(*v1.PersistentVolume)
 	if pv == nil || !ok {
