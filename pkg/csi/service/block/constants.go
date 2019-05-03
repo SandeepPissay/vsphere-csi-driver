@@ -32,22 +32,13 @@ const (
 	// AttributeDiskType is a PersistentVolume's attribute.
 	AttributeDiskType = "type"
 
-	// AttributeDiskParentType is the type of the PersistentVolume's parameters.
-	// For Example: parent_type: "Datastore"
-	AttributeDiskParentType = "parent_type"
+	// AttributeDatastoreName represents name of the Datastore in the Storage Classs
+	// For Example: Datastore: "sharedVmfs-0"
+	AttributeDatastoreName = "Datastore"
 
-	// AttributeDiskParentName is the name for the PersistentVolume's parameter specified with parent_type.
-	// For Example: parent_name: "sharedVmfs-0"
-	AttributeDiskParentName = "parent_name"
-	// AttributeStoragePolicyType is a Kubernetes volume label.
-	AttributeStoragePolicyType = "policy_type"
-	// AttributeStoragePolicyType is a Kubernetes volume label.
-	AttributeStoragePolicyName = "policy_name"
-
-	// DatastoreType is the permitted value for AttributeDiskParentType
-	DatastoreType = "Datastore"
-	//StoragePolicyType is the permitted value for AtrributeStoragePolicyType
-	StoragePolicyType = "StoragePolicy"
+	// AttributeStoragePolicyName represents name of the Storage Policy in the Storage Classs
+	// For Example: StoragePolicy: "vSAN Default Storage Policy"
+	AttributeStoragePolicyName = "StoragePolicy"
 
 	//ProviderPrefix is the prefix used for the ProviderID set on the node
 	// Example: vsphere://4201794a-f26b-8914-d95a-edeb7ecc4a8f
