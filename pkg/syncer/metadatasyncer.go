@@ -21,15 +21,15 @@ import (
 	"fmt"
 	"github.com/davecgh/go-spew/spew"
 	csictx "github.com/rexray/gocsi/context"
-	cnstypes "gitlab.eng.vmware.com/hatchway/common-csp/cns/types"
-	volumes "gitlab.eng.vmware.com/hatchway/common-csp/pkg/volume"
-	volumestypes "gitlab.eng.vmware.com/hatchway/common-csp/pkg/volume/types"
-	cnsvsphere "gitlab.eng.vmware.com/hatchway/common-csp/pkg/vsphere"
+	"github.com/vmware/govmomi/vim25/types"
 	"k8s.io/api/core/v1"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/klog"
 	"os"
 	"reflect"
+	cnstypes "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vmomi/types"
+	volumes "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/volume"
+	cnsvsphere "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vsphere"
 	cnsconfig "sigs.k8s.io/vsphere-csi-driver/pkg/common/config"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/block"
 	vTypes "sigs.k8s.io/vsphere-csi-driver/pkg/csi/types"
@@ -42,7 +42,7 @@ const (
 
 type metadataSyncInformer struct {
 	cfg                  *cnsconfig.Config
-	cnsconfig            *cnsvsphere.VirtualCenterConfig
+	vcconfig             *cnsvsphere.VirtualCenterConfig
 	k8sInformerManager   *k8s.InformerManager
 	virtualcentermanager cnsvsphere.VirtualCenterManager
 	PVLister             corelisters.PersistentVolumeLister
@@ -65,7 +65,7 @@ func (metadataSyncer *metadataSyncInformer) Init() error {
 		return err
 	}
 
-	metadataSyncer.cnsconfig, err = block.GetVirtualCenterConfig(metadataSyncer.cfg)
+	metadataSyncer.vcconfig, err = block.GetVirtualCenterConfig(metadataSyncer.cfg)
 	if err != nil {
 		klog.Errorf("Failed to get VirtualCenterConfig. err=%v", err)
 		return err
@@ -75,7 +75,7 @@ func (metadataSyncer *metadataSyncInformer) Init() error {
 	metadataSyncer.virtualcentermanager = cnsvsphere.GetVirtualCenterManager()
 
 	// Register virtual center manager
-	metadataSyncer.vcenter, err = metadataSyncer.virtualcentermanager.RegisterVirtualCenter(metadataSyncer.cnsconfig)
+	metadataSyncer.vcenter, err = metadataSyncer.virtualcentermanager.RegisterVirtualCenter(metadataSyncer.vcconfig)
 	if err != nil {
 		klog.Errorf("Failed to register VirtualCenter . err=%v", err)
 		return err
@@ -86,7 +86,7 @@ func (metadataSyncer *metadataSyncInformer) Init() error {
 	defer cancel()
 	err = metadataSyncer.vcenter.Connect(ctx)
 	if err != nil {
-		klog.Errorf("Failed to connect to VirtualCenter host: %q. err=%v", metadataSyncer.cnsconfig.Host, err)
+		klog.Errorf("Failed to connect to VirtualCenter host: %q. err=%v", metadataSyncer.vcconfig.Host, err)
 		return err
 	}
 	// Create the kubernetes client from config
@@ -160,6 +160,7 @@ func pvcDeleted(obj interface{}) {
 
 // Implementation of PV Update workflow
 func pvUpdated(oldObj, newObj interface{}, metadataSyncer *metadataSyncInformer) {
+	// Get old and new PV objects
 	oldPv, ok := oldObj.(*v1.PersistentVolume)
 	if oldPv == nil || !ok {
 		klog.Warningf("PVUpdated: unrecognized old object %+v", oldObj)
@@ -178,43 +179,52 @@ func pvUpdated(oldObj, newObj interface{}, metadataSyncer *metadataSyncInformer)
 		klog.V(3).Infof("PVUpdate: PV is not a vsphere volume: %+v", newPv)
 		return
 	}
+	// Return if new PV status is Pending or Failed
 	if newPv.Status.Phase == v1.VolumePending || newPv.Status.Phase == v1.VolumeFailed {
 		klog.V(3).Infof("PVUpdate: PV %s metadata is not updated since updated PV is in phase %s", newPv.Name, newPv.Status.Phase)
 		return
 	}
-	newLabels := newPv.GetLabels()
-	if oldPv.Status.Phase == v1.VolumeAvailable && reflect.DeepEqual(newLabels, oldPv.GetLabels()) {
+	// Return if labels are unchanged
+	if oldPv.Status.Phase == v1.VolumeAvailable && reflect.DeepEqual(newPv.GetLabels(), oldPv.GetLabels()) {
 		klog.V(3).Infof("PVUpdate: PV labels have not changed")
 		return
 	}
 
-	var metadataList []volumestypes.EntityMetaData
-	pvMetadata := block.GetEntityMetaData(newPv.Name, newPv.Namespace,
-		string(cnstypes.CnsKubernetesEntityTypePV),
-		newPv.Labels, false)
-	metadataList = append(metadataList, pvMetadata)
+	// Create new metadata spec
+	var newLabels []types.KeyValue
+	for labelKey, labelVal := range newPv.GetLabels() {
+		newLabels = append(newLabels, types.KeyValue{
+			Key:   labelKey,
+			Value: labelVal,
+		})
+	}
+
+	var metadataList []cnstypes.BaseCnsEntityMetadata
+	pvMetadata := block.GetCnsKubernetesEntityMetaData(newPv.Name, newLabels, false, string(cnstypes.CnsKubernetesEntityTypePV), newPv.Namespace)
+	metadataList = append(metadataList, cnstypes.BaseCnsEntityMetadata(pvMetadata))
 
 	if oldPv.Status.Phase == v1.VolumeAvailable || newPv.Spec.StorageClassName != "" {
-		updateSpec := &volumestypes.UpdateSpec{
-			VolumeID: &volumestypes.VolumeID{
-				ID: newPv.Spec.CSI.VolumeHandle,
+		updateSpec := &cnstypes.CnsVolumeMetadataUpdateSpec{
+			VolumeId: cnstypes.CnsVolumeId{
+				Id: newPv.Spec.CSI.VolumeHandle,
 			},
-			ContainerCluster: block.GetContainerCluster(metadataSyncer.cfg.Global.ClusterID, metadataSyncer.cfg.VirtualCenter[metadataSyncer.vcenter.Config.Host].User),
-			MetaData:         metadataList,
+			Metadata: cnstypes.CnsVolumeMetadata{
+				ContainerCluster: block.GetContainerCluster(metadataSyncer.cfg.Global.ClusterID, metadataSyncer.cfg.VirtualCenter[metadataSyncer.vcenter.Config.Host].User),
+				EntityMetadata:   metadataList,
+			},
 		}
 
-		klog.V(4).Infof("PVUpdated: Calling UpdateVolumeMetadata for volume %s with updateSpec: %+v", updateSpec.VolumeID.ID, spew.Sdump(updateSpec))
+		klog.V(4).Infof("PVUpdated: Calling UpdateVolumeMetadata for volume %s with updateSpec: %+v", updateSpec.VolumeId.Id, spew.Sdump(updateSpec))
 		if err := volumes.GetManager(metadataSyncer.vcenter).UpdateVolumeMetadata(updateSpec); err != nil {
 			klog.Errorf("PVUpdate: UpdateVolumeMetadata failed with err %v", err)
 		}
 	} else {
-		createSpec := &volumestypes.CreateSpec{
+		createSpec := &cnstypes.CnsVolumeCreateSpec{
 			Name: oldPv.Name,
-			BackingInfo: &volumestypes.BlockBackingInfo{
-				BackingDiskID: newPv.Spec.CSI.VolumeHandle,
+			Metadata: cnstypes.CnsVolumeMetadata{
+				ContainerCluster: block.GetContainerCluster(metadataSyncer.cfg.Global.ClusterID, metadataSyncer.cfg.VirtualCenter[metadataSyncer.vcenter.Config.Host].User),
+				EntityMetadata:   metadataList,
 			},
-			ContainerCluster: block.GetContainerCluster(metadataSyncer.cfg.Global.ClusterID, metadataSyncer.cfg.VirtualCenter[metadataSyncer.vcenter.Config.Host].User),
-			MetaData:         metadataList,
 		}
 
 		klog.V(4).Infof("PVUpdate: vSphere Cloud Provider creating volume %s with create spec %+v", oldPv.Name, spew.Sdump(createSpec))
@@ -240,20 +250,16 @@ func pvDeleted(obj interface{}, metadataSyncer *metadataSyncInformer) {
 		klog.V(3).Infof("PVDelete: Not a vsphere volume: %+v", pv)
 		return
 	}
-	deleteSpec := &volumestypes.DeleteSpec{
-		VolumeID: &volumestypes.VolumeID{
-			ID: pv.Spec.CSI.VolumeHandle,
-		},
-	}
+	var deleteDisk bool
 	if pv.Spec.ClaimRef == nil || (pv.Spec.PersistentVolumeReclaimPolicy != v1.PersistentVolumeReclaimDelete) {
-		deleteSpec.DeleteDisk = false
+		deleteDisk = false
 	} else {
 		// We set delete disk=true for the case where PV status is failed and kubernetes has deleted the volume after timing out
 		// In this case, the syncer will remove the volume from VC
-		deleteSpec.DeleteDisk = true
+		deleteDisk = true
 	}
-	if err := volumes.GetManager(metadataSyncer.vcenter).DeleteVolume(deleteSpec); err != nil {
-		klog.Errorf("PVDelete: Failed to delete disk %s with error %+v", deleteSpec.VolumeID.ID, err)
+	if err := volumes.GetManager(metadataSyncer.vcenter).DeleteVolume(pv.Spec.CSI.VolumeHandle, deleteDisk); err != nil {
+		klog.Errorf("PVDelete: Failed to delete disk %s with error %+v", pv.Spec.CSI.VolumeHandle, err)
 		return
 	}
 

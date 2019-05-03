@@ -25,22 +25,23 @@ import (
 
 	"github.com/vmware/govmomi/simulator"
 	vimtypes "github.com/vmware/govmomi/vim25/types"
-	cnssim "gitlab.eng.vmware.com/hatchway/common-csp/cns/simulator"
-	cnstypes "gitlab.eng.vmware.com/hatchway/common-csp/cns/types"
-	"gitlab.eng.vmware.com/hatchway/common-csp/pkg/volume"
-	cnsvolumetypes "gitlab.eng.vmware.com/hatchway/common-csp/pkg/volume/types"
-	cnsvsphere "gitlab.eng.vmware.com/hatchway/common-csp/pkg/vsphere"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	cnssim "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vmomi/simulator"
+	cnstypes "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vmomi/types"
+	"sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/volume"
+	cnsvsphere "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vsphere"
 	cnsconfig "sigs.k8s.io/vsphere-csi-driver/pkg/common/config"
 
 	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 const (
-	testVolumeName  = "test-volume"
+	testLabelName   = "test-label"
+	testLabelValue  = "test-value"
 	testClusterName = "test-cluster"
-	pvName          = "pv_name"
+	testVolumeName  = "test-volume"
+	testVolumeType  = "BLOCK"
 	gbInMb          = 1024
 )
 
@@ -138,14 +139,14 @@ func TestMetadataSyncPVWorkflows(t *testing.T) {
 	// Create spec for new volume
 	datastoreName := config.Global.Datastore
 
-	dc, err := cspVirtualCenter.GetDatacenter(ctx, cnsVCenterConfig.DatacenterPaths[0])
-	if err != nil {
+	dc, err := cspVirtualCenter.GetDatacenters(ctx)
+	if err != nil || len(dc) == 0 {
 		t.Errorf("Failed to get datacenter for the path: %s. Error: %v", cnsVCenterConfig.DatacenterPaths[0], err)
 		t.Fatal(err)
 		return
 	}
 
-	datastoreObj, err := dc.GetDatastoreByName(ctx, datastoreName)
+	datastoreObj, err := dc[0].GetDatastoreByName(ctx, datastoreName)
 	if err != nil {
 		t.Errorf("Failed to get datastore with name: %s. Error: %v", datastoreName, err)
 		t.Fatal(err)
@@ -157,26 +158,27 @@ func TestMetadataSyncPVWorkflows(t *testing.T) {
 	var metadataSyncer *metadataSyncInformer
 	metadataSyncer = &metadataSyncInformer{
 		cfg:                  config,
-		cnsconfig:            cnsVCenterConfig,
+		vcconfig:             cnsVCenterConfig,
 		virtualcentermanager: cspVirtualCenterManager,
 		vcenter:              cspVirtualCenter,
 	}
-	// Create a test volume
-	createSpec := cnsvolumetypes.CreateSpec{
-		Name:       testVolumeName,
-		Datastores: dsList,
-		BackingInfo: &cnsvolumetypes.BlockBackingInfo{
-			BackingObjectInfo: cnsvolumetypes.BackingObjectInfo{
-				Capacity: gbInMb,
+	createSpec := cnstypes.CnsVolumeCreateSpec{
+		DynamicData: vimtypes.DynamicData{},
+		Name:        testVolumeName,
+		VolumeType:  testVolumeType,
+		Datastores:  dsList,
+		Metadata: cnstypes.CnsVolumeMetadata{
+			DynamicData: vimtypes.DynamicData{},
+			ContainerCluster: cnstypes.CnsContainerCluster{
+				ClusterType: string(cnstypes.CnsClusterTypeKubernetes),
+				ClusterId:   config.Global.ClusterID,
+				VSphereUser: config.VirtualCenter[cnsVCenterConfig.Host].User,
 			},
 		},
-		ContainerCluster: cnsvolumetypes.ContainerCluster{
-			ClusterID:   config.Global.ClusterID,
-			ClusterType: cnstypes.CnsClusterTypeKubernetes,
-			VSphereUser: config.VirtualCenter[cnsVCenterConfig.Host].User,
+		BackingObjectDetails: &cnstypes.CnsBackingObjectDetails{
+			CapacityInMb: gbInMb,
 		},
 	}
-
 	volumeId, err := cspVolumeManager.CreateVolume(&createSpec)
 	if err != nil {
 		t.Errorf("Failed to create volume. Error: %+v", err)
@@ -188,7 +190,7 @@ func TestMetadataSyncPVWorkflows(t *testing.T) {
 	queryFilter := cnstypes.CnsQueryFilter{
 		VolumeIds: []cnstypes.CnsVolumeId{
 			cnstypes.CnsVolumeId{
-				Id: volumeId.ID,
+				Id: volumeId.Id,
 			},
 		},
 	}
@@ -199,19 +201,20 @@ func TestMetadataSyncPVWorkflows(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if len(queryResult.Volumes) != 1 && queryResult.Volumes[0].VolumeId.Id != volumeId.ID {
+	if len(queryResult.Volumes) != 1 && queryResult.Volumes[0].VolumeId.Id != volumeId.Id {
 		t.Fatalf("Failed to find the newly created volume with ID: %s", volumeId)
 	}
 
+	// Create update spec
 	var oldLabel map[string]string
 	var newLabel map[string]string
 
 	oldLabel = make(map[string]string)
 	newLabel = make(map[string]string)
-	newLabel[pvName] = queryResult.Volumes[0].Name
+	newLabel[testLabelName] = testLabelValue
 
-	oldPv := getCSPPersistentVolumeSpec(volumeId.ID, v1.PersistentVolumeReclaimRetain, oldLabel)
-	newPv := getCSPPersistentVolumeSpec(volumeId.ID, v1.PersistentVolumeReclaimRetain, newLabel)
+	oldPv := getCSPPersistentVolumeSpec(volumeId.Id, v1.PersistentVolumeReclaimRetain, oldLabel)
+	newPv := getCSPPersistentVolumeSpec(volumeId.Id, v1.PersistentVolumeReclaimRetain, newLabel)
 
 	pvUpdated(oldPv, newPv, metadataSyncer)
 
@@ -220,9 +223,14 @@ func TestMetadataSyncPVWorkflows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	queryLabel := queryResult.Volumes[0].Metadata.EntityMetadata[0].GetCnsEntityMetadata().Labels[0].Value
-	if len(queryResult.Volumes) != 1 || queryLabel != testVolumeName {
-		t.Fatalf("update query failed with : %s %s", volumeId, queryLabel)
+	if len(queryResult.Volumes) != 1 || len(queryResult.Volumes[0].Metadata.EntityMetadata) != 1 || len(queryResult.Volumes[0].Metadata.EntityMetadata[0].GetCnsEntityMetadata().Labels) != 1 {
+		t.Fatalf("pvUpdated failed for volume Id %s ", volumeId)
+	}
+	queryLabel := queryResult.Volumes[0].Metadata.EntityMetadata[0].GetCnsEntityMetadata().Labels[0].Key
+	queryValue := queryResult.Volumes[0].Metadata.EntityMetadata[0].GetCnsEntityMetadata().Labels[0].Value
+
+	if queryLabel != testLabelName || queryValue != testLabelValue {
+		t.Fatalf("update query failed for volume Id: %s. Expected key: %s value: %s Got key: %s value %s", volumeId, testLabelName, testLabelValue, queryLabel, queryValue)
 	}
 
 	pvDeleted(newPv, metadataSyncer)
@@ -233,9 +241,10 @@ func TestMetadataSyncPVWorkflows(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if len(queryResult.Volumes) != 0 {
-		t.Fatalf("Volume should not exist after deletion with ID: %s", volumeId.ID)
+	if len(queryResult.Volumes) != 0 && queryResult.Volumes[0].VolumeId.Id == volumeId.Id {
+		t.Fatalf("Volume should not exist after deletion with ID: %s", volumeId.Id)
 	}
+
 }
 
 // function to create PV volume spec with given Volume Handle, Reclaim Policy and labels
