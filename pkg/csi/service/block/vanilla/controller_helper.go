@@ -73,7 +73,6 @@ func checkAPI(version string) error {
 func validateCreateVolumeRequest(req *csi.CreateVolumeRequest) error {
 	// Get create params
 	params := req.GetParameters()
-	// Validate volume parameters
 	if params != nil {
 		for paramName := range params {
 			if !(paramName == block.AttributeDatastoreName || paramName == block.AttributeStoragePolicyName) {
@@ -82,7 +81,6 @@ func validateCreateVolumeRequest(req *csi.CreateVolumeRequest) error {
 			}
 		}
 	}
-
 	// Volume Name
 	volName := req.GetName()
 	if len(volName) == 0 {

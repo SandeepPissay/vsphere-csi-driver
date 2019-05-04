@@ -22,11 +22,17 @@ import (
 	"github.com/google/uuid"
 	"github.com/vmware/govmomi"
 	"github.com/vmware/govmomi/simulator"
+	"github.com/vmware/govmomi/vim25/types"
 	vim25types "github.com/vmware/govmomi/vim25/types"
 	cnstypes "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vmomi/types"
 	cnsvolume "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/volume"
 	cnsvsphere "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vsphere"
 	"testing"
+)
+
+const (
+	testLabel = "testLabel"
+	testValue = "testValue"
 )
 
 func TestSimulator(t *testing.T) {
@@ -122,6 +128,58 @@ func TestSimulator(t *testing.T) {
 
 	if len(queryResult.Volumes) != existingNumDisks+1 {
 		t.Fatal("Number of volumes mismatches after creating a single volume")
+	}
+
+	// Update
+	var metadataList []cnstypes.BaseCnsEntityMetadata
+	newLabels := []types.KeyValue{
+		{
+			Key:   testLabel,
+			Value: testValue,
+		},
+	}
+	metadata := &cnstypes.CnsKubernetesEntityMetadata{
+
+		CnsEntityMetadata: cnstypes.CnsEntityMetadata{
+			DynamicData: vim25types.DynamicData{},
+			EntityName:  queryResult.Volumes[0].Name,
+			Labels:      newLabels,
+			Delete:      false,
+		},
+		EntityType: string(cnstypes.CnsKubernetesEntityTypePV),
+		Namespace:  "",
+	}
+	metadataList = append(metadataList, cnstypes.BaseCnsEntityMetadata(metadata))
+	updateSpecList := []cnstypes.CnsVolumeMetadataUpdateSpec{
+		{
+			DynamicData: vim25types.DynamicData{},
+			VolumeId:    createVolumeOperationRes.VolumeId,
+			Metadata: cnstypes.CnsVolumeMetadata{
+				DynamicData:      vim25types.DynamicData{},
+				ContainerCluster: queryResult.Volumes[0].Metadata.ContainerCluster,
+				EntityMetadata:   metadataList,
+			},
+		},
+	}
+	updateTask, err := cnsClient.UpdateVolumeMetadata(ctx, updateSpecList)
+	if err != nil {
+		t.Fatal(err)
+	}
+	updateTaskInfo, err := cnsvolume.GetTaskInfo(ctx, updateTask)
+	if err != nil {
+		t.Fatal(err)
+	}
+	updateTaskResult, err := cnsvolume.GetTaskResult(ctx, updateTaskInfo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updateTaskResult == nil {
+		t.Fatalf("Empty create task results")
+	}
+
+	updateVolumeOperationRes := updateTaskResult.GetCnsVolumeOperationResult()
+	if updateVolumeOperationRes.Fault != nil {
+		t.Fatalf("Failed to create volume: fault=%s", spew.Sdump(updateVolumeOperationRes.Fault))
 	}
 
 	// Delete

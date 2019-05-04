@@ -18,8 +18,10 @@ package block
 
 import (
 	"errors"
+	"github.com/vmware/govmomi/vim25/types"
 	"golang.org/x/net/context"
 	"k8s.io/klog"
+	cnstypes "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vmomi/types"
 	cnsvsphere "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vsphere"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/common/config"
 	"strconv"
@@ -92,4 +94,30 @@ func GetVirtualCenterConfig(cfg *config.Config) (*cnsvsphere.VirtualCenterConfig
 		DatacenterPaths: strings.Split(cfg.VirtualCenter[host].Datacenters, ","),
 	}
 	return vcConfig, nil
+}
+
+// GetVcenterIPs returns list of vCenter IPs from VSphereConfig
+func GetVcenterIPs(cfg *config.Config) ([]string, error) {
+	var err error
+	vCenterIPs := make([]string, 0)
+	for key := range cfg.VirtualCenter {
+		vCenterIPs = append(vCenterIPs, key)
+	}
+	if len(vCenterIPs) == 0 {
+		err = errors.New("Unable get vCenter Hosts from VSphereConfig")
+	}
+	return vCenterIPs, err
+}
+
+// GetCnsKubernetesEntityMetaData creates a CnsKubernetesEntityMetadataObject object from given parameters
+func GetCnsKubernetesEntityMetaData(entityName string, labels []types.KeyValue, deleteFlag bool, entityType string, namespace string) *cnstypes.CnsKubernetesEntityMetadata {
+	entityMetadata := &cnstypes.CnsKubernetesEntityMetadata{}
+	entityMetadata.EntityName = entityName
+	entityMetadata.Delete = deleteFlag
+	if labels != nil {
+		entityMetadata.Labels = labels
+	}
+	entityMetadata.EntityType = entityType
+	entityMetadata.Namespace = namespace
+	return entityMetadata
 }

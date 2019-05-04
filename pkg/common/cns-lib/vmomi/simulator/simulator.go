@@ -147,3 +147,35 @@ func (m *CnsVolumeManager) CnsDeleteVolume(ctx context.Context, req *cnstypes.Cn
 		},
 	}
 }
+
+// CnsUpdateVolumeMetadata simulates UpdateVolumeMetadata call for simulated vc
+func (m *CnsVolumeManager) CnsUpdateVolumeMetadata(ctx context.Context, req *cnstypes.CnsUpdateVolumeMetadata) soap.HasFault {
+	task := simulator.CreateTask(m, "CnsUpdateVolumeMetadata", func(*simulator.Task) (vim25types.AnyType, vim25types.BaseMethodFault) {
+		if len(req.UpdateSpecs) == 0 {
+			return nil, &vim25types.InvalidArgument{InvalidProperty: "CnsUpdateVolumeMetadataSpec"}
+		}
+		operationResult := []cnstypes.BaseCnsVolumeOperationResult{}
+		for _, updateSpecs := range req.UpdateSpecs {
+			for _, dsVolumes := range m.volumes {
+				for id, volume := range dsVolumes {
+					if id.Id == updateSpecs.VolumeId.Id {
+						volume.Metadata.EntityMetadata = updateSpecs.Metadata.EntityMetadata
+						operationResult = append(operationResult, &cnstypes.CnsVolumeOperationResult{
+							VolumeId: volume.VolumeId,
+						})
+						break
+					}
+				}
+			}
+
+		}
+		return &cnstypes.CnsVolumeOperationBatchResult{
+			VolumeResults: operationResult,
+		}, nil
+	})
+	return &methods.CnsUpdateVolumeBody{
+		Res: &cnstypes.CnsUpdateVolumeMetadataResponse{
+			Returnval: task.Run(),
+		},
+	}
+}
