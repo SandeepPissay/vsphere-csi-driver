@@ -29,7 +29,6 @@ require (
 	github.com/imdario/mergo v0.3.7 // indirect
 	github.com/jonboulle/clockwork v0.1.0 // indirect
 	github.com/json-iterator/go v1.1.6 // indirect
-	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.1 // indirect
 	github.com/onsi/ginkgo v1.8.0
 	github.com/onsi/gomega v1.4.3
@@ -61,5 +60,7 @@ require (
 	k8s.io/apimachinery v0.0.0-20180621070125-103fd098999d
 	k8s.io/client-go v8.0.0+incompatible
 	k8s.io/klog v0.2.0
+	k8s.io/kube-openapi v0.0.0-20190430213458-20ad7abe0e6a // indirect
+	k8s.io/kubernetes v1.11.2
 	k8s.io/sample-controller v0.0.0-20180822125000-be98dc6210ab
 )

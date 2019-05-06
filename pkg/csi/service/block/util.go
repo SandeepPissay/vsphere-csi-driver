@@ -18,8 +18,11 @@ package block
 
 import (
 	"errors"
+	"fmt"
 	"github.com/vmware/govmomi/vim25/types"
 	"golang.org/x/net/context"
+	"k8s.io/api/core/v1"
+	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/klog"
 	cnstypes "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vmomi/types"
 	cnsvsphere "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vsphere"
@@ -110,14 +113,35 @@ func GetVcenterIPs(cfg *config.Config) ([]string, error) {
 }
 
 // GetCnsKubernetesEntityMetaData creates a CnsKubernetesEntityMetadataObject object from given parameters
-func GetCnsKubernetesEntityMetaData(entityName string, labels []types.KeyValue, deleteFlag bool, entityType string, namespace string) *cnstypes.CnsKubernetesEntityMetadata {
+func GetCnsKubernetesEntityMetaData(entityName string, labels map[string]string, deleteFlag bool, entityType string, namespace string) *cnstypes.CnsKubernetesEntityMetadata {
+	// Create new metadata spec
+	var newLabels []types.KeyValue
+	for labelKey, labelVal := range labels {
+		newLabels = append(newLabels, types.KeyValue{
+			Key:   labelKey,
+			Value: labelVal,
+		})
+	}
+
 	entityMetadata := &cnstypes.CnsKubernetesEntityMetadata{}
 	entityMetadata.EntityName = entityName
 	entityMetadata.Delete = deleteFlag
 	if labels != nil {
-		entityMetadata.Labels = labels
+		entityMetadata.Labels = newLabels
 	}
 	entityMetadata.EntityType = entityType
 	entityMetadata.Namespace = namespace
 	return entityMetadata
+}
+
+// GetPersistentVolume returns a Persistent Volume object attached to the PVC given in parameters
+func GetPersistentVolume(pvc *v1.PersistentVolumeClaim, pvLister corelisters.PersistentVolumeLister) (*v1.PersistentVolume, error) {
+	volumeName := pvc.Spec.VolumeName
+	pv, err := pvLister.Get(volumeName)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to find PV %q in PV informer cache with error : %v", volumeName, err)
+	}
+
+	return pv.DeepCopy(), nil
 }
