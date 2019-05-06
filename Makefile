@@ -376,6 +376,21 @@ push-$(IMAGE_SYNCER) upload-$(IMAGE_SYNCER): $(IMAGE_SYNCER_D) login-to-image-re
 push-images upload-images: upload-csi-image upload-syncer-image
 
 ################################################################################
+##                                  CI IMAGE                                  ##
+################################################################################
+.PHONY: build-ci-image
+build-ci-image:
+	$(MAKE) -C hack/images/ci build
+
+.PHONY: push-ci-image
+push-ci-image:
+	$(MAKE) -C hack/images/ci push
+
+.PHONY: print-ci-image
+print-ci-image:
+	@$(MAKE) --no-print-directory -C hack/images/ci print
+
+################################################################################
 ##                               PRINT VERISON                                ##
 ################################################################################
 .PHONY: version
