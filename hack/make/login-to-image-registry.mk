@@ -1,4 +1,4 @@
-REGISTRY ?= gcr.io/cloud-provider-vsphere
+REGISTRY ?= vsphere-csi-driver
 
 .PHONY: login-to-image-registry
 login-to-image-registry:
