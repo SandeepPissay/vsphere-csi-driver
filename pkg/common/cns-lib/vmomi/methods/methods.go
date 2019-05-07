@@ -18,7 +18,6 @@ package methods
 
 import (
 	"context"
-
 	"github.com/vmware/govmomi/vim25/soap"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vmomi/types"
 )
@@ -133,6 +132,26 @@ func (b *CnsQueryVolumeBody) Fault() *soap.Fault { return b.Fault_ }
 
 func CnsQueryVolume(ctx context.Context, r soap.RoundTripper, req *types.CnsQueryVolume) (*types.CnsQueryVolumeResponse, error) {
 	var reqBody, resBody CnsQueryVolumeBody
+
+	reqBody.Req = req
+
+	if err := r.RoundTrip(ctx, &reqBody, &resBody); err != nil {
+		return nil, err
+	}
+
+	return resBody.Res, nil
+}
+
+type CnsQueryAllVolumeBody struct {
+	Req    *types.CnsQueryAllVolume         `xml:"urn:vsan CnsQueryAllVolume,omitempty"`
+	Res    *types.CnsQueryAllVolumeResponse `xml:"urn:vsan CnsQueryAllVolumeResponse,omitempty"`
+	Fault_ *soap.Fault                      `xml:"http://schemas.xmlsoap.org/soap/envelope/ Fault,omitempty"`
+}
+
+func (b *CnsQueryAllVolumeBody) Fault() *soap.Fault { return b.Fault_ }
+
+func CnsQueryAllVolume(ctx context.Context, r soap.RoundTripper, req *types.CnsQueryAllVolume) (*types.CnsQueryAllVolumeResponse, error) {
+	var reqBody, resBody CnsQueryAllVolumeBody
 
 	reqBody.Req = req
 

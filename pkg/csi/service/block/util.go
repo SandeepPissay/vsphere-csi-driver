@@ -145,3 +145,12 @@ func GetPersistentVolume(pvc *v1.PersistentVolumeClaim, pvLister corelisters.Per
 
 	return pv.DeepCopy(), nil
 }
+
+// GetLabelsMapFromKeyValue creates a  map object from given parameter
+func GetLabelsMapFromKeyValue(labels []types.KeyValue) map[string]string {
+	labelsMap := make(map[string]string)
+	for _, label := range labels {
+		labelsMap[label.Key] = label.Value
+	}
+	return labelsMap
+}

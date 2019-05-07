@@ -207,6 +207,26 @@ type CnsQueryVolumeResponse struct {
 	Returnval CnsQueryResult `xml:"returnval"`
 }
 
+type CnsQueryAllVolume CnsQueryAllVolumeRequestType
+
+func init() {
+	types.Add("CnsQueryAllVolume", reflect.TypeOf((*CnsQueryAllVolume)(nil)).Elem())
+}
+
+type CnsQueryAllVolumeRequestType struct {
+	This      types.ManagedObjectReference `xml:"_this"`
+	Filter    CnsQueryFilter               `xml:"filter"`
+	Selection CnsQuerySelection            `xml:"selection"`
+}
+
+func init() {
+	types.Add("CnsQueryAllVolumeRequestType", reflect.TypeOf((*CnsQueryVolumeRequestType)(nil)).Elem())
+}
+
+type CnsQueryAllVolumeResponse struct {
+	Returnval CnsQueryResult `xml:"returnval"`
+}
+
 type CnsContainerCluster struct {
 	types.DynamicData
 
@@ -321,6 +341,12 @@ type CnsQueryFilter struct {
 
 func init() {
 	types.Add("CnsQueryFilter", reflect.TypeOf((*CnsQueryFilter)(nil)).Elem())
+}
+
+type CnsQuerySelection struct {
+	types.DynamicData
+
+	Names []string `xml:"names,omitempty"`
 }
 
 type CnsQueryResult struct {

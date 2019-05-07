@@ -130,6 +130,15 @@ func TestSimulator(t *testing.T) {
 		t.Fatal("Number of volumes mismatches after creating a single volume")
 	}
 
+	// QueryAll
+	queryFilter = cnstypes.CnsQueryFilter{}
+	querySelection := cnstypes.CnsQuerySelection{}
+	queryResult, err = cnsClient.QueryAllVolume(ctx, queryFilter, querySelection)
+
+	if len(queryResult.Volumes) != existingNumDisks+1 {
+		t.Fatal("Number of volumes mismatches after creating a single volume")
+	}
+
 	// Update
 	var metadataList []cnstypes.BaseCnsEntityMetadata
 	newLabels := []types.KeyValue{

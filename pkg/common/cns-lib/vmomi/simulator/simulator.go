@@ -149,6 +149,24 @@ func (m *CnsVolumeManager) CnsQueryVolume(ctx context.Context, req *cnstypes.Cns
 	}
 }
 
+func (m *CnsVolumeManager) CnsQueryAllVolume(ctx context.Context, req *cnstypes.CnsQueryAllVolume) soap.HasFault {
+	retVolumes := []cnstypes.CnsVolume{}
+	for _, dsVolumes := range m.volumes {
+		for _, volume := range dsVolumes {
+			retVolumes = append(retVolumes, *volume)
+		}
+	}
+
+	return &methods.CnsQueryAllVolumeBody{
+		Res: &cnstypes.CnsQueryAllVolumeResponse{
+			Returnval: cnstypes.CnsQueryResult{
+				Volumes: retVolumes,
+				Cursor:  cnstypes.CnsCursor{},
+			},
+		},
+	}
+}
+
 func (m *CnsVolumeManager) CnsDeleteVolume(ctx context.Context, req *cnstypes.CnsDeleteVolume) soap.HasFault {
 	task := simulator.CreateTask(m, "CnsDeleteVolume", func(*simulator.Task) (vim25types.AnyType, vim25types.BaseMethodFault) {
 		operationResult := []cnstypes.BaseCnsVolumeOperationResult{}
