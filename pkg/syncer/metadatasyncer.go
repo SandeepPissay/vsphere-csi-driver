@@ -18,6 +18,7 @@ package syncer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/davecgh/go-spew/spew"
 	csictx "github.com/rexray/gocsi/context"
@@ -33,7 +34,6 @@ import (
 	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/block"
 	vTypes "sigs.k8s.io/vsphere-csi-driver/pkg/csi/types"
-
 	k8s "sigs.k8s.io/vsphere-csi-driver/pkg/kubernetes"
 )
 
@@ -44,6 +44,7 @@ type metadataSyncInformer struct {
 	virtualcentermanager cnsvsphere.VirtualCenterManager
 	vcenter              *cnsvsphere.VirtualCenter
 	pvLister             corelisters.PersistentVolumeLister
+	pvcLister            corelisters.PersistentVolumeClaimLister
 }
 
 // New Returns uninitialized metadataSyncInformer
@@ -110,8 +111,16 @@ func (metadataSyncer *metadataSyncInformer) Init() error {
 		func(obj interface{}) { // Delete
 			pvDeleted(obj, metadataSyncer)
 		})
-	metadataSyncer.k8sInformerManager.AddPodListener(nil, podUpdated, podDeleted)
+	metadataSyncer.k8sInformerManager.AddPodListener(
+		nil, // Add
+		func(oldObj interface{}, newObj interface{}) { // Update
+			podUpdated(oldObj, newObj, metadataSyncer)
+		},
+		func(obj interface{}) { // Delete
+			podDeleted(obj, metadataSyncer)
+		})
 	metadataSyncer.pvLister = metadataSyncer.k8sInformerManager.GetPVLister()
+	metadataSyncer.pvcLister = metadataSyncer.k8sInformerManager.GetPVCLister()
 	klog.V(2).Infof("Initialized metadata syncer")
 	stopCh := metadataSyncer.k8sInformerManager.Listen()
 	<-(stopCh)
@@ -153,6 +162,7 @@ func createAndReadConfig() (*cnsconfig.Config, error) {
 	return cfg, nil
 }
 
+// pvcUpdated updates persistent volume claim metadata on VC when pvc labels on K8S cluster have been updated
 func pvcUpdated(oldObj, newObj interface{}, metadataSyncer *metadataSyncInformer) {
 	// Get old and new pvc objects
 	oldPvc, ok := oldObj.(*v1.PersistentVolumeClaim)
@@ -170,9 +180,9 @@ func pvcUpdated(oldObj, newObj interface{}, metadataSyncer *metadataSyncInformer
 	}
 
 	// Get pv object attached to pvc
-	pv, err := block.GetPersistentVolume(newPvc, metadataSyncer.pvLister)
+	pv, err := metadataSyncer.pvLister.Get(newPvc.Spec.VolumeName)
 	if err != nil {
-		klog.Errorf("PVCUpdated: Error getting Persistent Volume for pvc %q with err: %v", newPvc.UID, err)
+		klog.Errorf("PVCUpdated: Error getting Persistent Volume for pvc %s in namespace %s with err: %v", newPvc.Name, newPvc.Namespace, err)
 		return
 	}
 
@@ -209,6 +219,7 @@ func pvcUpdated(oldObj, newObj interface{}, metadataSyncer *metadataSyncInformer
 	}
 }
 
+// pvDeleted deletes pvc metadata on VC when pvc has been deleted on K8s cluster
 func pvcDeleted(obj interface{}, metadataSyncer *metadataSyncInformer) {
 	pvc, ok := obj.(*v1.PersistentVolumeClaim)
 	if pvc == nil || !ok {
@@ -216,11 +227,13 @@ func pvcDeleted(obj interface{}, metadataSyncer *metadataSyncInformer) {
 		return
 	}
 	klog.V(4).Infof("PVCDeleted: %+v", pvc)
-
+	if pvc.Status.Phase != v1.ClaimBound {
+		return
+	}
 	// Get pv object attached to pvc
-	pv, err := block.GetPersistentVolume(pvc, metadataSyncer.pvLister)
+	pv, err := metadataSyncer.pvLister.Get(pvc.Spec.VolumeName)
 	if err != nil {
-		klog.Errorf("PVCDeleted: Error getting Persistent Volume for pvc %q with err: %v", pvc.UID, err)
+		klog.Errorf("PVCDeleted: Error getting Persistent Volume for pvc %s in namespace %s with err: %v", pvc.Name, pvc.Namespace, err)
 		return
 	}
 
@@ -271,21 +284,21 @@ func pvUpdated(oldObj, newObj interface{}, metadataSyncer *metadataSyncInformer)
 		klog.Warningf("PVUpdated: unrecognized new object %+v", newObj)
 		return
 	}
-	klog.V(4).Infof("PVUpdate: PV Updated from %+v to %+v", oldPv, newPv)
+	klog.V(4).Infof("PVUpdated: PV Updated from %+v to %+v", oldPv, newPv)
 
 	// Check if vsphere volume
 	if newPv.Spec.CSI.Driver != service.Name {
-		klog.V(3).Infof("PVUpdate: PV is not a vsphere volume: %+v", newPv)
+		klog.V(3).Infof("PVUpdated: PV is not a vsphere volume: %+v", newPv)
 		return
 	}
 	// Return if new PV status is Pending or Failed
 	if newPv.Status.Phase == v1.VolumePending || newPv.Status.Phase == v1.VolumeFailed {
-		klog.V(3).Infof("PVUpdate: PV %s metadata is not updated since updated PV is in phase %s", newPv.Name, newPv.Status.Phase)
+		klog.V(3).Infof("PVUpdated: PV %s metadata is not updated since updated PV is in phase %s", newPv.Name, newPv.Status.Phase)
 		return
 	}
 	// Return if labels are unchanged
 	if oldPv.Status.Phase == v1.VolumeAvailable && reflect.DeepEqual(newPv.GetLabels(), oldPv.GetLabels()) {
-		klog.V(3).Infof("PVUpdate: PV labels have not changed")
+		klog.V(3).Infof("PVUpdated: PV labels have not changed")
 		return
 	}
 
@@ -306,7 +319,7 @@ func pvUpdated(oldObj, newObj interface{}, metadataSyncer *metadataSyncInformer)
 
 		klog.V(4).Infof("PVUpdated: Calling UpdateVolumeMetadata for volume %s with updateSpec: %+v", updateSpec.VolumeId.Id, spew.Sdump(updateSpec))
 		if err := volumes.GetManager(metadataSyncer.vcenter).UpdateVolumeMetadata(updateSpec); err != nil {
-			klog.Errorf("PVUpdate: UpdateVolumeMetadata failed with err %v", err)
+			klog.Errorf("PVUpdated: UpdateVolumeMetadata failed with err %v", err)
 		}
 	} else {
 		createSpec := &cnstypes.CnsVolumeCreateSpec{
@@ -321,11 +334,11 @@ func pvUpdated(oldObj, newObj interface{}, metadataSyncer *metadataSyncInformer)
 				BackingDiskId:           oldPv.Spec.CSI.VolumeHandle,
 			},
 		}
-		klog.V(4).Infof("PVUpdate: vSphere provisioner creating volume %s with create spec %+v", oldPv.Name, spew.Sdump(createSpec))
+		klog.V(4).Infof("PVUpdated: vSphere provisioner creating volume %s with create spec %+v", oldPv.Name, spew.Sdump(createSpec))
 		_, err := volumes.GetManager(metadataSyncer.vcenter).CreateVolume(createSpec)
 
 		if err != nil {
-			klog.Errorf("PVUpdate: Failed to create disk %s with error %+v", oldPv.Name, err)
+			klog.Errorf("PVUpdated: Failed to create disk %s with error %+v", oldPv.Name, err)
 		}
 	}
 }
@@ -361,11 +374,105 @@ func pvDeleted(obj interface{}, metadataSyncer *metadataSyncInformer) {
 	}
 }
 
-func podUpdated(oldObj, newObj interface{}) {
-	fmt.Printf("Temporary implementation of Pod Update\n")
+// podUpdated updates pod metadata on VC when pod labels have been updated on K8s cluster
+func podUpdated(oldObj, newObj interface{}, metadataSyncer *metadataSyncInformer) {
+	// Get old and new pod objects
+	oldPod, ok := oldObj.(*v1.Pod)
+	if oldPod == nil || !ok {
+		klog.Warningf("PodUpdated: unrecognized old object %+v", oldObj)
+		return
+	}
+	newPod, ok := newObj.(*v1.Pod)
+	if newPod == nil || !ok {
+		klog.Warningf("PodUpdated: unrecognized new object %+v", newObj)
+		return
+	}
+
+	// If old pod is in pending state and new pod is running, update metadata
+	if oldPod.Status.Phase == v1.PodPending && newPod.Status.Phase == v1.PodRunning {
+
+		klog.V(3).Infof("PodUpdated: Pod %s calling updatePodMetadata", newPod.Name)
+		// Update pod metadata
+		if errorList := updatePodMetadata(newPod, metadataSyncer, false); len(errorList) > 0 {
+			klog.Errorf("PodUpdated: updatePodMetadata failed for pod %s with errors: ", newPod.Name)
+			for _, err := range errorList {
+				klog.Errorf("PodUpdated: %v", err)
+			}
+		}
+	}
 }
 
-func podDeleted(obj interface{}) {
-	fmt.Printf("Temporary implementation of Pod Delete\n")
+// pvDeleted deletes pod metadata on VC when pod has been deleted on K8s cluster
+func podDeleted(obj interface{}, metadataSyncer *metadataSyncInformer) {
+	// Get pod object
+	pod, ok := obj.(*v1.Pod)
+	if pod == nil || !ok {
+		klog.Warningf("PodDeleted: unrecognized new object %+v", obj)
+		return
+	}
+
+	if pod.Status.Phase == v1.PodPending {
+		return
+	}
+
+	klog.V(3).Infof("PodDeleted: Pod %s calling updatePodMetadata", pod.Name)
+	// Update pod metadata
+	if errorList := updatePodMetadata(pod, metadataSyncer, true); len(errorList) > 0 {
+		klog.Errorf("PodDeleted: updatePodMetadata failed for pod %s with errors: ", pod.Name)
+		for _, err := range errorList {
+			klog.Errorf("PodDeleted: %v", err)
+		}
+
+	}
 }
 
+// updatePodMetadata updates metadata for volumes attached to the pod
+func updatePodMetadata(pod *v1.Pod, metadataSyncer *metadataSyncInformer, deleteFlag bool) []error {
+	var errorList []error
+	// Iterate through volumes attached to pod
+	for _, volume := range pod.Spec.Volumes {
+		if volume.PersistentVolumeClaim != nil {
+			pvcName := volume.PersistentVolumeClaim.ClaimName
+			// Get pvc attached to pod
+			pvc, err := metadataSyncer.pvcLister.PersistentVolumeClaims(pod.Namespace).Get(pvcName)
+			if err != nil {
+				msg := fmt.Sprintf("Error getting Persistent Volume Claim for volume %s with err: %v", volume.Name, err)
+				errorList = append(errorList, errors.New(msg))
+				continue
+			}
+
+			// Get pv object attached to pvc
+			pv, err := metadataSyncer.pvLister.Get(pvc.Spec.VolumeName)
+			if err != nil {
+				msg := fmt.Sprintf("Error getting Persistent Volume for PVC %s in volume %s with err: %v", pvc.Name, volume.Name, err)
+				errorList = append(errorList, errors.New(msg))
+				continue
+			}
+
+			// Verify if pv is vsphere volume
+			if pv.Spec.CSI.Driver != service.Name {
+				klog.V(3).Infof("Not a Vsphere volume")
+				continue
+			}
+			var metadataList []cnstypes.BaseCnsEntityMetadata
+			podMetadata := cnsvsphere.GetCnsKubernetesEntityMetaData(pod.Name, nil, deleteFlag, string(cnstypes.CnsKubernetesEntityTypePOD), pod.Namespace)
+			metadataList = append(metadataList, cnstypes.BaseCnsEntityMetadata(podMetadata))
+			updateSpec := &cnstypes.CnsVolumeMetadataUpdateSpec{
+				VolumeId: cnstypes.CnsVolumeId{
+					Id: pv.Spec.CSI.VolumeHandle,
+				},
+				Metadata: cnstypes.CnsVolumeMetadata{
+					ContainerCluster: cnsvsphere.GetContainerCluster(metadataSyncer.cfg.Global.ClusterID, metadataSyncer.cfg.VirtualCenter[metadataSyncer.vcenter.Config.Host].User),
+					EntityMetadata:   metadataList,
+				},
+			}
+
+			klog.V(4).Infof("Calling UpdateVolumeMetadata for volume %s with updateSpec: %+v", updateSpec.VolumeId.Id, spew.Sdump(updateSpec))
+			if err := volumes.GetManager(metadataSyncer.vcenter).UpdateVolumeMetadata(updateSpec); err != nil {
+				msg := fmt.Sprintf("UpdateVolumeMetadata failed for volume %s with err: %v", volume.Name, err)
+				errorList = append(errorList, errors.New(msg))
+			}
+		}
+	}
+	return errorList
+}

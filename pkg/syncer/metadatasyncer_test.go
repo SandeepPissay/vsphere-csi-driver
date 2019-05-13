@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"github.com/davecgh/go-spew/spew"
 	"k8s.io/klog"
 	"log"
 	"testing"
@@ -43,7 +44,9 @@ import (
 )
 
 const (
-	testVolumeName    = "test-volume"
+	testVolumeName    = "test-pv"
+	testPVCName       = "test-pvc"
+	testPodName       = "test-pod"
 	testClusterName   = "test-cluster"
 	gbInMb            = 1024
 	testVolumeType    = "BLOCK"
@@ -51,8 +54,11 @@ const (
 	testPVCLabelValue = "test-PVC-value"
 	testPVLabelName   = "test-PV-label"
 	testPVLabelValue  = "test-PV-value"
+	testPodLabelName  = "test-Pod-label"
+	testPodLabelValue = "test-Pod-value"
 	PVC               = "PVC"
 	PV                = "PV"
+	POD               = "POD"
 	testNamespace     = "default"
 )
 
@@ -131,6 +137,7 @@ func K8sClientFromEnvOrSim(metadataSyncer *metadataSyncInformer) (clientset.Inte
 		1. pv update/delete for dynamically created pv
 		2. pv update/delete for statically created pv
 		3. pvc update/delete
+		4. pod update/delete
 
 	Test Steps:
 		1. Setup configuration
@@ -143,8 +150,12 @@ func K8sClientFromEnvOrSim(metadataSyncer *metadataSyncInformer) (clientset.Inte
 		5. Verify pv update workflow
 		6. Create pvc on k8s to bound to recently created pv
 		7. Verify pvc update workflow
-		8. Verify pvc delete workflow
-		9. Verify pv delete workflow
+		8. Create pod on k8s to bound to recently created pvc
+		9. Verify pod update workflow
+		10. Verify pod delete workflow
+		11. Verify pvc delete workflow
+		12. Verify pv delete workflow
+
 */
 
 func TestMetadataSyncInformer(t *testing.T) {
@@ -197,6 +208,7 @@ func TestMetadataSyncInformer(t *testing.T) {
 	}
 	metadataSyncer.k8sInformerManager = k8s.NewInformer(k8sclient)
 	metadataSyncer.pvLister = metadataSyncer.k8sInformerManager.GetPVLister()
+	metadataSyncer.pvcLister = metadataSyncer.k8sInformerManager.GetPVCLister()
 	metadataSyncer.k8sInformerManager.Listen()
 
 	// Create spec for new volume
@@ -266,7 +278,7 @@ func TestMetadataSyncInformer(t *testing.T) {
 		t.Fatalf("Failed to find the newly created volume with ID: %s", volumeID)
 	}
 
-	// Set old and new labels
+	// Set old and new PV labels
 	var oldLabel map[string]string
 	var newLabel map[string]string
 
@@ -287,6 +299,7 @@ func TestMetadataSyncInformer(t *testing.T) {
 	if err = verifyUpdateOperation(queryResult, volumeID.Id, PV); err != nil {
 		t.Fatal(err)
 	}
+
 	// Delete volume with DeleteDisk=false
 	err = cspVolumeManager.DeleteVolume(volumeID.Id, false)
 
@@ -313,16 +326,17 @@ func TestMetadataSyncInformer(t *testing.T) {
 
 	// Create PVC on K8S to bound to recently created PV
 	namespace := testNamespace
+	oldPVCLabel := make(map[string]string)
 	newPVCLabel := make(map[string]string)
 	newPVCLabel[testPVCLabelName] = testPVCLabelValue
-	pvc := getPersistentVolumeClaimSpec(namespace, newLabel)
+	pvc := getPersistentVolumeClaimSpec(namespace, oldPVCLabel, pv.Name)
 	if pvc, err = k8sclient.CoreV1().PersistentVolumeClaims(namespace).Create(pvc); err != nil {
 		t.Fatal(err)
 	}
 
 	// Test pvcUpdate workflow on VC
-	oldPvc := getPersistentVolumeClaimSpec(testNamespace, oldLabel)
-	newPvc := getPersistentVolumeClaimSpec(testNamespace, newPVCLabel)
+	oldPvc := getPersistentVolumeClaimSpec(testNamespace, oldPVCLabel, pv.Name)
+	newPvc := getPersistentVolumeClaimSpec(testNamespace, newPVCLabel, pv.Name)
 	pvcUpdated(oldPvc, newPvc, metadataSyncer)
 
 	// Verify pvc label of volume matches that of updated metadata
@@ -333,42 +347,117 @@ func TestMetadataSyncInformer(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Create Pod on K8S with claim = recently created pvc
+	oldPodLabel := make(map[string]string)
+	newPodLabel := make(map[string]string)
+	newPodLabel[testPodLabelName] = testPodLabelValue
+	pod := getPodSpec(testNamespace, oldPodLabel, pvc.Name, v1.PodRunning)
+	if pod, err = k8sclient.CoreV1().Pods(namespace).Create(pod); err != nil {
+		t.Fatal(err)
+	}
+
+	// Test podUpdate workflow on VC
+	oldPod := getPodSpec(testNamespace, oldPodLabel, pvc.Name, v1.PodPending)
+	newPod := getPodSpec(testNamespace, newPodLabel, pvc.Name, v1.PodRunning)
+	podUpdated(oldPod, newPod, metadataSyncer)
+
+	// Verify pod label of volume matches that of updated metadata
+	if queryResult, err = metadataSyncer.vcenter.QueryVolume(ctx, queryFilter); err != nil {
+		t.Fatal(err)
+	}
+	if err = verifyUpdateOperation(queryResult, volumeID.Id, POD); err != nil {
+		t.Fatal(err)
+	}
+
+	// Test podDeleted workflow on VC
+	podDeleted(newPod, metadataSyncer)
+	if queryResult, err = metadataSyncer.vcenter.QueryVolume(ctx, queryFilter); err != nil {
+		t.Fatal(err)
+	}
+	if err = verifyDeleteOperation(queryResult, volumeID.Id, POD); err != nil {
+		t.Fatal(err)
+	}
+
 	// Test pvcDelete workflow
 	pvcDeleted(newPvc, metadataSyncer)
 	if queryResult, err = metadataSyncer.vcenter.QueryVolume(ctx, queryFilter); err != nil {
 		t.Fatal(err)
 	}
+	if err = verifyDeleteOperation(queryResult, volumeID.Id, PVC); err != nil {
+		t.Fatal(err)
+	}
 
 	// Test pvDelete workflow
 	pvDeleted(newPv, metadataSyncer)
-
-	// Verify PV has been deleted
 	if queryResult, err = metadataSyncer.vcenter.QueryVolume(ctx, queryFilter); err != nil {
 		t.Fatal(err)
 	}
-	if len(queryResult.Volumes) != 0 {
-		t.Fatalf("Volume should not exist after deletion with ID: %s", volumeID.Id)
+	if err = verifyDeleteOperation(queryResult, volumeID.Id, PV); err != nil {
+		t.Fatal(err)
 	}
+
+	// Cleanup on K8S
+	if err = k8sclient.CoreV1().Pods(namespace).Delete(pod.Name, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err = k8sclient.CoreV1().PersistentVolumeClaims(namespace).Delete(pvc.Name, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err = k8sclient.CoreV1().PersistentVolumes().Delete(pv.Name, nil); err != nil {
+		t.Fatal(err)
+	}
+
+}
+
+// verifyDeleteOperation verifies if a delete operation was successful
+func verifyDeleteOperation(queryResult *cnstypes.CnsQueryResult, volumeID string, resourceType string) error {
+	if len(queryResult.Volumes) == 0 && resourceType == PV {
+		return nil
+	}
+	entityMetadata := queryResult.Volumes[0].Metadata.EntityMetadata
+	for _, metadata := range entityMetadata {
+		if len(metadata.GetCnsEntityMetadata().Labels) == 0 {
+			continue
+		}
+		queryLabel := metadata.GetCnsEntityMetadata().Labels[0].Key
+		queryValue := metadata.GetCnsEntityMetadata().Labels[0].Value
+		if resourceType == PVC && queryLabel == testPVCLabelName && queryValue == testPVCLabelValue {
+			return fmt.Errorf("delete operation failed for volume Id %s and resource type %s ", volumeID, resourceType)
+		}
+		if resourceType == PV && queryLabel == testPVLabelName && queryValue == testPVLabelValue {
+			return fmt.Errorf("delete operation failed for volume Id %s and resource type %s ", volumeID, resourceType)
+		}
+		if resourceType == POD && queryLabel == testPodLabelName && queryValue == testPodLabelValue {
+			return fmt.Errorf("delete operation failed for volume Id %s and resource type %s ", volumeID, resourceType)
+		}
+	}
+	return nil
 }
 
 // verifyUpdateOperation verifies if an update operation was successful
 func verifyUpdateOperation(queryResult *cnstypes.CnsQueryResult, volumeID string, resourceType string) error {
-	if len(queryResult.Volumes) == 0 || len(queryResult.Volumes[0].Metadata.EntityMetadata) == 0 || len(queryResult.Volumes[0].Metadata.EntityMetadata[0].GetCnsEntityMetadata().Labels) == 0 {
-		return fmt.Errorf("update operation failed for volume Id %s and resource type %s", volumeID, resourceType)
+	if len(queryResult.Volumes) == 0 || len(queryResult.Volumes[0].Metadata.EntityMetadata) == 0 {
+		return fmt.Errorf("update operation failed for volume Id %s for resource type %s with queryResult: %v", volumeID, resourceType, spew.Sdump(queryResult))
 	}
-	Labels := queryResult.Volumes[0].Metadata.EntityMetadata[0].GetCnsEntityMetadata().Labels
-
-	for _, query := range Labels {
-		queryLabel := query.Key
-		queryValue := query.Value
-		if resourceType == PVC && queryLabel == testPVCLabelName && queryValue == testPVCLabelValue {
+	entityMetadata := queryResult.Volumes[0].Metadata.EntityMetadata
+	for _, baseMetadata := range entityMetadata {
+		metadata := interface{}(baseMetadata).(*cnstypes.CnsKubernetesEntityMetadata)
+		if resourceType == POD && metadata.EntityType == "POD" && len(metadata.Labels) == 0 {
 			return nil
 		}
-		if resourceType == PV && queryLabel == testPVLabelName && queryValue == testPVLabelValue {
+		if len(metadata.Labels) == 0 {
+			return fmt.Errorf("update operation failed for volume Id %s and resource type %s queryResult: %v", volumeID, metadata.EntityType, spew.Sdump(queryResult))
+		}
+		queryLabel := metadata.Labels[0].Key
+		queryValue := metadata.Labels[0].Value
+		if resourceType == PVC && metadata.EntityType == "PERSISTENT_VOLUME_CLAIM" && queryLabel == testPVCLabelName && queryValue == testPVCLabelValue {
+			return nil
+		}
+		if resourceType == PV && metadata.EntityType == "PERSISTENT_VOLUME" && queryLabel == testPVLabelName && queryValue == testPVLabelValue {
 			return nil
 		}
 	}
-	return fmt.Errorf("update operation failed for volume Id: %s and resource type %s", volumeID, resourceType)
+	return fmt.Errorf("update operation failed for volume Id: %s for resource type %s with queryResult: %v", volumeID, resourceType, spew.Sdump(queryResult))
 }
 
 // getCSPPersistentVolumeSpec creates PV volume spec with given Volume Handle, Reclaim Policy, Labels and Phase
@@ -416,7 +505,7 @@ func getCSPPersistentVolumeSpec(volumeHandle string, persistentVolumeReclaimPoli
 }
 
 // getPersistentVolumeClaimSpec gets vsphere persistent volume spec with given selector labels.
-func getPersistentVolumeClaimSpec(namespace string, labels map[string]string) *v1.PersistentVolumeClaim {
+func getPersistentVolumeClaimSpec(namespace string, labels map[string]string, pvName string) *v1.PersistentVolumeClaim {
 	var (
 		pvc *v1.PersistentVolumeClaim
 	)
@@ -427,7 +516,7 @@ func getPersistentVolumeClaimSpec(namespace string, labels map[string]string) *v
 			APIVersion: "",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:              "test-pvc",
+			Name:              testPVCName,
 			Namespace:         namespace,
 			Generation:        0,
 			CreationTimestamp: metav1.Time{},
@@ -441,7 +530,7 @@ func getPersistentVolumeClaimSpec(namespace string, labels map[string]string) *v
 					v1.ResourceName(v1.ResourceStorage): resource.MustParse("1Gi"),
 				},
 			},
-			VolumeName:       testVolumeName,
+			VolumeName:       pvName,
 			StorageClassName: &sc,
 		},
 		Status: v1.PersistentVolumeClaimStatus{
@@ -454,4 +543,59 @@ func getPersistentVolumeClaimSpec(namespace string, labels map[string]string) *v
 	}
 
 	return pvc
+}
+
+func getPodSpec(namespace string, labels map[string]string, pvcName string, phase v1.PodPhase) *v1.Pod {
+	var pod *v1.Pod
+	podVolume := []v1.Volume{
+		{
+			Name: testVolumeName,
+			VolumeSource: v1.VolumeSource{
+				PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{
+					ClaimName: pvcName,
+					ReadOnly:  false,
+				},
+			},
+		},
+	}
+
+	podContainer := []v1.Container{
+		{
+			Name:  "my-frontend",
+			Image: "busybox",
+			Command: []string{
+				"sleep",
+				"1000000",
+			},
+			Resources: v1.ResourceRequirements{},
+			VolumeMounts: []v1.VolumeMount{
+				{
+					Name:      testVolumeName,
+					ReadOnly:  false,
+					MountPath: "/data",
+				},
+			},
+			TerminationMessagePath:   "/dev/termination-log",
+			TerminationMessagePolicy: "File",
+			ImagePullPolicy:          "Always",
+		},
+	}
+	pod = &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              testPodName,
+			Namespace:         namespace,
+			Generation:        0,
+			CreationTimestamp: metav1.Time{},
+			Labels:            labels,
+		},
+		Spec: v1.PodSpec{
+			Volumes:       podVolume,
+			Containers:    podContainer,
+			RestartPolicy: "Always",
+		},
+		Status: v1.PodStatus{
+			Phase: phase,
+		},
+	}
+	return pod
 }

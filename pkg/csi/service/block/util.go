@@ -17,11 +17,8 @@ limitations under the License.
 package block
 
 import (
-	"fmt"
 	"github.com/vmware/govmomi/vim25/types"
 	"golang.org/x/net/context"
-	"k8s.io/api/core/v1"
-	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/klog"
 	cnsvsphere "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vsphere"
 	"strings"
@@ -65,18 +62,6 @@ func RoundUpSize(volumeSizeBytes int64, allocationUnitBytes int64) int64 {
 		roundedUp++
 	}
 	return roundedUp
-}
-
-// GetPersistentVolume returns a Persistent Volume object attached to the PVC given in parameters
-func GetPersistentVolume(pvc *v1.PersistentVolumeClaim, pvLister corelisters.PersistentVolumeLister) (*v1.PersistentVolume, error) {
-	volumeName := pvc.Spec.VolumeName
-	pv, err := pvLister.Get(volumeName)
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to find PV %q in PV informer cache with error : %v", volumeName, err)
-	}
-
-	return pv.DeepCopy(), nil
 }
 
 // GetLabelsMapFromKeyValue creates a  map object from given parameter

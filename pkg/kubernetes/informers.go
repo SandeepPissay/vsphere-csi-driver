@@ -97,6 +97,11 @@ func (im *InformerManager) GetPVLister() corelisters.PersistentVolumeLister {
 	return im.informerFactory.Core().V1().PersistentVolumes().Lister()
 }
 
+// GetPVCLister returns PVC Lister for the calling informer manager
+func (im *InformerManager) GetPVCLister() corelisters.PersistentVolumeClaimLister {
+	return im.informerFactory.Core().V1().PersistentVolumeClaims().Lister()
+}
+
 // Listen starts the Informers
 func (im *InformerManager) Listen() (stopCh <-chan struct{}) {
 	go im.informerFactory.Start(im.stopCh)

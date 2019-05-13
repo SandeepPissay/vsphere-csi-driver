@@ -35,10 +35,10 @@ func init() {
 type QuerySelectionNameType string
 
 const (
-	QuerySelectionNameTypeVolumeType = QuerySelectionNameType("VOLUME_TYPE")
-	QuerySelectionNameTypeVolumeName = QuerySelectionNameType("VOLUME_NAME")
-	QuerySelectionNameTypeBackingObjectDetails = QuerySelectionNameType("BACKING_OBJECT_DETAILS")
-	QuerySelectionNameTypeComplianceStatus = QuerySelectionNameType("COMPLIANCE_STATUS")
+	QuerySelectionNameTypeVolumeType             = QuerySelectionNameType("VOLUME_TYPE")
+	QuerySelectionNameTypeVolumeName             = QuerySelectionNameType("VOLUME_NAME")
+	QuerySelectionNameTypeBackingObjectDetails   = QuerySelectionNameType("BACKING_OBJECT_DETAILS")
+	QuerySelectionNameTypeComplianceStatus       = QuerySelectionNameType("COMPLIANCE_STATUS")
 	QuerySelectionNameTypeDataStoreAccessibility = QuerySelectionNameType("DATASTORE_ACCESSIBILITY_STATUS")
 )
 
