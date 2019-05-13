@@ -55,24 +55,17 @@ func (m *CnsVolumeManager) CnsCreateVolume(ctx context.Context, req *cnstypes.Cn
 
 		operationResult := []cnstypes.BaseCnsVolumeOperationResult{}
 		for _, createSpec := range req.CreateSpecs {
-			for _, datastoreRef := range createSpec.Datastores {
-				datastore := simulator.Map.Get(datastoreRef).(*simulator.Datastore)
-
+			staticProvisionedSpec, ok := interface{}(createSpec.BackingObjectDetails).(*cnstypes.CnsBlockBackingDetails)
+			if ok && staticProvisionedSpec.BackingDiskId != "" {
+				datastore := simulator.Map.Any("Datastore").(*simulator.Datastore)
 				volumes, ok := m.volumes[datastore.Self]
 				if !ok {
 					volumes = make(map[cnstypes.CnsVolumeId]*cnstypes.CnsVolume)
 					m.volumes[datastore.Self] = volumes
 				}
-
-				var policyId string
-				if createSpec.Profile != nil && createSpec.Profile[0] != nil &&
-					reflect.TypeOf(createSpec.Profile[0]) == reflect.TypeOf(&vim25types.VirtualMachineDefinedProfileSpec{}) {
-					policyId = interface{}(createSpec.Profile[0]).(*vim25types.VirtualMachineDefinedProfileSpec).ProfileId
-				}
-
 				newVolume := &cnstypes.CnsVolume{
 					VolumeId: cnstypes.CnsVolumeId{
-						Id: uuid.New().String(),
+						Id: interface{}(createSpec.BackingObjectDetails).(*cnstypes.CnsBlockBackingDetails).BackingDiskId,
 					},
 					Name:                         createSpec.Name,
 					VolumeType:                   createSpec.VolumeType,
@@ -81,13 +74,48 @@ func (m *CnsVolumeManager) CnsCreateVolume(ctx context.Context, req *cnstypes.Cn
 					BackingObjectDetails:         *createSpec.BackingObjectDetails.GetCnsBackingObjectDetails(),
 					ComplianceStatus:             "Simulator Compliance Status",
 					DatastoreAccessibilityStatus: "Simulator Datastore Accessibility Status",
-					StoragePolicyId:              policyId,
 				}
 
 				volumes[newVolume.VolumeId] = newVolume
 				operationResult = append(operationResult, &cnstypes.CnsVolumeOperationResult{
 					VolumeId: newVolume.VolumeId,
 				})
+
+			} else {
+				for _, datastoreRef := range createSpec.Datastores {
+					datastore := simulator.Map.Get(datastoreRef).(*simulator.Datastore)
+
+					volumes, ok := m.volumes[datastore.Self]
+					if !ok {
+						volumes = make(map[cnstypes.CnsVolumeId]*cnstypes.CnsVolume)
+						m.volumes[datastore.Self] = volumes
+					}
+
+					var policyId string
+					if createSpec.Profile != nil && createSpec.Profile[0] != nil &&
+						reflect.TypeOf(createSpec.Profile[0]) == reflect.TypeOf(&vim25types.VirtualMachineDefinedProfileSpec{}) {
+						policyId = interface{}(createSpec.Profile[0]).(*vim25types.VirtualMachineDefinedProfileSpec).ProfileId
+					}
+
+					newVolume := &cnstypes.CnsVolume{
+						VolumeId: cnstypes.CnsVolumeId{
+							Id: uuid.New().String(),
+						},
+						Name:                         createSpec.Name,
+						VolumeType:                   createSpec.VolumeType,
+						DatastoreUrl:                 datastore.Info.GetDatastoreInfo().Url,
+						Metadata:                     createSpec.Metadata,
+						BackingObjectDetails:         *createSpec.BackingObjectDetails.GetCnsBackingObjectDetails(),
+						ComplianceStatus:             "Simulator Compliance Status",
+						DatastoreAccessibilityStatus: "Simulator Datastore Accessibility Status",
+						StoragePolicyId:              policyId,
+					}
+
+					volumes[newVolume.VolumeId] = newVolume
+					operationResult = append(operationResult, &cnstypes.CnsVolumeOperationResult{
+						VolumeId: newVolume.VolumeId,
+					})
+				}
 			}
 		}
 
