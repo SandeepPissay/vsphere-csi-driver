@@ -36,6 +36,10 @@ type Manager interface {
 	DeleteVolume(volumeID string, deleteDisk bool) error
 	// UpdateVolumeMetadata updates a volume metadata given its spec.
 	UpdateVolumeMetadata(spec *cnstypes.CnsVolumeMetadataUpdateSpec) error
+	// QueryVolume returns volumes matching the given filter.
+	QueryVolume(queryFilter cnstypes.CnsQueryFilter) (*cnstypes.CnsQueryResult, error)
+	// QueryAllVolume returns all volumes matching the given filter and selection.
+	QueryAllVolume(queryFilter cnstypes.CnsQueryFilter, querySelection cnstypes.CnsQuerySelection) (*cnstypes.CnsQueryResult, error)
 }
 
 var (
@@ -370,4 +374,50 @@ func (m *defaultManager) UpdateVolumeMetadata(spec *cnstypes.CnsVolumeMetadataUp
 		spec.VolumeId.Id, spew.Sdump(spec), m.virtualCenter.Config.Host, taskInfo.Task.Value)
 
 	return nil
+}
+
+// QueryVolume returns volumes matching the given filter.
+func (m *defaultManager) QueryVolume(queryFilter cnstypes.CnsQueryFilter) (*cnstypes.CnsQueryResult, error) {
+	err := validateManager(m)
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	// Set up the VC connection
+	err = m.virtualCenter.Connect(ctx)
+	if err != nil {
+		klog.Errorf("Failed to connect to Virtual Center with err: %v", err)
+		return nil, err
+	}
+	//Call the CNS QueryVolume
+	res, err := m.virtualCenter.QueryVolume(ctx, queryFilter)
+	if err != nil {
+		klog.Errorf("CNS QueryVolume failed from vCenter %q with err: %v", m.virtualCenter.Config.Host, err)
+		return nil, err
+	}
+	return res, err
+}
+
+// QueryAllVolume returns all volumes matching the given filter and selection.
+func (m *defaultManager) QueryAllVolume(queryFilter cnstypes.CnsQueryFilter, querySelection cnstypes.CnsQuerySelection) (*cnstypes.CnsQueryResult, error) {
+	err := validateManager(m)
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	// Set up the VC connection
+	err = m.virtualCenter.Connect(ctx)
+	if err != nil {
+		klog.Errorf("Failed to connect to Virtual Center with err: %v", err)
+		return nil, err
+	}
+	//Call the CNS QueryAllVolume
+	res, err := m.virtualCenter.QueryAllVolume(ctx, queryFilter, querySelection)
+	if err != nil {
+		klog.Errorf("CNS QueryAllVolume failed from vCenter %q with err: %v", m.virtualCenter.Config.Host, err)
+		return nil, err
+	}
+	return res, err
 }

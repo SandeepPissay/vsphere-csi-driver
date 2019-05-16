@@ -16,7 +16,6 @@ package vsphere
 
 import (
 	"context"
-
 	"github.com/vmware/govmomi/object"
 	"github.com/vmware/govmomi/vim25"
 	"github.com/vmware/govmomi/vim25/soap"
@@ -175,6 +174,24 @@ func (vc *VirtualCenter) QueryVolume(ctx context.Context, queryFilter cnstypes.C
 		return nil, err
 	}
 	res, err := methods.CnsQueryVolume(ctx, vc.CnsClient.Client, &req)
+	if err != nil {
+		return nil, err
+	}
+	return &res.Returnval, nil
+}
+
+// QueryVolume calls the CNS QueryAllVolume API.
+func (vc *VirtualCenter) QueryAllVolume(ctx context.Context, queryFilter cnstypes.CnsQueryFilter, querySelection cnstypes.CnsQuerySelection) (*cnstypes.CnsQueryResult, error) {
+	req := cnstypes.CnsQueryAllVolume{
+		This:      CnsVolumeManagerInstance,
+		Filter:    queryFilter,
+		Selection: querySelection,
+	}
+	err := vc.ConnectCns(ctx)
+	if err != nil {
+		return nil, err
+	}
+	res, err := methods.CnsQueryAllVolume(ctx, vc.CnsClient.Client, &req)
 	if err != nil {
 		return nil, err
 	}

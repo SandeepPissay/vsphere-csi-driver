@@ -32,6 +32,20 @@ func init() {
 	types.Add("CnsVolumeType", reflect.TypeOf((*CnsVolumeType)(nil)).Elem())
 }
 
+type QuerySelectionNameType string
+
+const (
+	QuerySelectionNameTypeVolumeType = QuerySelectionNameType("VOLUME_TYPE")
+	QuerySelectionNameTypeVolumeName = QuerySelectionNameType("VOLUME_NAME")
+	QuerySelectionNameTypeBackingObjectDetails = QuerySelectionNameType("BACKING_OBJECT_DETAILS")
+	QuerySelectionNameTypeComplianceStatus = QuerySelectionNameType("COMPLIANCE_STATUS")
+	QuerySelectionNameTypeDataStoreAccessibility = QuerySelectionNameType("DATASTORE_ACCESSIBILITY_STATUS")
+)
+
+func init() {
+	types.Add("QuerySelectionNameType", reflect.TypeOf((*QuerySelectionNameType)(nil)).Elem())
+}
+
 type CnsClusterType string
 
 const (

@@ -34,11 +34,10 @@ import (
 	cnstypes "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vmomi/types"
 	cspvolume "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/volume"
 	cnsvsphere "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vsphere"
-	"sync"
-	"testing"
-
 	"sigs.k8s.io/vsphere-csi-driver/pkg/common/config"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/block"
+	"sync"
+	"testing"
 )
 
 const (
@@ -273,6 +272,24 @@ func TestCreateVolumeWithStoragePolicy(t *testing.T) {
 		t.Fatalf("Failed to match volume policy ID: %s", profileId)
 	}
 
+	// QueryAll
+	queryFilter = cnstypes.CnsQueryFilter{
+		VolumeIds: []cnstypes.CnsVolumeId{
+			{
+				Id: volID,
+			},
+		},
+	}
+	querySelection := cnstypes.CnsQuerySelection{}
+	queryResult, err = ct.vcenter.QueryAllVolume(ctx, queryFilter, querySelection)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(queryResult.Volumes) != 1 && queryResult.Volumes[0].VolumeId.Id != volID {
+		t.Fatalf("Failed to find the newly created volume with ID: %s", volID)
+	}
+
 	// Delete
 	reqDelete := &csi.DeleteVolumeRequest{
 		VolumeId: volID,
@@ -337,6 +354,24 @@ func TestCompleteControllerFlow(t *testing.T) {
 		},
 	}
 	queryResult, err := ct.vcenter.QueryVolume(ctx, queryFilter)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(queryResult.Volumes) != 1 && queryResult.Volumes[0].VolumeId.Id != volID {
+		t.Fatalf("Failed to find the newly created volume with ID: %s", volID)
+	}
+
+	// QueryAll
+	queryFilter = cnstypes.CnsQueryFilter{
+		VolumeIds: []cnstypes.CnsVolumeId{
+			{
+				Id: volID,
+			},
+		},
+	}
+	querySelection := cnstypes.CnsQuerySelection{}
+	queryResult, err = ct.vcenter.QueryAllVolume(ctx, queryFilter, querySelection)
 	if err != nil {
 		t.Fatal(err)
 	}
