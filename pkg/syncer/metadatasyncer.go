@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"github.com/davecgh/go-spew/spew"
 	csictx "github.com/rexray/gocsi/context"
-	"github.com/vmware/govmomi/vim25/types"
 	"k8s.io/api/core/v1"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/klog"
@@ -191,7 +190,7 @@ func pvcUpdated(oldObj, newObj interface{}, metadataSyncer *metadataSyncInformer
 
 	// Create updateSpec
 	var metadataList []cnstypes.BaseCnsEntityMetadata
-	pvcMetadata := getCnsKubernetesEntityMetaData(newPvc.Name, newPvc.Labels, false, string(cnstypes.CnsKubernetesEntityTypePVC), newPvc.Namespace)
+	pvcMetadata := cnsvsphere.GetCnsKubernetesEntityMetaData(newPvc.Name, newPvc.Labels, false, string(cnstypes.CnsKubernetesEntityTypePVC), newPvc.Namespace)
 	metadataList = append(metadataList, cnstypes.BaseCnsEntityMetadata(pvcMetadata))
 
 	updateSpec := &cnstypes.CnsVolumeMetadataUpdateSpec{
@@ -199,7 +198,7 @@ func pvcUpdated(oldObj, newObj interface{}, metadataSyncer *metadataSyncInformer
 			Id: pv.Spec.CSI.VolumeHandle,
 		},
 		Metadata: cnstypes.CnsVolumeMetadata{
-			ContainerCluster: getContainerCluster(metadataSyncer.cfg.Global.ClusterID, metadataSyncer.cfg.VirtualCenter[metadataSyncer.vcenter.Config.Host].User),
+			ContainerCluster: cnsvsphere.GetContainerCluster(metadataSyncer.cfg.Global.ClusterID, metadataSyncer.cfg.VirtualCenter[metadataSyncer.vcenter.Config.Host].User),
 			EntityMetadata:   metadataList,
 		},
 	}
@@ -239,7 +238,7 @@ func pvcDeleted(obj interface{}, metadataSyncer *metadataSyncInformer) {
 
 	// If the PV reclaim policy is retain we need to delete PVC labels
 	var metadataList []cnstypes.BaseCnsEntityMetadata
-	pvcMetadata := getCnsKubernetesEntityMetaData(pvc.Name, nil, true, string(cnstypes.CnsKubernetesEntityTypePVC), pvc.Namespace)
+	pvcMetadata := cnsvsphere.GetCnsKubernetesEntityMetaData(pvc.Name, nil, true, string(cnstypes.CnsKubernetesEntityTypePVC), pvc.Namespace)
 	metadataList = append(metadataList, cnstypes.BaseCnsEntityMetadata(pvcMetadata))
 
 	updateSpec := &cnstypes.CnsVolumeMetadataUpdateSpec{
@@ -247,7 +246,7 @@ func pvcDeleted(obj interface{}, metadataSyncer *metadataSyncInformer) {
 			Id: pv.Spec.CSI.VolumeHandle,
 		},
 		Metadata: cnstypes.CnsVolumeMetadata{
-			ContainerCluster: getContainerCluster(metadataSyncer.cfg.Global.ClusterID, metadataSyncer.cfg.VirtualCenter[metadataSyncer.vcenter.Config.Host].User),
+			ContainerCluster: cnsvsphere.GetContainerCluster(metadataSyncer.cfg.Global.ClusterID, metadataSyncer.cfg.VirtualCenter[metadataSyncer.vcenter.Config.Host].User),
 			EntityMetadata:   metadataList,
 		},
 	}
@@ -291,7 +290,7 @@ func pvUpdated(oldObj, newObj interface{}, metadataSyncer *metadataSyncInformer)
 	}
 
 	var metadataList []cnstypes.BaseCnsEntityMetadata
-	pvMetadata := getCnsKubernetesEntityMetaData(newPv.Name, newPv.GetLabels(), false, string(cnstypes.CnsKubernetesEntityTypePV), newPv.Namespace)
+	pvMetadata := cnsvsphere.GetCnsKubernetesEntityMetaData(newPv.Name, newPv.GetLabels(), false, string(cnstypes.CnsKubernetesEntityTypePV), newPv.Namespace)
 	metadataList = append(metadataList, cnstypes.BaseCnsEntityMetadata(pvMetadata))
 
 	if oldPv.Status.Phase == v1.VolumeAvailable || newPv.Spec.StorageClassName != "" {
@@ -300,7 +299,7 @@ func pvUpdated(oldObj, newObj interface{}, metadataSyncer *metadataSyncInformer)
 				Id: newPv.Spec.CSI.VolumeHandle,
 			},
 			Metadata: cnstypes.CnsVolumeMetadata{
-				ContainerCluster: getContainerCluster(metadataSyncer.cfg.Global.ClusterID, metadataSyncer.cfg.VirtualCenter[metadataSyncer.vcenter.Config.Host].User),
+				ContainerCluster: cnsvsphere.GetContainerCluster(metadataSyncer.cfg.Global.ClusterID, metadataSyncer.cfg.VirtualCenter[metadataSyncer.vcenter.Config.Host].User),
 				EntityMetadata:   metadataList,
 			},
 		}
@@ -314,7 +313,7 @@ func pvUpdated(oldObj, newObj interface{}, metadataSyncer *metadataSyncInformer)
 			Name:       oldPv.Name,
 			VolumeType: block.BlockVolumeType,
 			Metadata: cnstypes.CnsVolumeMetadata{
-				ContainerCluster: getContainerCluster(metadataSyncer.cfg.Global.ClusterID, metadataSyncer.cfg.VirtualCenter[metadataSyncer.vcenter.Config.Host].User),
+				ContainerCluster: cnsvsphere.GetContainerCluster(metadataSyncer.cfg.Global.ClusterID, metadataSyncer.cfg.VirtualCenter[metadataSyncer.vcenter.Config.Host].User),
 				EntityMetadata:   metadataList,
 			},
 			BackingObjectDetails: &cnstypes.CnsBlockBackingDetails{
@@ -370,34 +369,3 @@ func podDeleted(obj interface{}) {
 	fmt.Printf("Temporary implementation of Pod Delete\n")
 }
 
-// getCnsKubernetesEntityMetaData creates a CnsKubernetesEntityMetadataObject object from given parameters
-func getCnsKubernetesEntityMetaData(entityName string, labels map[string]string, deleteFlag bool, entityType string, namespace string) *cnstypes.CnsKubernetesEntityMetadata {
-	// Create new metadata spec
-	var newLabels []types.KeyValue
-	for labelKey, labelVal := range labels {
-		newLabels = append(newLabels, types.KeyValue{
-			Key:   labelKey,
-			Value: labelVal,
-		})
-	}
-
-	entityMetadata := &cnstypes.CnsKubernetesEntityMetadata{}
-	entityMetadata.EntityName = entityName
-	entityMetadata.Delete = deleteFlag
-	if labels != nil {
-		entityMetadata.Labels = newLabels
-	}
-	entityMetadata.EntityType = entityType
-	entityMetadata.Namespace = namespace
-	return entityMetadata
-}
-
-// getContainerCluster creates ContainerCluster object from given parameters
-func getContainerCluster(clusterid string, username string) cnstypes.CnsContainerCluster {
-	return cnstypes.CnsContainerCluster{
-		ClusterType: string(cnstypes.CnsClusterTypeKubernetes),
-		ClusterId:   clusterid,
-		VSphereUser: username,
-	}
-
-}

@@ -23,7 +23,6 @@ import (
 	"k8s.io/api/core/v1"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/klog"
-	cnstypes "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vmomi/types"
 	cnsvsphere "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vsphere"
 	"strings"
 )
@@ -66,28 +65,6 @@ func RoundUpSize(volumeSizeBytes int64, allocationUnitBytes int64) int64 {
 		roundedUp++
 	}
 	return roundedUp
-}
-
-// GetCnsKubernetesEntityMetaData creates a CnsKubernetesEntityMetadataObject object from given parameters
-func GetCnsKubernetesEntityMetaData(entityName string, labels map[string]string, deleteFlag bool, entityType string, namespace string) *cnstypes.CnsKubernetesEntityMetadata {
-	// Create new metadata spec
-	var newLabels []types.KeyValue
-	for labelKey, labelVal := range labels {
-		newLabels = append(newLabels, types.KeyValue{
-			Key:   labelKey,
-			Value: labelVal,
-		})
-	}
-
-	entityMetadata := &cnstypes.CnsKubernetesEntityMetadata{}
-	entityMetadata.EntityName = entityName
-	entityMetadata.Delete = deleteFlag
-	if labels != nil {
-		entityMetadata.Labels = newLabels
-	}
-	entityMetadata.EntityType = entityType
-	entityMetadata.Namespace = namespace
-	return entityMetadata
 }
 
 // GetPersistentVolume returns a Persistent Volume object attached to the PVC given in parameters

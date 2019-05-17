@@ -19,13 +19,6 @@ import (
 	"crypto/tls"
 	"encoding/pem"
 	"fmt"
-	"net"
-	neturl "net/url"
-	"strconv"
-	"strings"
-	"sync"
-	"errors"
-
 	"github.com/vmware/govmomi"
 	"github.com/vmware/govmomi/find"
 	"github.com/vmware/govmomi/pbm"
@@ -34,8 +27,10 @@ import (
 	"github.com/vmware/govmomi/vim25"
 	"github.com/vmware/govmomi/vim25/soap"
 	"k8s.io/klog"
-	"sigs.k8s.io/vsphere-csi-driver/pkg/common/config"
-
+	"net"
+	neturl "net/url"
+	"strconv"
+	"sync"
 )
 
 const (
@@ -316,40 +311,3 @@ func (vc *VirtualCenter) UpdateCredentials(username, password string) {
 	vc.Config.Password = password
 }
 
-
-// GetVirtualCenterConfig returns VirtualCenterConfig Object created using vSphere Configuration
-// specified in the argurment.
-func GetVirtualCenterConfig(cfg *config.Config) (*VirtualCenterConfig, error) {
-	var err error
-	vCenterIPs, err := GetVcenterIPs(cfg) //  make([]string, 0)
-	if err != nil {
-		return nil, err
-	}
-	host := vCenterIPs[0]
-	port, err := strconv.Atoi(cfg.VirtualCenter[host].VCenterPort)
-	if err != nil {
-		return nil, err
-	}
-	vcConfig := &VirtualCenterConfig{
-		Host:            host,
-		Port:            port,
-		Username:        cfg.VirtualCenter[host].User,
-		Password:        cfg.VirtualCenter[host].Password,
-		Insecure:        cfg.VirtualCenter[host].InsecureFlag,
-		DatacenterPaths: strings.Split(cfg.VirtualCenter[host].Datacenters, ","),
-	}
-	return vcConfig, nil
-}
-
-// GetVcenterIPs returns list of vCenter IPs from VSphereConfig
-func GetVcenterIPs(cfg *config.Config) ([]string, error) {
-	var err error
-	vCenterIPs := make([]string, 0)
-	for key := range cfg.VirtualCenter {
-		vCenterIPs = append(vCenterIPs, key)
-	}
-	if len(vCenterIPs) == 0 {
-		err = errors.New("Unable get vCenter Hosts from VSphereConfig")
-	}
-	return vCenterIPs, err
-}
