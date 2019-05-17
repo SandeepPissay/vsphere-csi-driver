@@ -70,7 +70,7 @@ func (c *controller) Init(config *config.Config) error {
 	klog.Infof("Initializing CNS controller")
 	// Get VirtualCenterManager instance and validate version
 	var err error
-	vcenterconfig, err := block.GetVirtualCenterConfig(config)
+	vcenterconfig, err := cnsvsphere.GetVirtualCenterConfig(config)
 	if err != nil {
 		klog.Errorf("Failed to get VirtualCenterConfig. err=%v", err)
 		return err

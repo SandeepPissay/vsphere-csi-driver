@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"k8s.io/klog"
 	"log"
-	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/block"
 	"testing"
 
 	"github.com/vmware/govmomi/simulator"
@@ -160,7 +159,7 @@ func TestMetadataSyncInformer(t *testing.T) {
 	defer cancel()
 
 	// Init VC configuration
-	cnsVCenterConfig, err := block.GetVirtualCenterConfig(config)
+	cnsVCenterConfig, err := cnsvsphere.GetVirtualCenterConfig(config)
 	if err != nil {
 		t.Errorf("Failed to get virtualCenter. err=%v", err)
 		t.Fatal(err)
