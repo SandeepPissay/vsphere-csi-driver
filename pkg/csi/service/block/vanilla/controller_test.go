@@ -156,7 +156,7 @@ func getControllerTest(t *testing.T) *controllerTest {
 
 		ctx := context.Background()
 
-		vcenterconfig, err := block.GetVirtualCenterConfig(config)
+		vcenterconfig, err := cnsvsphere.GetVirtualCenterConfig(config)
 		if err != nil {
 			t.Fatal(err)
 		}

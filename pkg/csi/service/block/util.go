@@ -17,17 +17,13 @@ limitations under the License.
 package block
 
 import (
-	"errors"
 	"fmt"
 	"github.com/vmware/govmomi/vim25/types"
 	"golang.org/x/net/context"
 	"k8s.io/api/core/v1"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/klog"
-	cnstypes "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vmomi/types"
 	cnsvsphere "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vsphere"
-	"sigs.k8s.io/vsphere-csi-driver/pkg/common/config"
-	"strconv"
 	"strings"
 )
 
@@ -69,69 +65,6 @@ func RoundUpSize(volumeSizeBytes int64, allocationUnitBytes int64) int64 {
 		roundedUp++
 	}
 	return roundedUp
-}
-
-// GetVirtualCenterConfig returns VirtualCenterConfig Object created using vSphere Configuration
-// specified in the argurment.
-func GetVirtualCenterConfig(cfg *config.Config) (*cnsvsphere.VirtualCenterConfig, error) {
-	var err error
-	vCenterIPs := make([]string, 0)
-	for key := range cfg.VirtualCenter {
-		vCenterIPs = append(vCenterIPs, key)
-	}
-	if len(vCenterIPs) == 0 {
-		err = errors.New("Unable get vCenter Hosts from VSphereConfig")
-		return nil, err
-	}
-	host := vCenterIPs[0]
-	port, err := strconv.Atoi(cfg.VirtualCenter[host].VCenterPort)
-	if err != nil {
-		return nil, err
-	}
-	vcConfig := &cnsvsphere.VirtualCenterConfig{
-		Host:            host,
-		Port:            port,
-		Username:        cfg.VirtualCenter[host].User,
-		Password:        cfg.VirtualCenter[host].Password,
-		Insecure:        cfg.VirtualCenter[host].InsecureFlag,
-		DatacenterPaths: strings.Split(cfg.VirtualCenter[host].Datacenters, ","),
-	}
-	return vcConfig, nil
-}
-
-// GetVcenterIPs returns list of vCenter IPs from VSphereConfig
-func GetVcenterIPs(cfg *config.Config) ([]string, error) {
-	var err error
-	vCenterIPs := make([]string, 0)
-	for key := range cfg.VirtualCenter {
-		vCenterIPs = append(vCenterIPs, key)
-	}
-	if len(vCenterIPs) == 0 {
-		err = errors.New("Unable get vCenter Hosts from VSphereConfig")
-	}
-	return vCenterIPs, err
-}
-
-// GetCnsKubernetesEntityMetaData creates a CnsKubernetesEntityMetadataObject object from given parameters
-func GetCnsKubernetesEntityMetaData(entityName string, labels map[string]string, deleteFlag bool, entityType string, namespace string) *cnstypes.CnsKubernetesEntityMetadata {
-	// Create new metadata spec
-	var newLabels []types.KeyValue
-	for labelKey, labelVal := range labels {
-		newLabels = append(newLabels, types.KeyValue{
-			Key:   labelKey,
-			Value: labelVal,
-		})
-	}
-
-	entityMetadata := &cnstypes.CnsKubernetesEntityMetadata{}
-	entityMetadata.EntityName = entityName
-	entityMetadata.Delete = deleteFlag
-	if labels != nil {
-		entityMetadata.Labels = newLabels
-	}
-	entityMetadata.EntityType = entityType
-	entityMetadata.Namespace = namespace
-	return entityMetadata
 }
 
 // GetPersistentVolume returns a Persistent Volume object attached to the PVC given in parameters

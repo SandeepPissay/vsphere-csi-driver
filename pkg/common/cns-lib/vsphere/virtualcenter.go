@@ -19,11 +19,6 @@ import (
 	"crypto/tls"
 	"encoding/pem"
 	"fmt"
-	"net"
-	neturl "net/url"
-	"strconv"
-	"sync"
-
 	"github.com/vmware/govmomi"
 	"github.com/vmware/govmomi/find"
 	"github.com/vmware/govmomi/pbm"
@@ -32,6 +27,10 @@ import (
 	"github.com/vmware/govmomi/vim25"
 	"github.com/vmware/govmomi/vim25/soap"
 	"k8s.io/klog"
+	"net"
+	neturl "net/url"
+	"strconv"
+	"sync"
 )
 
 const (
@@ -311,3 +310,4 @@ func (vc *VirtualCenter) UpdateCredentials(username, password string) {
 	vc.Config.Username = username
 	vc.Config.Password = password
 }
+
