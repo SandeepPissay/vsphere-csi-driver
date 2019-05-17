@@ -1,13 +1,13 @@
 package vsphere
 
 import (
+	"errors"
 	"github.com/vmware/govmomi/vim25/soap"
 	"github.com/vmware/govmomi/vim25/types"
 	cnstypes "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vmomi/types"
+	"sigs.k8s.io/vsphere-csi-driver/pkg/common/config"
 	"strconv"
 	"strings"
-	"sigs.k8s.io/vsphere-csi-driver/pkg/common/config"
-	"errors"
 )
 
 // IsInvalidCredentialsError returns true if error is of type InvalidLogin
@@ -50,7 +50,6 @@ func GetContainerCluster(clusterid string, username string) cnstypes.CnsContaine
 	}
 
 }
-
 
 // GetVirtualCenterConfig returns VirtualCenterConfig Object created using vSphere Configuration
 // specified in the argurment.
