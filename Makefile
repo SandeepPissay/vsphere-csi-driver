@@ -3,6 +3,7 @@ all: build
 # Get the absolute path and name of the current directory.
 PWD := $(abspath .)
 BASE_DIR := $(notdir $(PWD))
+IMAGE_CI := $(shell $(MAKE) --no-print-directory -C hack/images/ci print)
 
 # PROJECT_ROOT is used when host access is required when running
 # Docker-in-Docker (DinD).
@@ -18,8 +19,11 @@ export BIN_OUT ?= $(BUILD_OUT)/bin
 export DIST_OUT ?= $(BUILD_OUT)/dist
 
 # ARTIFACTS is the directory containing artifacts uploaded to the Kubernetes
-# test grid at the end of a Prow job.
+# test grid at the end of the job.
 export ARTIFACTS ?= $(BUILD_OUT)/artifacts
+
+# K8S_VERSION is the specific version of Kubernetes test binaries.
+export K8S_VERSION ?= ci/latest
 
 -include hack/make/docker.mk
 
@@ -258,7 +262,7 @@ endif
 TEST_FLAGS ?= -v -count=1
 .PHONY: unit build-unit-tests
 unit unit-test:
-	env -u VSPHERE_SERVER -u VSPHERE_PASSWORD -u VSPHERE_USER -u VSPHERE_STORAGE_POLICY_NAME go test $(TEST_FLAGS) $(PKGS_WITH_TESTS)
+	env -u VSPHERE_SERVER -u VSPHERE_PASSWORD -u VSPHERE_USER -u VSPHERE_STORAGE_POLICY_NAME -u KUBECONFIG go test $(TEST_FLAGS) $(PKGS_WITH_TESTS)
 build-unit-tests:
 	$(foreach pkg,$(PKGS_WITH_TESTS),go test $(TEST_FLAGS) -c $(pkg); )
 
@@ -292,6 +296,36 @@ build-tests: build-unit-tests
 .PHONY: cover
 cover: TEST_FLAGS += -cover
 cover: test
+
+KUBETEST_COMMON_FLAGS := --provider=skeleton --check-version-skew=false
+.PHONY: conformance-test
+conformance-test: | $(DOCKER_SOCK)
+ifndef KUBECONFIG
+	$(error no KUBECONFIG provided to run conformance test!)
+else
+ifeq (,$(wildcard $(KUBECONFIG)))
+	$(error $(KUBECONFIG) does not exist!)
+endif
+endif
+ifeq (true,$(DOCKER_IN_DOCKER_ENABLED))
+	@export KUBERNETES_CONFORMANCE_TEST=y && \
+	kubetest --extract=$(K8S_VERSION) && \
+	cd kubernetes && \
+	kubetest $(KUBETEST_COMMON_FLAGS) --ginkgo-parallel \
+	  --test --test_args="--ginkgo.focus=\[Conformance\] --ginkgo.skip=\[Serial\]|\[Flaky\]|\[Disruptive\]" && \
+	kubetest $(KUBETEST_COMMON_FLAGS) \
+	  --test --test_args="--ginkgo.focus=\[Serial\].*\[Conformance\] --ginkgo.skip=\[Flaky\]|\[Disruptive\]"
+else
+	@docker run -it --rm  \
+	  -e "PROJECT_ROOT=$(PROJECT_ROOT)" \
+	  -v $(DOCKER_SOCK):$(DOCKER_SOCK) \
+	  -v "$(PWD)":/go/src/sigs.k8s.io/vsphere-csi-driver \
+	  -e "K8S_VERSION=$${K8S_VERSION}" \
+	  -e "ARTIFACTS=/artifacts"    -v "$(abspath $(ARTIFACTS))":/artifacts \
+	  -e "KUBECONFIG=/kubeconfig"	 -v $(KUBECONFIG):/kubeconfig:ro \
+	  $(IMAGE_CI) \
+	  make conformance-test
+endif
 
 ################################################################################
 ##                                 LINTING                                    ##
@@ -388,7 +422,7 @@ push-ci-image:
 
 .PHONY: print-ci-image
 print-ci-image:
-	@$(MAKE) --no-print-directory -C hack/images/ci print
+	@echo $(IMAGE_CI)
 
 ################################################################################
 ##                               PRINT VERISON                                ##

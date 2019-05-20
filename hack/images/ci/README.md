@@ -80,3 +80,12 @@ $ docker run -it --rm \
   vsphere-csi-driver/ci \
   make unit-test
 ```
+
+## Execute the conformance tests
+Running the e2e conformance suite not only requires DinD but also KUBECONFIG environment variable that provides admin access a running cluster.
+
+```shell
+K8S_VERSION=ci/latest-1.13 \
+KUBECONFIG=$HOME/.kube/config \
+make conformance-test
+```
