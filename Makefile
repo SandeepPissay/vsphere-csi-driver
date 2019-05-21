@@ -257,7 +257,7 @@ endif # ifndef X_BUILD_DISABLED
 ##                                 TESTING                                    ##
 ################################################################################
 ifndef PKGS_WITH_TESTS
-export PKGS_WITH_TESTS := $(sort $(shell find . -name "*_test.go" -type f -exec dirname \{\} \;))
+export PKGS_WITH_TESTS := $(sort $(shell find . -path ./tests -prune -o -name "*_test.go" -type f -exec dirname \{\} \;))
 endif
 TEST_FLAGS ?= -v -count=1
 .PHONY: unit build-unit-tests
