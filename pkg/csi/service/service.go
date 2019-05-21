@@ -19,12 +19,15 @@ package service
 import (
 	"context"
 	"flag"
+
 	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/block/vanilla"
+	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/block/wcp"
 
 	"net"
 	"os"
-	cnsconfig "sigs.k8s.io/vsphere-csi-driver/pkg/common/config"
 	"strings"
+
+	cnsconfig "sigs.k8s.io/vsphere-csi-driver/pkg/common/config"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/rexray/gocsi"
@@ -37,15 +40,18 @@ const (
 	// Name is the name of this CSI SP.
 	Name = "vsphere.csi.vmware.com"
 
-	// APICNS is the CNS API
-	APICNS = "CNS"
+	// VanillaK8SControllerType indicated Vanilla K8S CSI Controller
+	VanillaK8SControllerType = "VANILLA"
 
-	defaultAPI = APICNS
+	// WcpControllerType indicated WCP CSI Controller
+	WcpControllerType = "WCP"
+
+	defaultController = VanillaK8SControllerType
 )
 
 var (
-	api     = defaultAPI
-	cfgPath = vTypes.DefaultCloudConfigPath
+	controllerType = defaultController
+	cfgPath        = vTypes.DefaultCloudConfigPath
 )
 
 // Service is a CSI SP and idempotency.Provider.
@@ -67,11 +73,13 @@ func New() Service {
 }
 
 func (s *service) GetController() csi.ControllerServer {
-	// check which API to use
-	api = os.Getenv(vTypes.EnvAPI)
-	if api == "" {
-		api = defaultAPI
+	// check which controller type to use
+	controllerType = os.Getenv(vTypes.EnvControllerType)
+	if controllerType == WcpControllerType {
+		s.cnscs = wcp.New()
+		return s.cnscs
 	}
+	controllerType = defaultController
 	s.cnscs = vanilla.New()
 	return s.cnscs
 }
@@ -81,8 +89,8 @@ func (s *service) BeforeServe(
 
 	defer func() {
 		fields := map[string]interface{}{
-			"api":  api,
-			"mode": s.mode,
+			"controllerType": controllerType,
+			"mode":           s.mode,
 		}
 
 		log.WithFields(fields).Infof("configured: %s", Name)

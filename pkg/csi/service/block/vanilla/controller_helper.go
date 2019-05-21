@@ -93,7 +93,7 @@ func validateCreateVolumeRequest(req *csi.CreateVolumeRequest) error {
 	if len(volCaps) == 0 {
 		return status.Error(codes.InvalidArgument, "Volume capabilities not provided")
 	}
-	if !isValidVolumeCapabilities(volCaps) {
+	if !block.IsValidVolumeCapabilities(volCaps) {
 		return status.Error(codes.InvalidArgument, "Volume capabilities not supported")
 	}
 	return nil
@@ -129,7 +129,7 @@ func validateControllerPublishVolumeRequest(req *csi.ControllerPublishVolumeRequ
 		return status.Error(codes.InvalidArgument, "Volume capability not provided")
 	}
 	caps := []*csi.VolumeCapability{volCap}
-	if !isValidVolumeCapabilities(caps) {
+	if !block.IsValidVolumeCapabilities(caps) {
 		return status.Error(codes.InvalidArgument, "Volume capability not supported")
 	}
 	return nil
@@ -149,23 +149,4 @@ func validateControllerUnpublishVolumeRequest(req *csi.ControllerUnpublishVolume
 		return status.Errorf(codes.InvalidArgument, msg)
 	}
 	return nil
-}
-
-// isValidVolumeCapabilities is the helper function to validate capabilities of volume.
-func isValidVolumeCapabilities(volCaps []*csi.VolumeCapability) bool {
-	hasSupport := func(cap *csi.VolumeCapability) bool {
-		for _, c := range volumeCaps {
-			if c.GetMode() == cap.AccessMode.GetMode() {
-				return true
-			}
-		}
-		return false
-	}
-	foundAll := true
-	for _, c := range volCaps {
-		if !hasSupport(c) {
-			foundAll = false
-		}
-	}
-	return foundAll
 }
