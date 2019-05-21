@@ -738,7 +738,7 @@ func getDiskID(volID string, pubCtx map[string]string) (string, error) {
 
 	var diskID string
 
-	if api == APICNS {
+	if controllerType == VanillaK8SControllerType {
 		if _, ok := pubCtx["page83data"]; !ok {
 			return "", status.Errorf(codes.InvalidArgument,
 				"Attribute: %s required in publish context",

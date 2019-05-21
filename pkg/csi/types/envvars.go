@@ -23,7 +23,7 @@ const (
 
 const (
 	// EnvAPI is the name of the API to use with vSphere
-	EnvAPI = "X_CSI_VSPHERE_APINAME"
+	EnvControllerType = "X_CSI_CONTROLLER_TYPE"
 
 	// EnvCloudConfig contains the path to the vSphere Cloud Config
 	EnvCloudConfig = "X_CSI_VSPHERE_CLOUD_CONFIG"

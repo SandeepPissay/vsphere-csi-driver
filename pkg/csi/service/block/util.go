@@ -17,11 +17,13 @@ limitations under the License.
 package block
 
 import (
+	"strings"
+
+	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/vmware/govmomi/vim25/types"
 	"golang.org/x/net/context"
 	"k8s.io/klog"
 	cnsvsphere "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vsphere"
-	"strings"
 )
 
 // GetVCenter returns VirtualCenter object from specified Manager object.
@@ -71,4 +73,23 @@ func GetLabelsMapFromKeyValue(labels []types.KeyValue) map[string]string {
 		labelsMap[label.Key] = label.Value
 	}
 	return labelsMap
+}
+
+// IsValidVolumeCapabilities is the helper function to validate capabilities of volume.
+func IsValidVolumeCapabilities(volCaps []*csi.VolumeCapability) bool {
+	hasSupport := func(cap *csi.VolumeCapability) bool {
+		for _, c := range VolumeCaps {
+			if c.GetMode() == cap.AccessMode.GetMode() {
+				return true
+			}
+		}
+		return false
+	}
+	foundAll := true
+	for _, c := range volCaps {
+		if !hasSupport(c) {
+			foundAll = false
+		}
+	}
+	return foundAll
 }
