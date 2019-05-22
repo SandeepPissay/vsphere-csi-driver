@@ -1,0 +1,38 @@
+kind: StatefulSet
+apiVersion: apps/v1
+metadata:
+  name: vsphere-csi-metadata-syncer
+  namespace: kube-system
+spec:
+  serviceName: vsphere-csi
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vsphere-csi-metadata-syncer
+  template:
+    metadata:
+      labels:
+        app: vsphere-csi-metadata-syncer
+        role: vsphere-csi-metadata-syncer
+    spec:
+      serviceAccount: vsphere-csi-metadata-syncer
+      nodeSelector:
+        node-role.kubernetes.io/master: ""
+      tolerations:
+      - operator: "Exists"
+        key: node-role.kubernetes.io/master
+        effect: NoSchedule
+      containers:
+      - name: vsphere-syncer
+        image: your-docker-repository/syncer:latest
+        imagePullPolicy: "Always"
+        volumeMounts:
+        - mountPath: /etc/cloud
+          name: vsphere-config-volume
+          readOnly: true
+      volumes:
+      - name: vsphere-config-volume
+        configMap:
+          name: csi-config
+      - name: socket-dir
+        emptyDir: {}
