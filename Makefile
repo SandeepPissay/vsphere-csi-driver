@@ -311,7 +311,7 @@ ifeq (true,$(DOCKER_IN_DOCKER_ENABLED))
 	@export KUBERNETES_CONFORMANCE_TEST=y && \
 	kubetest --extract=$(K8S_VERSION) && \
 	cd kubernetes && \
-	kubetest $(KUBETEST_COMMON_FLAGS) --ginkgo-parallel \
+	kubetest $(KUBETEST_COMMON_FLAGS) --ginkgo-parallel=5 \
 	  --test --test_args="--ginkgo.focus=\[Conformance\] --ginkgo.skip=\[Serial\]|\[Flaky\]|\[Disruptive\]" && \
 	kubetest $(KUBETEST_COMMON_FLAGS) \
 	  --test --test_args="--ginkgo.focus=\[Serial\].*\[Conformance\] --ginkgo.skip=\[Flaky\]|\[Disruptive\]"
