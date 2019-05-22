@@ -7,8 +7,9 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/vmware/govmomi/object"
 	vim25types "github.com/vmware/govmomi/vim25/types"
-	"k8s.io/api/core/v1"
-	storagev1 "k8s.io/api/storage/v1"
+	corev1 "k8s.io/api/core/v1"
+	stroagev1 "k8s.io/api/storage/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
@@ -18,18 +19,21 @@ import (
 	"time"
 )
 
-// getVSphereStorageClassSpec returns Storage Class with supplied storage class parameters
-func getVSphereStorageClassSpec(name string, scParameters map[string]string) *storagev1.StorageClass {
-	var sc *storagev1.StorageClass
-
-	sc = &storagev1.StorageClass{
+// getVSphereStorageClassSpec returns Storage Class Spec with supplied storage class parameters
+func getVSphereStorageClassSpec(scName string, scParameters map[string]string) *stroagev1.StorageClass {
+	var sc *stroagev1.StorageClass
+	sc = &stroagev1.StorageClass{
 		TypeMeta: metav1.TypeMeta{
 			Kind: "StorageClass",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
+			GenerateName: "sc-",
 		},
 		Provisioner: "vsphere.csi.vmware.com",
+	}
+	// If scName is specified, use that name, else auto-generate storage class name
+	if scName != "" {
+		sc.ObjectMeta.Name = scName
 	}
 	if scParameters != nil {
 		sc.Parameters = scParameters
@@ -38,7 +42,7 @@ func getVSphereStorageClassSpec(name string, scParameters map[string]string) *st
 }
 
 // getPvFromClaim returns PersistentVolume for requested claim
-func getPvFromClaim(client clientset.Interface, namespace string, claimName string) *v1.PersistentVolume {
+func getPvFromClaim(client clientset.Interface, namespace string, claimName string) *corev1.PersistentVolume {
 	pvclaim, err := client.CoreV1().PersistentVolumeClaims(namespace).Get(claimName, metav1.GetOptions{})
 	Expect(err).NotTo(HaveOccurred())
 	pv, err := client.CoreV1().PersistentVolumes().Get(pvclaim.Spec.VolumeName, metav1.GetOptions{})
@@ -100,21 +104,58 @@ func isCNSDiskDetached(vs *VSphere, vmUUID string, volumeID string) (bool, error
 
 // getVirtualDeviceByDiskID gets the virtual device by diskID
 func getVirtualDeviceByDiskID(ctx context.Context, vm *object.VirtualMachine, diskID string) (vim25types.BaseVirtualDevice, error) {
+	vmname, err := vm.Common.ObjectName(ctx)
+	Expect(err).NotTo(HaveOccurred())
 	vmDevices, err := vm.Device(ctx)
 	if err != nil {
-		framework.Logf("Failed to get the devices for VM: %q. err: %+v", vm.InventoryPath, err)
+		framework.Logf("Failed to get the devices for VM: %q. err: %+v", vmname, err)
 		return nil, err
 	}
 	for _, device := range vmDevices {
 		if vmDevices.TypeName(device) == "VirtualDisk" {
 			if virtualDisk, ok := device.(*vim25types.VirtualDisk); ok {
 				if virtualDisk.VDiskId != nil && virtualDisk.VDiskId.Id == diskID {
-					framework.Logf("Found FCDID %q attached to VM %q", diskID, vm.Name())
+					framework.Logf("Found FCDID %q attached to VM %q", diskID, vmname)
 					return device, nil
 				}
 			}
 		}
 	}
-	framework.Logf("Failed to find FCDID %q attached to VM %q", diskID, vm.Name())
+	framework.Logf("Failed to find FCDID %q attached to VM %q", diskID, vmname)
 	return nil, nil
+}
+
+// getPersistentVolumeClaimSpecWithStorageClass return the PersistentVolumeClaim spec with specified storage class
+func getPersistentVolumeClaimSpecWithStorageClass(namespace string, diskSize string, storageclass *stroagev1.StorageClass) *corev1.PersistentVolumeClaim {
+	claim := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: "pvc-",
+			Namespace:    namespace,
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes: []corev1.PersistentVolumeAccessMode{
+				corev1.ReadWriteOnce,
+			},
+			Resources: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceName(corev1.ResourceStorage): resource.MustParse(diskSize),
+				},
+			},
+			StorageClassName: &(storageclass.Name),
+		},
+	}
+	return claim
+}
+
+// createPVCAndStorageClass helps creates a storage class with specified nameand PVC
+func createPVCAndStorageClass(client clientset.Interface, pvcnamespace string, scParameters map[string]string) (*stroagev1.StorageClass, *corev1.PersistentVolumeClaim, error) {
+	By("Creating Storage Class With Specified Datastore")
+	storageclass, err := client.StorageV1().StorageClasses().Create(getVSphereStorageClassSpec("", scParameters))
+	Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to create storage class with err: %v", err))
+
+	By("Creating PVC using the Storage Class")
+	pvcspec := getPersistentVolumeClaimSpecWithStorageClass(pvcnamespace, diskSize, storageclass)
+	pvclaim, err := framework.CreatePVC(client, pvcnamespace, pvcspec)
+	Expect(err).NotTo(HaveOccurred())
+	return storageclass, pvclaim, err
 }

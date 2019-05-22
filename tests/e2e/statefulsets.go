@@ -48,7 +48,7 @@ const (
 */
 
 var _ = Describe("[csi-block-e2e] statefulset", func() {
-	f := framework.NewDefaultFramework("vsphere-statefulset")
+	f := framework.NewDefaultFramework("e2e-vsphere-statefulset")
 	var (
 		namespace string
 		client    clientset.Interface
@@ -57,13 +57,17 @@ var _ = Describe("[csi-block-e2e] statefulset", func() {
 		namespace = f.Namespace.Name
 		client = f.ClientSet
 		bootstrap()
+		sc, err := client.StorageV1().StorageClasses().Get(storageclassname, metav1.GetOptions{})
+		if err == nil && sc != nil {
+			Expect(client.StorageV1().StorageClasses().Delete(sc.Name, nil)).NotTo(HaveOccurred())
+		}
 	})
 	AfterEach(func() {
 		framework.Logf("Deleting all statefulset in namespace: %v", namespace)
 		framework.DeleteAllStatefulSets(client, namespace)
 	})
 
-	It("CSP - vsphere statefulset testing", func() {
+	It("vsphere statefulset testing", func() {
 		By("Creating StorageClass for Statefulset")
 		scSpec := getVSphereStorageClassSpec(storageclassname, nil)
 		sc, err := client.StorageV1().StorageClasses().Create(scSpec)
