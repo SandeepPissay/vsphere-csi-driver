@@ -19,7 +19,7 @@ package e2e
 import (
 	"context"
 	"fmt"
-	. "github.com/onsi/gomega"
+	gomega "github.com/onsi/gomega"
 	"github.com/vmware/govmomi"
 	"github.com/vmware/govmomi/session"
 	"github.com/vmware/govmomi/vim25"
@@ -51,7 +51,7 @@ var (
 
 // connect helps make a connection to vCenter Server
 // No actions are taken if a connection exists and alive. Otherwise, a new client will be created.
-func connect(ctx context.Context, vs *VSphere) {
+func connect(ctx context.Context, vs *vSphere) {
 	clientLock.Lock()
 	var err error
 	defer clientLock.Unlock()
@@ -60,7 +60,7 @@ func connect(ctx context.Context, vs *VSphere) {
 	}
 	manager := session.NewManager(vs.Client.Client)
 	userSession, err := manager.UserSession(ctx)
-	Expect(err).NotTo(HaveOccurred())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	if userSession != nil {
 		return
 	}
@@ -71,12 +71,12 @@ func connect(ctx context.Context, vs *VSphere) {
 }
 
 // newClient creates a new client for vSphere connection
-func newClient(ctx context.Context, vs *VSphere) *govmomi.Client {
+func newClient(ctx context.Context, vs *vSphere) *govmomi.Client {
 	url, err := neturl.Parse(fmt.Sprintf("https://%s:%s/sdk", vs.Config.Global.VCenterHostname, vs.Config.Global.VCenterPort))
-	Expect(err).NotTo(HaveOccurred())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	url.User = neturl.UserPassword(vs.Config.Global.User, vs.Config.Global.Password)
 	client, err := govmomi.NewClient(ctx, url, true)
-	Expect(err).NotTo(HaveOccurred())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	client.RoundTripper = vim25.Retry(client.RoundTripper, vim25.TemporaryNetworkError(roundTripperDefaultCount))
 	return client
 }
@@ -88,13 +88,13 @@ func newCnsClient(ctx context.Context, c *vim25.Client) (*cnsClient, error) {
 }
 
 // connectCns creates a CNS client for the virtual center.
-func connectCns(ctx context.Context, vs *VSphere) error {
+func connectCns(ctx context.Context, vs *vSphere) error {
 	var err error
 	clientMutex.Lock()
 	defer clientMutex.Unlock()
 	if vs.CnsClient == nil {
 		vs.CnsClient, err = newCnsClient(ctx, vs.Client.Client)
-		Expect(err).NotTo(HaveOccurred())
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	}
 	return nil
 }

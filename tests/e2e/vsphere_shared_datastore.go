@@ -18,13 +18,12 @@ package e2e
 
 import (
 	"fmt"
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+	"github.com/onsi/ginkgo"
+	"github.com/onsi/gomega"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/kubernetes/test/e2e/framework"
-	"k8s.io/kubernetes/test/e2e/storage/utils"
 	"time"
 )
 
@@ -43,7 +42,7 @@ import (
 	2. NONSHARED_VSPHERE_DATASTORE_URL (set to non-shared datastor URL)
 */
 
-var _ = utils.SIGDescribe("[csi-block-e2e] Datastore Based Volume Provisioning With No Storage Policy", func() {
+var _ = ginkgo.Describe("[csi-block-e2e] Datastore Based Volume Provisioning With No Storage Policy", func() {
 	f := framework.NewDefaultFramework("e2e-vsphere-volume-provisioning-no-storage-policy")
 	var (
 		client                clientset.Interface
@@ -52,7 +51,7 @@ var _ = utils.SIGDescribe("[csi-block-e2e] Datastore Based Volume Provisioning W
 		sharedDatastoreURL    string
 		nonSharedDatastoreURL string
 	)
-	BeforeEach(func() {
+	ginkgo.BeforeEach(func() {
 		client = f.ClientSet
 		namespace = f.Namespace.Name
 		scParameters = make(map[string]string)
@@ -63,35 +62,37 @@ var _ = utils.SIGDescribe("[csi-block-e2e] Datastore Based Volume Provisioning W
 	})
 
 	// Shared datastore should be provisioned successfully
-	It("Verify dynamic provisioning of PV passes with user specified shared datastore and no storage policy specified in the storage class", func() {
-		By("Invoking Test for user specified Shared Datastore in Storage class for volume provisioning")
+	ginkgo.It("Verify dynamic provisioning of PV passes with user specified shared datastore and no storage policy specified in the storage class", func() {
+		ginkgo.By("Invoking Test for user specified Shared Datastore in Storage class for volume provisioning")
 		sharedDatastoreURL = GetAndExpectStringEnvVar(envSharedDatastoreURL)
 		scParameters[scParamDatastoreURL] = sharedDatastoreURL
-		storageclass, pvclaim, err := createPVCAndStorageClass(client, namespace, scParameters)
-		defer client.StorageV1().StorageClasses().Delete(storageclass.Name, nil)
-		defer framework.DeletePersistentVolumeClaim(client, pvclaim.Name, namespace)
-		By("Expect claim to pass provisioning volume as shared datastore")
-		err = framework.WaitForPersistentVolumeClaimPhase(v1.ClaimBound, client, pvclaim.Namespace, pvclaim.Name, framework.Poll, time.Minute)
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to provision volume on shared datastore with err: %v", err))
-	})
-	// Setting non-shared datastore in the storage class should fail dynamic volume provisioning
-	It("Verify dynamic provisioning of PV fails with user specified non-shared datastore and no storage policy specified in the storage class", func() {
-		By("Invoking Test for user specified non-shared Datastore in storage class for volume provisioning")
-		nonSharedDatastoreURL = GetAndExpectStringEnvVar(envNonSharedStorageClassDatastoreURL)
-		scParameters[scParamDatastoreURL] = nonSharedDatastoreURL
-		storageclass, pvclaim, err := createPVCAndStorageClass(client, namespace, scParameters)
+		storageclass, pvclaim, err := createPVCAndStorageClass(client, namespace, nil, scParameters)
 		defer client.StorageV1().StorageClasses().Delete(storageclass.Name, nil)
 		defer framework.DeletePersistentVolumeClaim(client, pvclaim.Name, namespace)
 
-		By("Expect claim to fail provisioning volume on non shared datastore")
+		ginkgo.By("Expect claim to pass provisioning volume as shared datastore")
+		err = framework.WaitForPersistentVolumeClaimPhase(v1.ClaimBound, client, pvclaim.Namespace, pvclaim.Name, framework.Poll, time.Minute)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred(), fmt.Sprintf("Failed to provision volume on shared datastore with err: %v", err))
+	})
+
+	// Setting non-shared datastore in the storage class should fail dynamic volume provisioning
+	ginkgo.It("Verify dynamic provisioning of PV fails with user specified non-shared datastore and no storage policy specified in the storage class", func() {
+		ginkgo.By("Invoking Test for user specified non-shared Datastore in storage class for volume provisioning")
+		nonSharedDatastoreURL = GetAndExpectStringEnvVar(envNonSharedStorageClassDatastoreURL)
+		scParameters[scParamDatastoreURL] = nonSharedDatastoreURL
+		storageclass, pvclaim, err := createPVCAndStorageClass(client, namespace, nil, scParameters)
+		defer client.StorageV1().StorageClasses().Delete(storageclass.Name, nil)
+		defer framework.DeletePersistentVolumeClaim(client, pvclaim.Name, namespace)
+
+		ginkgo.By("Expect claim to fail provisioning volume on non shared datastore")
 		err = framework.WaitForPersistentVolumeClaimPhase(v1.ClaimBound, client, pvclaim.Namespace, pvclaim.Name, framework.Poll, time.Minute/2)
-		Expect(err).To(HaveOccurred())
+		gomega.Expect(err).To(gomega.HaveOccurred())
 		// eventList contains the events related to pvc
 		eventList, _ := client.CoreV1().Events(pvclaim.Namespace).List(metav1.ListOptions{})
 		actualErrMsg := eventList.Items[len(eventList.Items)-1].Message
 		fmt.Println(fmt.Sprintf("Actual failure message: %+q", actualErrMsg))
 		expectedErrMsg := "failed to provision volume with StorageClass \"" + storageclass.Name + "\": rpc error: code = Unknown desc = Datastore: " + nonSharedDatastoreURL + " specified in the storage class is not accessible to all nodes."
 		fmt.Println(fmt.Sprintf("Expected failure message: %+q", expectedErrMsg))
-		Expect(actualErrMsg == expectedErrMsg).To(BeTrue(), fmt.Sprintf("actualErrMsg: %q does not match with expectedErrMsg: %q", actualErrMsg, expectedErrMsg))
+		gomega.Expect(actualErrMsg == expectedErrMsg).To(gomega.BeTrue(), fmt.Sprintf("actualErrMsg: %q does not match with expectedErrMsg: %q", actualErrMsg, expectedErrMsg))
 	})
 })

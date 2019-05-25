@@ -14,7 +14,7 @@ const e2eTestConfFileEnvVar = "E2E_TEST_CONF_FILE"
 type e2eTestConfig struct {
 	Global struct {
 		// Kubernetes Cluster-ID
-		ClusterId string `gcfg:"cluster-id"`
+		ClusterID string `gcfg:"cluster-id"`
 		// vCenter username.
 		User string `gcfg:"user"`
 		// vCenter password in clear text.
@@ -34,7 +34,7 @@ type e2eTestConfig struct {
 func getConfig() (*e2eTestConfig, error) {
 	var confFileLocation = os.Getenv(e2eTestConfFileEnvVar)
 	if confFileLocation == "" {
-		return nil, fmt.Errorf("Env variable 'VSPHERE_CONF_FILE' is not set.")
+		return nil, fmt.Errorf("environment variable 'E2E_TEST_CONF_FILE' is not set")
 	}
 	confFile, err := os.Open(confFileLocation)
 	if err != nil {

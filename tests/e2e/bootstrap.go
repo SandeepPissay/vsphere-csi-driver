@@ -18,18 +18,18 @@ package e2e
 
 import (
 	"context"
-	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega"
 	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/kubernetes/test/e2e/framework/testfiles"
 )
 
-var e2eVSphere VSphere
+var e2eVSphere vSphere
 
 // bootstrap function takes care of initializing necessary tests context for e2e tests
 func bootstrap() {
 	config, err := getConfig()
-	Expect(err).NotTo(HaveOccurred())
-	e2eVSphere = VSphere{
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
+	e2eVSphere = vSphere{
 		Config: config,
 	}
 	ctx, cancel := context.WithCancel(context.Background())

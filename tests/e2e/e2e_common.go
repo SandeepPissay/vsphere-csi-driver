@@ -17,23 +17,31 @@ limitations under the License.
 package e2e
 
 import (
-	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega"
 	"os"
 	"strconv"
+	"time"
 )
 
 const (
-	envSharedDatastoreURL                = "SHARED_VSPHERE_DATASTORE_URL"
-	envNonSharedStorageClassDatastoreURL = "NONSHARED_VSPHERE_DATASTORE_URL"
-	scParamDatastoreURL                  = "DatastoreURL"
-	diskSize                             = "2Gi"
-	e2evSphereCSIBlockDriverName         = "block.vsphere.csi.vmware.com"
+	envSharedDatastoreURL                      = "SHARED_VSPHERE_DATASTORE_URL"
+	envNonSharedStorageClassDatastoreURL       = "NONSHARED_VSPHERE_DATASTORE_URL"
+	scParamDatastoreURL                        = "DatastoreURL"
+	diskSize                                   = "2Gi"
+	e2evSphereCSIBlockDriverName               = "block.vsphere.csi.vmware.com"
+	envVolumeOperationsScale                   = "VOLUME_OPS_SCALE"
+	envStoragePolicyNameForSharedDatastores    = "STORAGE_POLICY_FOR_SHARED_DATASTORES"
+	envStoragePolicyNameForNonSharedDatastores = "STORAGE_POLICY_FOR_NONSHARED_DATASTORES"
+	scParamStoragePolicyName                   = "StoragePolicy"
+	poll                                       = 2 * time.Second
+	pollTimeout                                = 5 * time.Minute
+	pollTimeoutShort                           = 1 * time.Minute / 2
 )
 
 // GetAndExpectStringEnvVar parses a string from env variable
 func GetAndExpectStringEnvVar(varName string) string {
 	varValue := os.Getenv(varName)
-	Expect(varValue).NotTo(BeEmpty(), "ENV "+varName+" is not set")
+	gomega.Expect(varValue).NotTo(gomega.BeEmpty(), "ENV "+varName+" is not set")
 	return varValue
 }
 
@@ -41,6 +49,6 @@ func GetAndExpectStringEnvVar(varName string) string {
 func GetAndExpectIntEnvVar(varName string) int {
 	varValue := GetAndExpectStringEnvVar(varName)
 	varIntValue, err := strconv.Atoi(varValue)
-	Expect(err).NotTo(HaveOccurred(), "Error Parsing "+varName)
+	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Error Parsing "+varName)
 	return varIntValue
 }

@@ -22,8 +22,12 @@ GO111MODULE=on go get -u github.com/onsi/ginkgo/ginkgo
 # Exporting KUBECONFIG path
 export KUBECONFIG=$HOME/.kube/config
 # Running the e2e test
-FOCUS=${GINKGO_FOCUS-"[csi\-block\-e2e]"}
 
+FOCUS=${GINKGO_FOCUS:-}
+if [ -z "$FOCUS" ]
+then
+    FOCUS="[csi\-block\-e2e]"
+fi
 ginkgo -v --focus="$FOCUS" tests/e2e
 
 # Checking for test status
