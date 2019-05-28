@@ -32,11 +32,11 @@ const (
 	// AttributeDiskType is a PersistentVolume's attribute.
 	AttributeDiskType = "type"
 
-	// AttributeDatastoreName represents name of the Datastore in the Storage Classs
-	// For Example: Datastore: "sharedVmfs-0"
-	AttributeDatastoreName = "Datastore"
+	// AttributeDatastoreURL represents URL of the datastore in the StorageClass
+	// For Example: DatastoreURL: "ds:///vmfs/volumes/5c9bb20e-009c1e46-4b85-0200483b2a97/"
+	AttributeDatastoreURL = "DatastoreURL"
 
-	// AttributeStoragePolicyName represents name of the Storage Policy in the Storage Classs
+	// AttributeStoragePolicyName represents name of the Storage Policy in the Storage Class
 	// For Example: StoragePolicy: "vSAN Default Storage Policy"
 	AttributeStoragePolicyName = "StoragePolicy"
 

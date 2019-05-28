@@ -117,8 +117,8 @@ func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 	}
 	volSizeMB := int64(block.RoundUpSize(volSizeBytes, block.GbInBytes)) * 1024
 
-	var datastoreName string
-	datastoreName = req.Parameters[block.AttributeDatastoreName]
+	var datastoreURL string
+	datastoreURL = req.Parameters[block.AttributeDatastoreURL]
 
 	var storagePolicyName string
 	storagePolicyName = req.Parameters[block.AttributeStoragePolicyName]
@@ -126,7 +126,7 @@ func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 	var createVolumeSpec = block.CreateVolumeSpec{
 		CapacityMB:        volSizeMB,
 		Name:              req.Name,
-		Datastore:         datastoreName,
+		DatastoreURL:      datastoreURL,
 		StoragePolicyName: storagePolicyName,
 	}
 	// Get shared datastores for the Kubernetes cluster

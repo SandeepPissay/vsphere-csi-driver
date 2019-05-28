@@ -23,10 +23,10 @@ import (
 )
 
 const (
-	envSharedDatastoreName                = "SHARED_VSPHERE_DATASTORE"
-	envNonSharedStorageClassDatastoreName = "NONSHARED_VSPHERE_DATASTORE"
-	scParamDatastore                      = "Datastore"
-	diskSize                              = "2Gi"
+	envSharedDatastoreURL                = "SHARED_VSPHERE_DATASTORE_URL"
+	envNonSharedStorageClassDatastoreURL = "NONSHARED_VSPHERE_DATASTORE_URL"
+	scParamDatastoreURL                  = "DatastoreURL"
+	diskSize                             = "2Gi"
 )
 
 // GetAndExpectStringEnvVar parses a string from env variable

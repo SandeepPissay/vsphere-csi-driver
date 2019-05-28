@@ -27,6 +27,9 @@ import (
 	"k8s.io/klog"
 )
 
+// DatastoreInfoProperty refers to the property name info for the Datastore
+const DatastoreInfoProperty = "info"
+
 // Datacenter holds virtual center information along with the Datacenter.
 type Datacenter struct {
 	// Datacenter represents the govmomi Datacenter.
@@ -40,16 +43,38 @@ func (dc *Datacenter) String() string {
 		dc.Datacenter, dc.VirtualCenterHost)
 }
 
-// GetDatastoreByName returns the *Datastore instance given its name.
-func (dc *Datacenter) GetDatastoreByName(ctx context.Context, name string) (*Datastore, error) {
+// GetDatastoreByURL returns the *Datastore instance given its URL.
+func (dc *Datacenter) GetDatastoreByURL(ctx context.Context, datastoreURL string) (*Datastore, error) {
 	finder := find.NewFinder(dc.Datacenter.Client(), false)
 	finder.SetDatacenter(dc.Datacenter)
-	ds, err := finder.Datastore(ctx, name)
+	datastores, err := finder.DatastoreList(ctx, "*")
 	if err != nil {
-		klog.Errorf("Couldn't find Datastore given name %s with err: %v", name, err)
+		klog.Errorf("Failed to get all the datastores. err: %+v", err)
 		return nil, err
 	}
-	return &Datastore{Datastore: ds, Datacenter: dc}, nil
+	var dsList []types.ManagedObjectReference
+	for _, ds := range datastores {
+		dsList = append(dsList, ds.Reference())
+	}
+
+	var dsMoList []mo.Datastore
+	pc := property.DefaultCollector(dc.Client())
+	properties := []string{DatastoreInfoProperty}
+	err = pc.Retrieve(ctx, dsList, properties, &dsMoList)
+	if err != nil {
+		klog.Errorf("Failed to get Datastore managed objects from datastore objects."+
+			" dsObjList: %+v, properties: %+v, err: %v", dsList, properties, err)
+		return nil, err
+	}
+	for _, dsMo := range dsMoList {
+		if dsMo.Info.GetDatastoreInfo().Url == datastoreURL {
+			return &Datastore{object.NewDatastore(dc.Client(), dsMo.Reference()),
+				dc}, nil
+		}
+	}
+	err = fmt.Errorf("Couldn't find Datastore given URL %q", datastoreURL)
+	klog.Error(err)
+	return nil, err
 }
 
 // GetVirtualMachineByUUID returns the VirtualMachine instance given its UUID in a datacenter.

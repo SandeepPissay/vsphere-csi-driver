@@ -280,8 +280,8 @@ endif
 ifndef VSPHERE_DATACENTER
 	$(error Requires VSPHERE_DATACENTER from a deployed testbed to run integration-unit-test)
 endif
-ifndef VSPHERE_DATASTORE
-	$(error Requires VSPHERE_DATASTORE from a deployed testbed to run integration-unit-test)
+ifndef VSPHERE_DATASTORE_URL
+	$(error Requires VSPHERE_DATASTORE_URL from a deployed testbed to run integration-unit-test)
 endif
 ifndef VSPHERE_INSECURE
 	$(error Requires VSPHERE_INSECURE from a deployed testbed to run integration-unit-test)

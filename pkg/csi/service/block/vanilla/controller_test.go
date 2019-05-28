@@ -19,6 +19,7 @@ package vanilla
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/vmware/govmomi/find"
 	"github.com/vmware/govmomi/object"
@@ -28,6 +29,7 @@ import (
 	"github.com/vmware/govmomi/simulator"
 	"github.com/vmware/govmomi/vim25"
 	"github.com/vmware/govmomi/vim25/mo"
+	"github.com/vmware/govmomi/vim25/types"
 	"log"
 	"os"
 	cnssim "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vmomi/simulator"
@@ -103,8 +105,8 @@ func configFromEnvOrSim() (*config.Config, func()) {
 }
 
 type FakeNodeManager struct {
-	client              *vim25.Client
-	sharedDatastoreName string
+	client             *vim25.Client
+	sharedDatastoreURL string
 }
 
 func (f *FakeNodeManager) Initialize(serviceAccount string) error {
@@ -115,19 +117,39 @@ func (f *FakeNodeManager) GetSharedDatastoresInK8SCluster(ctx context.Context) (
 	finder := find.NewFinder(f.client, false)
 	dc, _ := finder.DefaultDatacenter(ctx)
 	finder.SetDatacenter(dc)
-	ds, _ := finder.Datastore(ctx, f.sharedDatastoreName)
 
-	var dsMo mo.Datastore
-	pc := property.DefaultCollector(f.client)
+	datastores, err := finder.DatastoreList(ctx, "*")
+	if err != nil {
+		return nil, err
+	}
+	var dsList []types.ManagedObjectReference
+	for _, ds := range datastores {
+		dsList = append(dsList, ds.Reference())
+	}
+	var dsMoList []mo.Datastore
+	pc := property.DefaultCollector(dc.Client())
 	properties := []string{"info"}
-	_ = pc.RetrieveOne(ctx, ds.Reference(), properties, &dsMo)
+	err = pc.Retrieve(ctx, dsList, properties, &dsMoList)
+	if err != nil {
+		return nil, err
+	}
 
+	var sharedDatastoreManagedObject *mo.Datastore
+	for _, dsMo := range dsMoList {
+		if dsMo.Info.GetDatastoreInfo().Url == f.sharedDatastoreURL {
+			sharedDatastoreManagedObject = &dsMo
+			break
+		}
+	}
+	if sharedDatastoreManagedObject == nil {
+		return nil, fmt.Errorf("Failed to get shared datastores")
+	}
 	return []*cnsvsphere.DatastoreInfo{
 		{
 			&cnsvsphere.Datastore{
-				object.NewDatastore(nil, ds.Reference()),
+				object.NewDatastore(nil, sharedDatastoreManagedObject.Reference()),
 				nil},
-			dsMo.Info.GetDatastoreInfo(),
+			sharedDatastoreManagedObject.Info.GetDatastoreInfo(),
 		},
 	}, nil
 }
@@ -178,17 +200,17 @@ func getControllerTest(t *testing.T) *controllerTest {
 			VcenterManager: cnsvsphere.GetVirtualCenterManager(),
 		}
 
-		var sharedDatastoreName string
-		if v := os.Getenv("VSPHERE_DATASTORE"); v != "" {
-			sharedDatastoreName = v
+		var sharedDatastoreURL string
+		if v := os.Getenv("VSPHERE_DATASTORE_URL"); v != "" {
+			sharedDatastoreURL = v
 		} else {
-			sharedDatastoreName = simulator.Map.Any("Datastore").(*simulator.Datastore).Info.GetDatastoreInfo().Name
+			sharedDatastoreURL = simulator.Map.Any("Datastore").(*simulator.Datastore).Info.GetDatastoreInfo().Url
 		}
 		c := &controller{
 			manager: manager,
 			nodeMgr: &FakeNodeManager{
-				client:              vcenter.Client.Client,
-				sharedDatastoreName: sharedDatastoreName,
+				client:             vcenter.Client.Client,
+				sharedDatastoreURL: sharedDatastoreURL,
 			},
 		}
 		controllerTestInstance = &controllerTest{
@@ -209,8 +231,8 @@ func TestCreateVolumeWithStoragePolicy(t *testing.T) {
 
 	// Create
 	params := make(map[string]string, 0)
-	if v := os.Getenv("VSPHERE_DATASTORE"); v != "" {
-		params[block.AttributeDatastoreName] = v
+	if v := os.Getenv("VSPHERE_DATASTORE_URL"); v != "" {
+		params[block.AttributeDatastoreURL] = v
 	}
 
 	// PBM simulator defaults
@@ -319,8 +341,8 @@ func TestCompleteControllerFlow(t *testing.T) {
 
 	// Create
 	params := make(map[string]string, 0)
-	if v := os.Getenv("VSPHERE_DATASTORE"); v != "" {
-		params[block.AttributeDatastoreName] = v
+	if v := os.Getenv("VSPHERE_DATASTORE_URL"); v != "" {
+		params[block.AttributeDatastoreURL] = v
 	}
 	capabilities := []*csi.VolumeCapability{
 		{

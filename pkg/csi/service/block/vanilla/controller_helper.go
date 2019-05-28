@@ -75,7 +75,7 @@ func validateCreateVolumeRequest(req *csi.CreateVolumeRequest) error {
 	params := req.GetParameters()
 	if params != nil {
 		for paramName := range params {
-			if !(paramName == block.AttributeDatastoreName || paramName == block.AttributeStoragePolicyName) {
+			if !(paramName == block.AttributeDatastoreURL || paramName == block.AttributeStoragePolicyName) {
 				msg := fmt.Sprintf("volume parameter %s is not a valid parameter.", paramName)
 				return status.Error(codes.InvalidArgument, msg)
 			}

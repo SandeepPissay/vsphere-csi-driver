@@ -49,8 +49,8 @@ func CreateVolumeUtil(ctx context.Context, manager *Manager, spec *CreateVolumeS
 		}
 	}
 	var datastores []vim25types.ManagedObjectReference
-	if spec.Datastore == "" {
-		//  If datastore is not specified in storageclass, get all shared datastores
+	if spec.DatastoreURL == "" {
+		//  If DatastoreURL is not specified in StorageClass, get all shared datastores
 		datastores = getDatastoreMoRefs(sharedDatastores)
 	} else {
 		// Check datastore specified in the StorageClass should be shared datastore across all nodes.
@@ -67,18 +67,13 @@ func CreateVolumeUtil(ctx context.Context, manager *Manager, spec *CreateVolumeS
 		isSharedDatastoreURL := false
 		var datastoreObj *vsphere.Datastore
 		for _, datacenter := range datacenters {
-			datastoreObj, err = datacenter.GetDatastoreByName(ctx, spec.Datastore)
+			datastoreObj, err = datacenter.GetDatastoreByURL(ctx, spec.DatastoreURL)
 			if err != nil {
-				klog.Warningf("Failed to find datastore:%+v in datacenter:%s from VC:%s, Error: %+v", spec.Datastore, datacenter.InventoryPath, vc.Config.Host, err)
-			}
-			var datastoreURL string
-			datastoreURL, err = datastoreObj.GetDatastoreURL(ctx)
-			if err != nil {
-				klog.Errorf("Failed to get URL for the datastore:%s , Error: %+v", spec.Datastore, err)
-				return "", err
+				klog.Warningf("Failed to find datastore %q in datacenter %q from VC %q, Error: %+v", spec.DatastoreURL, datacenter.InventoryPath, vc.Config.Host, err)
+				continue
 			}
 			for _, sharedDatastore := range sharedDatastores {
-				if sharedDatastore.Info.Url == datastoreURL {
+				if sharedDatastore.Info.Url == spec.DatastoreURL {
 					isSharedDatastoreURL = true
 					break
 				}
@@ -88,14 +83,14 @@ func CreateVolumeUtil(ctx context.Context, manager *Manager, spec *CreateVolumeS
 			}
 		}
 		if datastoreObj == nil {
-			errMsg := fmt.Sprintf("Datastore: %s specified in the storage class is not found.", spec.Datastore)
+			errMsg := fmt.Sprintf("DatastoreURL: %s specified in the storage class is not found.", spec.DatastoreURL)
 			klog.Errorf(errMsg)
 			return "", errors.New(errMsg)
 		}
 		if isSharedDatastoreURL {
 			datastores = append(datastores, datastoreObj.Reference())
 		} else {
-			errMsg := fmt.Sprintf("Datastore: %s specified in the storage class is not accessible to all nodes.", spec.Datastore)
+			errMsg := fmt.Sprintf("Datastore: %s specified in the storage class is not accessible to all nodes.", spec.DatastoreURL)
 			klog.Errorf(errMsg)
 			return "", errors.New(errMsg)
 		}
@@ -175,4 +170,3 @@ func getDatastoreMoRefs(datastores []*vsphere.DatastoreInfo) []vim25types.Manage
 	}
 	return datastoreMoRefs
 }
-

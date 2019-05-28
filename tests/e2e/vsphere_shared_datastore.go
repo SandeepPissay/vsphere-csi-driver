@@ -39,18 +39,18 @@ import (
 		3b. Volume provisioning to pass if shared datastore
 
 	This test reads env
-	1. SHARED_VSPHERE_DATASTORE (set to shared datastore)
-	2. NONSHARED_VSPHERE_DATASTORE (set to non-shared datastore)
+	1. SHARED_VSPHERE_DATASTORE_URL (set to shared datastore)
+	2. NONSHARED_VSPHERE_DATASTORE_URL (set to non-shared datastore)
 */
 
 var _ = utils.SIGDescribe("[csi-block-e2e] Datastore Based Volume Provisioning With No Storage Policy", func() {
 	f := framework.NewDefaultFramework("e2e-vsphere-volume-provisioning-no-storage-policy")
 	var (
-		client                 clientset.Interface
-		namespace              string
-		scParameters           map[string]string
-		sharedDatastoreName    string
-		nonSharedDatastoreName string
+		client                clientset.Interface
+		namespace             string
+		scParameters          map[string]string
+		sharedDatastoreURL    string
+		nonSharedDatastoreURL string
 	)
 	BeforeEach(func() {
 		client = f.ClientSet
@@ -65,8 +65,8 @@ var _ = utils.SIGDescribe("[csi-block-e2e] Datastore Based Volume Provisioning W
 	// Shared datastore should be provisioned successfully
 	It("Verify dynamic provisioning of PV passes with user specified shared datastore and no storage policy specified in the storage class", func() {
 		By("Invoking Test for user specified Shared Datastore in Storage class for volume provisioning")
-		sharedDatastoreName = GetAndExpectStringEnvVar(envSharedDatastoreName)
-		scParameters[scParamDatastore] = sharedDatastoreName
+		sharedDatastoreURL = GetAndExpectStringEnvVar(envSharedDatastoreURL)
+		scParameters[scParamDatastoreURL] = sharedDatastoreURL
 		storageclass, pvclaim, err := createPVCAndStorageClass(client, namespace, scParameters)
 		defer client.StorageV1().StorageClasses().Delete(storageclass.Name, nil)
 		defer framework.DeletePersistentVolumeClaim(client, pvclaim.Name, namespace)
@@ -77,8 +77,8 @@ var _ = utils.SIGDescribe("[csi-block-e2e] Datastore Based Volume Provisioning W
 	// Setting non-shared datastore in the storage class should fail dynamic volume provisioning
 	It("Verify dynamic provisioning of PV fails with user specified non-shared datastore and no storage policy specified in the storage class", func() {
 		By("Invoking Test for user specified non-shared Datastore in storage class for volume provisioning")
-		nonSharedDatastoreName = GetAndExpectStringEnvVar(envNonSharedStorageClassDatastoreName)
-		scParameters[scParamDatastore] = nonSharedDatastoreName
+		nonSharedDatastoreURL = GetAndExpectStringEnvVar(envNonSharedStorageClassDatastoreURL)
+		scParameters[scParamDatastoreURL] = nonSharedDatastoreURL
 		storageclass, pvclaim, err := createPVCAndStorageClass(client, namespace, scParameters)
 		defer client.StorageV1().StorageClasses().Delete(storageclass.Name, nil)
 		defer framework.DeletePersistentVolumeClaim(client, pvclaim.Name, namespace)
@@ -90,7 +90,7 @@ var _ = utils.SIGDescribe("[csi-block-e2e] Datastore Based Volume Provisioning W
 		eventList, _ := client.CoreV1().Events(pvclaim.Namespace).List(metav1.ListOptions{})
 		actualErrMsg := eventList.Items[len(eventList.Items)-1].Message
 		fmt.Println(fmt.Sprintf("Actual failure message: %+q", actualErrMsg))
-		expectedErrMsg := "failed to provision volume with StorageClass \"" + storageclass.Name + "\": rpc error: code = Unknown desc = Datastore: " + nonSharedDatastoreName + " specified in the storage class is not accessible to all nodes."
+		expectedErrMsg := "failed to provision volume with StorageClass \"" + storageclass.Name + "\": rpc error: code = Unknown desc = Datastore: " + nonSharedDatastoreURL + " specified in the storage class is not accessible to all nodes."
 		fmt.Println(fmt.Sprintf("Expected failure message: %+q", expectedErrMsg))
 		Expect(actualErrMsg == expectedErrMsg).To(BeTrue(), fmt.Sprintf("actualErrMsg: %q does not match with expectedErrMsg: %q", actualErrMsg, expectedErrMsg))
 	})

@@ -213,10 +213,10 @@ func TestMetadataSyncInformer(t *testing.T) {
 
 	// Create spec for new volume
 	var sharedDatastore string
-	if v := os.Getenv("VSPHERE_DATASTORE"); v != "" {
+	if v := os.Getenv("VSPHERE_DATASTORE_URL"); v != "" {
 		sharedDatastore = v
 	} else {
-		sharedDatastore = simulator.Map.Any("Datastore").(*simulator.Datastore).Info.GetDatastoreInfo().Name
+		sharedDatastore = simulator.Map.Any("Datastore").(*simulator.Datastore).Info.GetDatastoreInfo().Url
 	}
 
 	dc, err := metadataSyncer.vcenter.GetDatacenters(ctx)
@@ -226,9 +226,9 @@ func TestMetadataSyncInformer(t *testing.T) {
 		return
 	}
 
-	datastoreObj, err := dc[0].GetDatastoreByName(ctx, sharedDatastore)
+	datastoreObj, err := dc[0].GetDatastoreByURL(ctx, sharedDatastore)
 	if err != nil {
-		t.Errorf("Failed to get datastore with name: %s. Error: %v", sharedDatastore, err)
+		t.Errorf("Failed to get datastore with URL: %s. Error: %v", sharedDatastore, err)
 		t.Fatal(err)
 		return
 	}
