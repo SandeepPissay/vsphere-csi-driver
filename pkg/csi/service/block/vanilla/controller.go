@@ -110,12 +110,9 @@ func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 	if err != nil {
 		return nil, err
 	}
-	// Volume Size - Default is 10 GiB
-	volSizeBytes := int64(block.DefaultGbDiskSize * block.GbInBytes)
-	if req.GetCapacityRange() != nil && req.GetCapacityRange().RequiredBytes != 0 {
-		volSizeBytes = int64(req.GetCapacityRange().GetRequiredBytes())
-	}
-	volSizeMB := int64(block.RoundUpSize(volSizeBytes, block.GbInBytes)) * 1024
+	
+	volSizeBytes := int64(req.GetCapacityRange().GetRequiredBytes())
+	volSizeMB := int64(block.RoundUpSize(volSizeBytes, block.MbInBytes))
 
 	var datastoreURL string
 	datastoreURL = req.Parameters[block.AttributeDatastoreURL]
