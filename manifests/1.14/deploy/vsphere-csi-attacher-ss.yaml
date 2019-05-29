@@ -36,5 +36,5 @@ spec:
       volumes:
       - name: socket-dir
         hostPath:
-          path: /var/lib/csi/sockets/pluginproxy/vsphere.csi.vmware.com
+          path: /var/lib/csi/sockets/pluginproxy/block.vsphere.csi.vmware.com
           type: DirectoryOrCreate

@@ -5,7 +5,7 @@ metadata:
   namespace: kube-system
   annotations:
     storageclass.kubernetes.io/is-default-class: "true"
-provisioner: vsphere.csi.vmware.com
+provisioner: block.vsphere.csi.vmware.com
 parameters:
   DatastoreURL: "ds:///vmfs/volumes/vsan:52cdfa80721ff516-ea1e993113acfc77/" #Optional Parameter
   StoragePolicy: "vSAN Default Storage Policy"  #Optional Parameter

@@ -27,6 +27,7 @@ const (
 	envNonSharedStorageClassDatastoreURL = "NONSHARED_VSPHERE_DATASTORE_URL"
 	scParamDatastoreURL                  = "DatastoreURL"
 	diskSize                             = "2Gi"
+	e2evSphereCSIBlockDriverName         = "block.vsphere.csi.vmware.com"
 )
 
 // GetAndExpectStringEnvVar parses a string from env variable

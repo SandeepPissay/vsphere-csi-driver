@@ -38,7 +38,7 @@ import (
 
 const (
 	// Name is the name of this CSI SP.
-	Name = "vsphere.csi.vmware.com"
+	Name = "block.vsphere.csi.vmware.com"
 
 	// VanillaK8SControllerType indicated Vanilla K8S CSI Controller
 	VanillaK8SControllerType = "VANILLA"

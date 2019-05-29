@@ -57,13 +57,13 @@ spec:
           name: csi-config
       - name: socket-dir
         hostPath:
-          path: /var/lib/csi/sockets/pluginproxy/vsphere.csi.vmware.com
+          path: /var/lib/csi/sockets/pluginproxy/block.vsphere.csi.vmware.com
           type: DirectoryOrCreate
 ---
 apiVersion: storage.k8s.io/v1beta1
 kind: CSIDriver
 metadata:
-  name: vsphere.csi.vmware.com
+  name: block.vsphere.csi.vmware.com
 spec:
   attachRequired: true
   podInfoOnMount: false

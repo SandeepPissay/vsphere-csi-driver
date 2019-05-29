@@ -29,7 +29,7 @@ func getVSphereStorageClassSpec(scName string, scParameters map[string]string) *
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: "sc-",
 		},
-		Provisioner: "vsphere.csi.vmware.com",
+		Provisioner: e2evSphereCSIBlockDriverName,
 	}
 	// If scName is specified, use that name, else auto-generate storage class name
 	if scName != "" {

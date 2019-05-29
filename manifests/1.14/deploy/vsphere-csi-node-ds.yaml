@@ -20,7 +20,7 @@ spec:
         lifecycle:
           preStop:
             exec:
-              command: ["/bin/sh", "-c", "rm -rf /registration/vsphere.csi.vmware.com /var/lib/kubelet/plugins_registry/vsphere.csi.vmware.com/csi.sock"]
+              command: ["/bin/sh", "-c", "rm -rf /registration/block.vsphere.csi.vmware.com /var/lib/kubelet/plugins_registry/block.vsphere.csi.vmware.com/csi.sock"]
         args:
         - "--v=5"
         - "--csi-address=$(ADDRESS)"
@@ -29,7 +29,7 @@ spec:
         - name: ADDRESS
           value: /csi/csi.sock
         - name: DRIVER_REG_SOCK_PATH
-          value: /var/lib/kubelet/plugins_registry/vsphere.csi.vmware.com/csi.sock
+          value: /var/lib/kubelet/plugins_registry/block.vsphere.csi.vmware.com.sock
         securityContext:
           privileged: true
         volumeMounts:
@@ -38,7 +38,7 @@ spec:
         - name: registration-dir
           mountPath: /registration
       - name: vsphere-csi-node
-        image: gcr.io/cloud-provider-vsphere/vsphere-csi:v0.2.0
+        image: your-docker-repository/vsphere-csi:latest
         env:
         - name: CSI_ENDPOINT
           value: unix:///csi/csi.sock
@@ -80,7 +80,7 @@ spec:
           type: DirectoryOrCreate
       - name: plugin-dir
         hostPath:
-          path: /var/lib/kubelet/plugins_registry/vsphere.csi.vmware.com
+          path: /var/lib/kubelet/plugins_registry/block.vsphere.csi.vmware.com
           type: DirectoryOrCreate
       - name: pods-mount-dir
         hostPath:
