@@ -69,7 +69,7 @@ func CreateVolumeUtil(ctx context.Context, manager *Manager, spec *CreateVolumeS
 		for _, datacenter := range datacenters {
 			datastoreObj, err = datacenter.GetDatastoreByURL(ctx, spec.DatastoreURL)
 			if err != nil {
-				klog.Warningf("Failed to find datastore %q in datacenter %q from VC %q, Error: %+v", spec.DatastoreURL, datacenter.InventoryPath, vc.Config.Host, err)
+				klog.Warningf("Failed to find datastore with URL %q in datacenter %q from VC %q, Error: %+v", spec.DatastoreURL, datacenter.InventoryPath, vc.Config.Host, err)
 				continue
 			}
 			for _, sharedDatastore := range sharedDatastores {

@@ -39,8 +39,8 @@ import (
 		3b. Volume provisioning to pass if shared datastore
 
 	This test reads env
-	1. SHARED_VSPHERE_DATASTORE_URL (set to shared datastore)
-	2. NONSHARED_VSPHERE_DATASTORE_URL (set to non-shared datastore)
+	1. SHARED_VSPHERE_DATASTORE_URL (set to shared datastore URL)
+	2. NONSHARED_VSPHERE_DATASTORE_URL (set to non-shared datastor URL)
 */
 
 var _ = utils.SIGDescribe("[csi-block-e2e] Datastore Based Volume Provisioning With No Storage Policy", func() {
