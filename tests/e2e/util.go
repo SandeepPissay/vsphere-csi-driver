@@ -8,7 +8,8 @@ import (
 	"github.com/vmware/govmomi/object"
 	vim25types "github.com/vmware/govmomi/vim25/types"
 	corev1 "k8s.io/api/core/v1"
-	stroagev1 "k8s.io/api/storage/v1"
+
+	storagev1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientset "k8s.io/client-go/kubernetes"
@@ -18,9 +19,9 @@ import (
 )
 
 // getVSphereStorageClassSpec returns Storage Class Spec with supplied storage class parameters
-func getVSphereStorageClassSpec(scName string, scParameters map[string]string) *stroagev1.StorageClass {
-	var sc *stroagev1.StorageClass
-	sc = &stroagev1.StorageClass{
+func getVSphereStorageClassSpec(scName string, scParameters map[string]string) *storagev1.StorageClass {
+	var sc *storagev1.StorageClass
+	sc = &storagev1.StorageClass{
 		TypeMeta: metav1.TypeMeta{
 			Kind: "StorageClass",
 		},
@@ -102,7 +103,7 @@ func getVirtualDeviceByDiskID(ctx context.Context, vm *object.VirtualMachine, di
 }
 
 // getPersistentVolumeClaimSpecWithStorageClass return the PersistentVolumeClaim spec with specified storage class
-func getPersistentVolumeClaimSpecWithStorageClass(namespace string, diskSize string, storageclass *stroagev1.StorageClass, pvclaimlabels map[string]string) *corev1.PersistentVolumeClaim {
+func getPersistentVolumeClaimSpecWithStorageClass(namespace string, diskSize string, storageclass *storagev1.StorageClass, pvclaimlabels map[string]string) *corev1.PersistentVolumeClaim {
 	claim := &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: "pvc-",
@@ -128,13 +129,17 @@ func getPersistentVolumeClaimSpecWithStorageClass(namespace string, diskSize str
 }
 
 // createPVCAndStorageClass helps creates a storage class with specified name, storageclass parameters and PVC using storage class
-func createPVCAndStorageClass(client clientset.Interface, pvcnamespace string, pvclaimlabels map[string]string, scParameters map[string]string) (*stroagev1.StorageClass, *corev1.PersistentVolumeClaim, error) {
+func createPVCAndStorageClass(client clientset.Interface, pvcnamespace string, pvclaimlabels map[string]string, scParameters map[string]string, ds string) (*storagev1.StorageClass, *corev1.PersistentVolumeClaim, error) {
 	ginkgo.By(fmt.Sprintf("Creating StorageClass With scParameters: %+v", scParameters))
 	storageclass, err := client.StorageV1().StorageClasses().Create(getVSphereStorageClassSpec("", scParameters))
 	gomega.Expect(err).NotTo(gomega.HaveOccurred(), fmt.Sprintf("Failed to create storage class with err: %v", err))
 
 	ginkgo.By("Creating PVC using the StorageClass")
-	pvcspec := getPersistentVolumeClaimSpecWithStorageClass(pvcnamespace, diskSize, storageclass, pvclaimlabels)
+	disksize := diskSize
+	if ds != "" {
+		disksize = ds
+	}
+	pvcspec := getPersistentVolumeClaimSpecWithStorageClass(pvcnamespace, disksize, storageclass, pvclaimlabels)
 	pvclaim, err := framework.CreatePVC(client, pvcnamespace, pvcspec)
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	return storageclass, pvclaim, err

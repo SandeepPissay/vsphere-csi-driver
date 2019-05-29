@@ -66,7 +66,7 @@ var _ = ginkgo.Describe("[csi-block-e2e] Datastore Based Volume Provisioning Wit
 		ginkgo.By("Invoking Test for user specified Shared Datastore in Storage class for volume provisioning")
 		sharedDatastoreURL = GetAndExpectStringEnvVar(envSharedDatastoreURL)
 		scParameters[scParamDatastoreURL] = sharedDatastoreURL
-		storageclass, pvclaim, err := createPVCAndStorageClass(client, namespace, nil, scParameters)
+		storageclass, pvclaim, err := createPVCAndStorageClass(client, namespace, nil, scParameters, "")
 		defer client.StorageV1().StorageClasses().Delete(storageclass.Name, nil)
 		defer framework.DeletePersistentVolumeClaim(client, pvclaim.Name, namespace)
 
@@ -80,7 +80,7 @@ var _ = ginkgo.Describe("[csi-block-e2e] Datastore Based Volume Provisioning Wit
 		ginkgo.By("Invoking Test for user specified non-shared Datastore in storage class for volume provisioning")
 		nonSharedDatastoreURL = GetAndExpectStringEnvVar(envNonSharedStorageClassDatastoreURL)
 		scParameters[scParamDatastoreURL] = nonSharedDatastoreURL
-		storageclass, pvclaim, err := createPVCAndStorageClass(client, namespace, nil, scParameters)
+		storageclass, pvclaim, err := createPVCAndStorageClass(client, namespace, nil, scParameters, "")
 		defer client.StorageV1().StorageClasses().Delete(storageclass.Name, nil)
 		defer framework.DeletePersistentVolumeClaim(client, pvclaim.Name, namespace)
 

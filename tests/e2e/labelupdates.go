@@ -66,7 +66,7 @@ var _ bool = ginkgo.Describe("[csi-block-e2e] label-updates", func() {
 
 	ginkgo.It("verify labels are created in CNS after updating pvc and/or pv with new labels", func() {
 		ginkgo.By(fmt.Sprintf("Invoking test to verify labels creation"))
-		sc, pvc, err := createPVCAndStorageClass(client, namespace, nil, nil)
+		sc, pvc, err := createPVCAndStorageClass(client, namespace, nil, nil, "")
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		defer client.StorageV1().StorageClasses().Delete(sc.Name, nil)
 		defer client.CoreV1().PersistentVolumeClaims(namespace).Delete(pvc.Name, nil)
@@ -115,7 +115,7 @@ var _ bool = ginkgo.Describe("[csi-block-e2e] label-updates", func() {
 		labels := make(map[string]string)
 		labels[labelKey] = labelValue
 
-		sc, pvc, err := createPVCAndStorageClass(client, namespace, nil, nil)
+		sc, pvc, err := createPVCAndStorageClass(client, namespace, nil, nil, "")
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		defer client.StorageV1().StorageClasses().Delete(sc.Name, nil)
 		defer client.CoreV1().PersistentVolumeClaims(namespace).Delete(pvc.Name, nil)
@@ -172,7 +172,7 @@ var _ bool = ginkgo.Describe("[csi-block-e2e] label-updates", func() {
 
 	ginkgo.It("verify podname label is created/deleted when pod with cns volume is created/deleted.", func() {
 		ginkgo.By(fmt.Sprintf("Invoking test to verify pod name label updates"))
-		sc, pvc, err := createPVCAndStorageClass(client, namespace, nil, nil)
+		sc, pvc, err := createPVCAndStorageClass(client, namespace, nil, nil, "")
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		defer client.StorageV1().StorageClasses().Delete(sc.Name, nil)
 		defer client.CoreV1().PersistentVolumeClaims(namespace).Delete(pvc.Name, nil)
