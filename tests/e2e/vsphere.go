@@ -10,6 +10,8 @@ import (
 	"github.com/vmware/govmomi/object"
 	"github.com/vmware/govmomi/pbm"
 	pbmtypes "github.com/vmware/govmomi/pbm/types"
+	"github.com/vmware/govmomi/vim25/methods"
+	"github.com/vmware/govmomi/vim25/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/kubernetes/test/e2e/framework"
@@ -234,6 +236,75 @@ func (vs *vSphere) waitForCNSVolumeToBeDeleted(volumeID string) error {
 		framework.Logf("waiting for Volume %q to be deleted.", volumeID)
 		return false, nil
 	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// waitForCNSVolumeToBeCreate executes QueryVolume API on vCenter and verifies
+// volume entries are created in vCenter Database
+func (vs *vSphere) waitForCNSVolumeToBeCreated(volumeID string) error {
+	err := wait.Poll(poll, pollTimeout, func() (bool, error) {
+		queryResult, err := vs.queryCNSVolumeWithResult(volumeID)
+		if err != nil {
+			return true, err
+		}
+
+		if len(queryResult.Volumes) == 1 && queryResult.Volumes[0].VolumeId.Id == volumeID {
+			framework.Logf("volume %q has successfully created", volumeID)
+			return true, nil
+		}
+		framework.Logf("waiting for Volume %q to be created.", volumeID)
+		return false, nil
+	})
+	return err
+}
+
+// createFCD creates an FCD disk
+func (vs *vSphere) createFCD(ctx context.Context, fcdname string, diskCapacityInMB int64, dsRef types.ManagedObjectReference) (string, error) {
+	KeepAfterDeleteVM := false
+	spec := types.VslmCreateSpec{
+		Name:              fcdname,
+		CapacityInMB:      diskCapacityInMB,
+		KeepAfterDeleteVm: &KeepAfterDeleteVM,
+		BackingSpec: &types.VslmCreateSpecDiskFileBackingSpec{
+			VslmCreateSpecBackingSpec: types.VslmCreateSpecBackingSpec{
+				Datastore: dsRef,
+			},
+			ProvisioningType: string(types.BaseConfigInfoDiskFileBackingInfoProvisioningTypeThin),
+		},
+	}
+	req := types.CreateDisk_Task{
+		This: *vs.Client.Client.ServiceContent.VStorageObjectManager,
+		Spec: spec,
+	}
+	res, err := methods.CreateDisk_Task(ctx, vs.Client.Client, &req)
+	if err != nil {
+		return "", err
+	}
+	task := object.NewTask(vs.Client.Client, res.Returnval)
+	taskInfo, err := task.WaitForResult(ctx, nil)
+	if err != nil {
+		return "", err
+	}
+	fcdID := taskInfo.Result.(types.VStorageObject).Config.Id.Id
+	return fcdID, nil
+}
+
+// deleteFCD deletes an FCD disk
+func (vs *vSphere) deleteFCD(ctx context.Context, fcdID string, dsRef types.ManagedObjectReference) error {
+	req := types.DeleteVStorageObject_Task{
+		This:      *vs.Client.Client.ServiceContent.VStorageObjectManager,
+		Datastore: dsRef,
+		Id:        types.ID{Id: fcdID},
+	}
+	res, err := methods.DeleteVStorageObject_Task(ctx, vs.Client.Client, &req)
+	if err != nil {
+		return err
+	}
+	task := object.NewTask(vs.Client.Client, res.Returnval)
+	_, err = task.WaitForResult(ctx, nil)
 	if err != nil {
 		return err
 	}

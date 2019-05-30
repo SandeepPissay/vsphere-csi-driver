@@ -37,6 +37,9 @@ const (
 	poll                                       = 2 * time.Second
 	pollTimeout                                = 5 * time.Minute
 	pollTimeoutShort                           = 1 * time.Minute / 2
+	envPandoraSyncWaitTime                     = "PANDORA_SYNC_WAIT_TIME"
+	defaultPandoraSyncWaitTime                 = 90
+	sleepTimeOut                               = 30
 )
 
 // GetAndExpectStringEnvVar parses a string from env variable
