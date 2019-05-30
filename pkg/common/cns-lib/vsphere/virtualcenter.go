@@ -19,18 +19,22 @@ import (
 	"crypto/tls"
 	"encoding/pem"
 	"fmt"
-	"github.com/vmware/govmomi"
-	"github.com/vmware/govmomi/find"
-	"github.com/vmware/govmomi/pbm"
-	"github.com/vmware/govmomi/session"
-	"github.com/vmware/govmomi/sts"
-	"github.com/vmware/govmomi/vim25"
-	"github.com/vmware/govmomi/vim25/soap"
-	"k8s.io/klog"
 	"net"
 	neturl "net/url"
 	"strconv"
 	"sync"
+
+	"github.com/vmware/govmomi"
+	"github.com/vmware/govmomi/find"
+	"github.com/vmware/govmomi/object"
+	"github.com/vmware/govmomi/pbm"
+	"github.com/vmware/govmomi/session"
+	"github.com/vmware/govmomi/sts"
+	"github.com/vmware/govmomi/vim25"
+	"github.com/vmware/govmomi/vim25/mo"
+	"github.com/vmware/govmomi/vim25/soap"
+	"github.com/vmware/govmomi/vim25/types"
+	"k8s.io/klog"
 )
 
 const (
@@ -311,3 +315,24 @@ func (vc *VirtualCenter) UpdateCredentials(username, password string) {
 	vc.Config.Password = password
 }
 
+// GetHostsByCluster return hosts inside the cluster using cluster moref.
+func (vc *VirtualCenter) GetHostsByCluster(ctx context.Context, clusterMorefValue string) ([]*HostSystem, error) {
+	clusterMoref := types.ManagedObjectReference{
+		Type:  "ClusterComputeResource",
+		Value: clusterMorefValue,
+	}
+	clusterComputeResourceMo := mo.ClusterComputeResource{}
+	err := vc.Client.RetrieveOne(ctx, clusterMoref, []string{"host"}, &clusterComputeResourceMo)
+	if err != nil {
+		klog.Errorf("Failed to fetch hosts from cluster given clusterMorefValue %s with err: %v", clusterMorefValue, err)
+		return nil, err
+	}
+	var hostObjList []*HostSystem
+	for _, hostMoref := range clusterComputeResourceMo.Host {
+		hostObjList = append(hostObjList,
+			&HostSystem{
+				HostSystem: object.NewHostSystem(vc.Client.Client, hostMoref),
+			})
+	}
+	return hostObjList, nil
+}
