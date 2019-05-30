@@ -18,11 +18,12 @@ package simulator
 
 import (
 	"context"
+	"reflect"
+
 	"github.com/google/uuid"
 	"github.com/vmware/govmomi/simulator"
 	"github.com/vmware/govmomi/vim25/soap"
 	vim25types "github.com/vmware/govmomi/vim25/types"
-	"reflect"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vmomi/methods"
 	cnstypes "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vmomi/types"
 	cnsvsphere "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vsphere"
@@ -131,11 +132,20 @@ func (m *CnsVolumeManager) CnsCreateVolume(ctx context.Context, req *cnstypes.Cn
 	}
 }
 
+// CnsQueryVolume simulates the query volumes implementation for CNSQuery API
 func (m *CnsVolumeManager) CnsQueryVolume(ctx context.Context, req *cnstypes.CnsQueryVolume) soap.HasFault {
 	retVolumes := []cnstypes.CnsVolume{}
+	reqVolumeIds := make(map[string]bool)
+	// Create map of requested volume Ids in query request
+	for _, volumeId := range req.Filter.VolumeIds {
+		reqVolumeIds[volumeId.Id] = true
+	}
+
 	for _, dsVolumes := range m.volumes {
 		for _, volume := range dsVolumes {
-			retVolumes = append(retVolumes, *volume)
+			if _, ok := reqVolumeIds[volume.VolumeId.Id]; ok {
+				retVolumes = append(retVolumes, *volume)
+			}
 		}
 	}
 
@@ -149,11 +159,20 @@ func (m *CnsVolumeManager) CnsQueryVolume(ctx context.Context, req *cnstypes.Cns
 	}
 }
 
+// CnsQueryAllVolume simulates the query volumes implementation for CNSQueryAll API
 func (m *CnsVolumeManager) CnsQueryAllVolume(ctx context.Context, req *cnstypes.CnsQueryAllVolume) soap.HasFault {
 	retVolumes := []cnstypes.CnsVolume{}
+	reqVolumeIds := make(map[string]bool)
+	// Create map of requested volume Ids in query request
+	for _, volumeId := range req.Filter.VolumeIds {
+		reqVolumeIds[volumeId.Id] = true
+	}
+
 	for _, dsVolumes := range m.volumes {
 		for _, volume := range dsVolumes {
-			retVolumes = append(retVolumes, *volume)
+			if _, ok := reqVolumeIds[volume.VolumeId.Id]; ok {
+				retVolumes = append(retVolumes, *volume)
+			}
 		}
 	}
 
