@@ -110,7 +110,7 @@ func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 	if err != nil {
 		return nil, err
 	}
-	
+
 	volSizeBytes := int64(req.GetCapacityRange().GetRequiredBytes())
 	volSizeMB := int64(block.RoundUpSize(volSizeBytes, block.MbInBytes))
 
@@ -151,7 +151,7 @@ func (c *controller) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequ
 	*csi.DeleteVolumeResponse, error) {
 	klog.V(4).Infof("DeleteVolume: called with args: %+v", *req)
 	var err error
-	err = validateDeleteVolumeRequest(req)
+	err = block.ValidateDeleteVolumeRequest(req)
 	if err != nil {
 		return nil, err
 	}
