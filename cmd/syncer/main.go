@@ -24,7 +24,7 @@ import (
 
 // main is ignored when this package is built as a go plug-in.
 func main() {
-	metadataSyncer := metadatasyncer.New()
+	metadataSyncer := metadatasyncer.NewInformer()
 	if err := metadataSyncer.Init(); err != nil {
 		klog.Errorf("Error initializing Metadata Syncer")
 		os.Exit(1)

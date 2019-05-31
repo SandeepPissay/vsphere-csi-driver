@@ -18,6 +18,7 @@ package syncer
 
 import (
 	"context"
+	"time"
 	"errors"
 	"fmt"
 	"github.com/davecgh/go-spew/spew"
@@ -46,9 +47,10 @@ type metadataSyncInformer struct {
 	pvLister             corelisters.PersistentVolumeLister
 	pvcLister            corelisters.PersistentVolumeClaimLister
 }
+const defaultFullSyncIntervalInMin = 30
 
-// New Returns uninitialized metadataSyncInformer
-func New() *metadataSyncInformer {
+// new Returns uninitialized metadataSyncInformer
+func NewInformer() *metadataSyncInformer {
 	return &metadataSyncInformer{}
 }
 
@@ -93,6 +95,18 @@ func (metadataSyncer *metadataSyncInformer) Init() error {
 		klog.Errorf("Creating Kubernetes client failed. Err: %v", err)
 		return err
 	}
+
+	ticker := time.NewTicker(time.Duration(defaultFullSyncIntervalInMin)*time.Minute)
+	// Trigger full sync
+	go func() {
+		for _ = range ticker.C {
+			klog.V(2).Infof("fullSync is triggered")
+			triggerFullSync(k8sclient, metadataSyncer)
+		}
+	}()
+
+	stopFullSync := make(chan bool, 1)
+
 	// Set up kubernetes resource listeners for metadata syncer
 	metadataSyncer.k8sInformerManager = k8s.NewInformer(k8sclient)
 	metadataSyncer.k8sInformerManager.AddPVCListener(
@@ -124,6 +138,7 @@ func (metadataSyncer *metadataSyncInformer) Init() error {
 	klog.V(2).Infof("Initialized metadata syncer")
 	stopCh := metadataSyncer.k8sInformerManager.Listen()
 	<-(stopCh)
+	<-(stopFullSync)
 	return nil
 }
 

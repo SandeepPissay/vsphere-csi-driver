@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/vmware/govmomi/vim25/soap"
 	"github.com/vmware/govmomi/vim25/types"
+	"reflect"
 	cnstypes "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vmomi/types"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/common/config"
 	"strconv"
@@ -87,3 +88,44 @@ func GetVcenterIPs(cfg *config.Config) ([]string, error) {
 	}
 	return vCenterIPs, err
 }
+
+// CompareK8sandCNSVolumeMetadata compare the metadata list from K8S and metadata list from CNS are same or not
+func CompareK8sandCNSVolumeMetadata(pvMetadata []cnstypes.BaseCnsEntityMetadata, cnsMetadata []cnstypes.BaseCnsEntityMetadata) bool {
+	if len(pvMetadata) != len(cnsMetadata){
+		return false
+	}
+	metadataMap :=make(map[string]*cnstypes.CnsKubernetesEntityMetadata)
+	for _, metadata := range cnsMetadata{
+		cnsKubernetesMetadata := metadata.(*cnstypes.CnsKubernetesEntityMetadata)
+		metadataMap[cnsKubernetesMetadata.EntityType] = cnsKubernetesMetadata
+	}
+	for _, k8sMetadata := range pvMetadata{
+		k8sKubernetesMetadata := k8sMetadata.(*cnstypes.CnsKubernetesEntityMetadata)
+		if !CompareKubernetesMetadata(k8sKubernetesMetadata,metadataMap[k8sKubernetesMetadata.EntityType]){
+			return false
+		}
+	}
+	return true
+}
+
+// GetLabelsMapFromKeyValue creates a  map object from given parameter
+func GetLabelsMapFromKeyValue(labels []types.KeyValue) map[string]string {
+	labelsMap := make(map[string]string)
+	for _, label := range labels {
+		labelsMap[label.Key] = label.Value
+	}
+	return labelsMap
+}
+
+// CompareKubernetesMetadata compares the whole cnskubernetesEntityMetadata from two given parameters
+func CompareKubernetesMetadata(pvMetaData *cnstypes.CnsKubernetesEntityMetadata, kubernetesMetaData *cnstypes.CnsKubernetesEntityMetadata) bool {
+	if (pvMetaData.EntityName != kubernetesMetaData.EntityName) || (pvMetaData.Delete != kubernetesMetaData.Delete) || (pvMetaData.Namespace != kubernetesMetaData.Namespace) {
+		return false
+	}
+	labelsMatch := reflect.DeepEqual(GetLabelsMapFromKeyValue(pvMetaData.Labels), GetLabelsMapFromKeyValue(kubernetesMetaData.Labels))
+	if !labelsMatch {
+		return false
+	}
+	return true
+}
+

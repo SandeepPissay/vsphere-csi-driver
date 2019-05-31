@@ -44,22 +44,41 @@ import (
 )
 
 const (
-	testVolumeName    = "test-pv"
-	testPVCName       = "test-pvc"
-	testPodName       = "test-pod"
-	testClusterName   = "test-cluster"
-	gbInMb            = 1024
-	testVolumeType    = "BLOCK"
-	testPVCLabelName  = "test-PVC-label"
-	testPVCLabelValue = "test-PVC-value"
-	testPVLabelName   = "test-PV-label"
-	testPVLabelValue  = "test-PV-value"
-	testPodLabelName  = "test-Pod-label"
-	testPodLabelValue = "test-Pod-value"
-	PVC               = "PVC"
-	PV                = "PV"
-	POD               = "POD"
-	testNamespace     = "default"
+	testVolumeName      = "test-pv"
+	testPVCName         = "test-pvc"
+	testPodName         = "test-pod"
+	testClusterName     = "test-cluster"
+	gbInMb              = 1024
+	testVolumeType      = "BLOCK"
+	testPVCLabelName    = "test-PVC-label"
+	testPVCLabelValue   = "test-PVC-value"
+	testPVLabelName     = "test-PV-label"
+	testPVLabelValue    = "test-PV-value"
+	testPodLabelName    = "test-Pod-label"
+	testPodLabelValue   = "test-Pod-value"
+	newTestPVLabelValue = "new-test-PV-value"
+	newTestPVCLabelValue = "new-test-PVC-value"
+	PVC                 = "PVC"
+	PV                  = "PV"
+	POD                 = "POD"
+	testNamespace       = "default"
+)
+
+var (
+	config                  *cnsconfig.Config
+	ctx                     context.Context
+	cnsVCenterConfig        *cnsvsphere.VirtualCenterConfig
+	err                     error
+	virtualCenterManager cnsvsphere.VirtualCenterManager
+	virtualCenter        *cnsvsphere.VirtualCenter
+	metadataSyncer          *metadataSyncInformer
+	k8sclient               clientset.Interface
+	dc                      []*cnsvsphere.Datacenter
+	volumeManager        volume.Manager
+	sharedDatastore         string
+	datastoreObj            *cnsvsphere.Datastore
+	dsList                  []vimtypes.ManagedObjectReference
+	cancel                  context.CancelFunc
 )
 
 // configFromSim starts a vcsim instance and returns config for use against the vcsim instance.
@@ -132,6 +151,86 @@ func K8sClientFromEnvOrSim(metadataSyncer *metadataSyncInformer) (clientset.Inte
 	return k8sclient, nil
 }
 
+func TestSyncerWorkflows(t *testing.T) {
+	t.Log("TestSyncerWorkflows: start")
+	var cleanup func()
+	config, cleanup = configFromEnvOrSim()
+	defer cleanup()
+
+	// CNS based CSI requires a valid cluster name
+	config.Global.ClusterID = testClusterName
+
+	// Create context
+	var cancel func()
+	ctx, cancel = context.WithCancel(context.Background())
+	defer cancel()
+
+	// Init VC configuration
+	cnsVCenterConfig, err = cnsvsphere.GetVirtualCenterConfig(config)
+	if err != nil {
+		t.Errorf("Failed to get virtualCenter. err=%v", err)
+		t.Fatal(err)
+	}
+
+	virtualCenterManager = cnsvsphere.GetVirtualCenterManager()
+
+	virtualCenter, err = virtualCenterManager.RegisterVirtualCenter(cnsVCenterConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = virtualCenter.Connect(ctx)
+	defer virtualCenter.Disconnect(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	volumeManager = volume.GetManager(virtualCenter)
+
+	// Initialize metadata syncer object
+	metadataSyncer = &metadataSyncInformer{
+		cfg:                  config,
+		vcconfig:             cnsVCenterConfig,
+		virtualcentermanager: virtualCenterManager,
+		vcenter:              virtualCenter,
+	}
+
+	// Create the kubernetes client from config or env
+	if k8sclient, err = K8sClientFromEnvOrSim(metadataSyncer); err != nil {
+		klog.Errorf("Creating Kubernetes client failed. Err: %v", err)
+		return
+	}
+	metadataSyncer.k8sInformerManager = k8s.NewInformer(k8sclient)
+	metadataSyncer.pvLister = metadataSyncer.k8sInformerManager.GetPVLister()
+	metadataSyncer.pvcLister = metadataSyncer.k8sInformerManager.GetPVCLister()
+	metadataSyncer.k8sInformerManager.Listen()
+
+	var sharedDatastore string
+	if v := os.Getenv("VSPHERE_DATASTORE_URL"); v != "" {
+		sharedDatastore = v
+	} else {
+		sharedDatastore = simulator.Map.Any("Datastore").(*simulator.Datastore).Info.GetDatastoreInfo().Url
+	}
+	dc, err = virtualCenter.GetDatacenters(ctx)
+	if err != nil || len(dc) == 0 {
+		t.Errorf("Failed to get datacenter for the path: %s. Error: %v", cnsVCenterConfig.DatacenterPaths[0], err)
+		t.Fatal(err)
+		return
+	}
+
+	datastoreObj, err := dc[0].GetDatastoreByURL(ctx, sharedDatastore)
+	if err != nil {
+		t.Errorf("Failed to get datastore with URL: %s. Error: %v", sharedDatastore, err)
+		t.Fatal(err)
+		return
+	}
+	dsList = append(dsList, datastoreObj.Reference())
+
+	runTestMetadataSyncInformer(t)
+	runTestFullSyncWorkflows(t)
+	t.Log("TestSyncerWorkflows: end")
+}
+
 /*
 	This test verifies the following workflows:
 		1. pv update/delete for dynamically created pv
@@ -155,86 +254,11 @@ func K8sClientFromEnvOrSim(metadataSyncer *metadataSyncInformer) (clientset.Inte
 		10. Verify pod delete workflow
 		11. Verify pvc delete workflow
 		12. Verify pv delete workflow
-
 */
 
-func TestMetadataSyncInformer(t *testing.T) {
-	config, cleanup := configFromEnvOrSim()
-	defer cleanup()
+func runTestMetadataSyncInformer(t *testing.T) {
 
-	// CNS based CSI requires a valid cluster name
-	config.Global.ClusterID = testClusterName
-
-	// Create context
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	// Init VC configuration
-	cnsVCenterConfig, err := cnsvsphere.GetVirtualCenterConfig(config)
-	if err != nil {
-		t.Errorf("Failed to get virtualCenter. err=%v", err)
-		t.Fatal(err)
-	}
-
-	cspVirtualCenterManager := cnsvsphere.GetVirtualCenterManager()
-
-	cspVirtualCenter, err := cspVirtualCenterManager.RegisterVirtualCenter(cnsVCenterConfig)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = cspVirtualCenter.Connect(ctx)
-	defer cspVirtualCenter.Disconnect(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	cspVolumeManager := volume.GetManager(cspVirtualCenter)
-
-	// Initialize metadata syncer object
-	var metadataSyncer *metadataSyncInformer
-	metadataSyncer = &metadataSyncInformer{
-		cfg:                  config,
-		vcconfig:             cnsVCenterConfig,
-		virtualcentermanager: cspVirtualCenterManager,
-		vcenter:              cspVirtualCenter,
-	}
-
-	// Create the kubernetes client from config or env
-	var k8sclient clientset.Interface
-	if k8sclient, err = K8sClientFromEnvOrSim(metadataSyncer); err != nil {
-		klog.Errorf("Creating Kubernetes client failed. Err: %v", err)
-		return
-	}
-	metadataSyncer.k8sInformerManager = k8s.NewInformer(k8sclient)
-	metadataSyncer.pvLister = metadataSyncer.k8sInformerManager.GetPVLister()
-	metadataSyncer.pvcLister = metadataSyncer.k8sInformerManager.GetPVCLister()
-	metadataSyncer.k8sInformerManager.Listen()
-
-	// Create spec for new volume
-	var sharedDatastore string
-	if v := os.Getenv("VSPHERE_DATASTORE_URL"); v != "" {
-		sharedDatastore = v
-	} else {
-		sharedDatastore = simulator.Map.Any("Datastore").(*simulator.Datastore).Info.GetDatastoreInfo().Url
-	}
-
-	dc, err := metadataSyncer.vcenter.GetDatacenters(ctx)
-	if err != nil || len(dc) == 0 {
-		t.Errorf("Failed to get datacenter for the path: %s. Error: %v", metadataSyncer.vcconfig.DatacenterPaths[0], err)
-		t.Fatal(err)
-		return
-	}
-
-	datastoreObj, err := dc[0].GetDatastoreByURL(ctx, sharedDatastore)
-	if err != nil {
-		t.Errorf("Failed to get datastore with URL: %s. Error: %v", sharedDatastore, err)
-		t.Fatal(err)
-		return
-	}
-	var dsList []vimtypes.ManagedObjectReference
-	dsList = append(dsList, datastoreObj.Reference())
-
+	t.Log("TestMetadataSyncInformer start")
 	// Create a test volume
 	createSpec := cnstypes.CnsVolumeCreateSpec{
 		DynamicData: vimtypes.DynamicData{},
@@ -254,7 +278,7 @@ func TestMetadataSyncInformer(t *testing.T) {
 		},
 	}
 
-	volumeID, err := cspVolumeManager.CreateVolume(&createSpec)
+	volumeID, err := volumeManager.CreateVolume(&createSpec)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -287,8 +311,8 @@ func TestMetadataSyncInformer(t *testing.T) {
 	newLabel[testPVLabelName] = testPVLabelValue
 
 	// Test pvUpdate workflow for dynamic provisioning of Volume
-	oldPv := getCSPPersistentVolumeSpec(volumeID.Id, v1.PersistentVolumeReclaimRetain, oldLabel, v1.VolumeAvailable)
-	newPv := getCSPPersistentVolumeSpec(volumeID.Id, v1.PersistentVolumeReclaimRetain, newLabel, v1.VolumeAvailable)
+	oldPv := getPersistentVolumeSpec(volumeID.Id, v1.PersistentVolumeReclaimRetain, oldLabel, v1.VolumeAvailable,"")
+	newPv := getPersistentVolumeSpec(volumeID.Id, v1.PersistentVolumeReclaimRetain, newLabel, v1.VolumeAvailable,"")
 
 	pvUpdated(oldPv, newPv, metadataSyncer)
 
@@ -296,23 +320,23 @@ func TestMetadataSyncInformer(t *testing.T) {
 	if queryResult, err = metadataSyncer.vcenter.QueryVolume(ctx, queryFilter); err != nil {
 		t.Fatal(err)
 	}
-	if err = verifyUpdateOperation(queryResult, volumeID.Id, PV); err != nil {
+	if err = verifyUpdateOperation(queryResult, volumeID.Id, PV, newPv.Name, testPVLabelValue); err != nil {
 		t.Fatal(err)
 	}
 
 	// Delete volume with DeleteDisk=false
-	err = cspVolumeManager.DeleteVolume(volumeID.Id, false)
+	err = volumeManager.DeleteVolume(volumeID.Id, false)
 
 	// Create PV on K8S with VolumeHandle of recently deleted Volume
-	pv := getCSPPersistentVolumeSpec(volumeID.Id, v1.PersistentVolumeReclaimRetain, nil, v1.VolumeAvailable)
+	pv := getPersistentVolumeSpec(volumeID.Id, v1.PersistentVolumeReclaimRetain, nil, v1.VolumeAvailable,"")
 	if pv, err = k8sclient.CoreV1().PersistentVolumes().Create(pv); err != nil {
 		t.Fatal(err)
 	}
 
 	// Test pvUpdate workflow on VC for static provisioning of Volume
 	// pvUpdate should create the volume on vc for static provisioning
-	oldPv = getCSPPersistentVolumeSpec(volumeID.Id, v1.PersistentVolumeReclaimRetain, oldLabel, v1.VolumePending)
-	newPv = getCSPPersistentVolumeSpec(volumeID.Id, v1.PersistentVolumeReclaimRetain, newLabel, v1.VolumeAvailable)
+	oldPv = getPersistentVolumeSpec(volumeID.Id, v1.PersistentVolumeReclaimRetain, oldLabel, v1.VolumePending,"")
+	newPv = getPersistentVolumeSpec(volumeID.Id, v1.PersistentVolumeReclaimRetain, newLabel, v1.VolumeAvailable,"")
 
 	pvUpdated(oldPv, newPv, metadataSyncer)
 
@@ -320,7 +344,7 @@ func TestMetadataSyncInformer(t *testing.T) {
 	if queryResult, err = metadataSyncer.vcenter.QueryVolume(ctx, queryFilter); err != nil {
 		t.Fatal(err)
 	}
-	if err = verifyUpdateOperation(queryResult, volumeID.Id, PV); err != nil {
+	if err = verifyUpdateOperation(queryResult, volumeID.Id, PV, newPv.Name, testPVLabelValue); err != nil {
 		t.Fatal(err)
 	}
 
@@ -343,7 +367,7 @@ func TestMetadataSyncInformer(t *testing.T) {
 	if queryResult, err = metadataSyncer.vcenter.QueryVolume(ctx, queryFilter); err != nil {
 		t.Fatal(err)
 	}
-	if err = verifyUpdateOperation(queryResult, volumeID.Id, PVC); err != nil {
+	if err = verifyUpdateOperation(queryResult, volumeID.Id, PVC, newPvc.Name, testPVCLabelValue); err != nil {
 		t.Fatal(err)
 	}
 
@@ -365,7 +389,7 @@ func TestMetadataSyncInformer(t *testing.T) {
 	if queryResult, err = metadataSyncer.vcenter.QueryVolume(ctx, queryFilter); err != nil {
 		t.Fatal(err)
 	}
-	if err = verifyUpdateOperation(queryResult, volumeID.Id, POD); err != nil {
+	if err = verifyUpdateOperation(queryResult, volumeID.Id, POD, newPod.Name,""); err != nil {
 		t.Fatal(err)
 	}
 
@@ -407,6 +431,8 @@ func TestMetadataSyncInformer(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	t.Log("TestMetadataSyncInformer end")
+
 }
 
 // verifyDeleteOperation verifies if a delete operation was successful
@@ -435,14 +461,14 @@ func verifyDeleteOperation(queryResult *cnstypes.CnsQueryResult, volumeID string
 }
 
 // verifyUpdateOperation verifies if an update operation was successful
-func verifyUpdateOperation(queryResult *cnstypes.CnsQueryResult, volumeID string, resourceType string) error {
+func verifyUpdateOperation(queryResult *cnstypes.CnsQueryResult, volumeID string, resourceType string, resourceName string, resourceNewLabel string) error {
 	if len(queryResult.Volumes) == 0 || len(queryResult.Volumes[0].Metadata.EntityMetadata) == 0 {
 		return fmt.Errorf("update operation failed for volume Id %s for resource type %s with queryResult: %v", volumeID, resourceType, spew.Sdump(queryResult))
 	}
 	entityMetadata := queryResult.Volumes[0].Metadata.EntityMetadata
 	for _, baseMetadata := range entityMetadata {
 		metadata := interface{}(baseMetadata).(*cnstypes.CnsKubernetesEntityMetadata)
-		if resourceType == POD && metadata.EntityType == "POD" && len(metadata.Labels) == 0 {
+		if resourceType == POD && metadata.EntityType == "POD" && metadata.EntityName == resourceName && len(metadata.Labels) == 0 {
 			return nil
 		}
 		if len(metadata.Labels) == 0 {
@@ -450,20 +476,25 @@ func verifyUpdateOperation(queryResult *cnstypes.CnsQueryResult, volumeID string
 		}
 		queryLabel := metadata.Labels[0].Key
 		queryValue := metadata.Labels[0].Value
-		if resourceType == PVC && metadata.EntityType == "PERSISTENT_VOLUME_CLAIM" && queryLabel == testPVCLabelName && queryValue == testPVCLabelValue {
+		if resourceType == PVC && metadata.EntityType == "PERSISTENT_VOLUME_CLAIM" && metadata.EntityName == resourceName && queryLabel == testPVCLabelName && queryValue == resourceNewLabel {
 			return nil
 		}
-		if resourceType == PV && metadata.EntityType == "PERSISTENT_VOLUME" && queryLabel == testPVLabelName && queryValue == testPVLabelValue {
+		if resourceType == PV && metadata.EntityType == "PERSISTENT_VOLUME" && metadata.EntityName == resourceName && queryLabel == testPVLabelName && queryValue == resourceNewLabel {
 			return nil
 		}
 	}
 	return fmt.Errorf("update operation failed for volume Id: %s for resource type %s with queryResult: %v", volumeID, resourceType, spew.Sdump(queryResult))
 }
 
-// getCSPPersistentVolumeSpec creates PV volume spec with given Volume Handle, Reclaim Policy, Labels and Phase
-func getCSPPersistentVolumeSpec(volumeHandle string, persistentVolumeReclaimPolicy v1.PersistentVolumeReclaimPolicy, labels map[string]string, phase v1.PersistentVolumePhase) *v1.PersistentVolume {
+// getPersistentVolumeSpec creates PV volume spec with given Volume Handle, Reclaim Policy, Labels and Phase
+func getPersistentVolumeSpec(volumeHandle string, persistentVolumeReclaimPolicy v1.PersistentVolumeReclaimPolicy, labels map[string]string, phase v1.PersistentVolumePhase, claimRefName string) *v1.PersistentVolume {
 	var pv *v1.PersistentVolume
 	var claimRef *v1.ObjectReference
+	if claimRefName != "" {
+		claimRef = &v1.ObjectReference{
+			Name:claimRefName,
+		}
+	}
 	pv = &v1.PersistentVolume{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "PersistentVolume",
@@ -543,6 +574,193 @@ func getPersistentVolumeClaimSpec(namespace string, labels map[string]string, pv
 	}
 
 	return pvc
+}
+
+/*
+	This test verifies the fullsync workflow:
+		1. PV does not exist in K8S, but exist in CNS cache, fullsync should delete this volume from CNS cache
+		2. PV and PVC exist in K8S, but does not exist in CNS cache, fullsync should create this volume in CNS cache
+		3. PV and PVC exist in K8S and CNS cache, update the label of PV and PVC in K8S, fullsync should update the label in CNS cache
+		4. POD is created in K8S with PVC, fullsync should update the POD in CNS cache
+*/
+func runTestFullSyncWorkflows(t *testing.T) {
+	t.Log("TestFullSyncWorkflows start")
+	// Create spec for new volume
+	createSpec := cnstypes.CnsVolumeCreateSpec{
+		DynamicData: vimtypes.DynamicData{},
+		Name:        testVolumeName,
+		VolumeType:  testVolumeType,
+		Datastores:  dsList,
+		Metadata: cnstypes.CnsVolumeMetadata{
+			DynamicData: vimtypes.DynamicData{},
+			ContainerCluster: cnstypes.CnsContainerCluster{
+				ClusterType: string(cnstypes.CnsClusterTypeKubernetes),
+				ClusterId:   config.Global.ClusterID,
+				VSphereUser: config.VirtualCenter[cnsVCenterConfig.Host].User,
+			},
+		},
+		BackingObjectDetails: &cnstypes.CnsBackingObjectDetails{
+			CapacityInMb: gbInMb,
+		},
+	}
+	volumeID, err := volumeManager.CreateVolume(&createSpec)
+	if err != nil {
+		t.Errorf("Failed to create volume. Error: %+v", err)
+		t.Fatal(err)
+		return
+	}
+
+	// Set volume id to be queried
+	queryFilter := cnstypes.CnsQueryFilter{
+		VolumeIds: []cnstypes.CnsVolumeId{
+			cnstypes.CnsVolumeId{
+				Id: volumeID.Id,
+			},
+		},
+	}
+
+	// Verify if volume is created
+	queryResult, err := virtualCenter.QueryVolume(ctx, queryFilter)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(queryResult.Volumes) != 1 && queryResult.Volumes[0].VolumeId.Id != volumeID.Id {
+		t.Fatalf("Failed to find the newly created volume with ID: %s", volumeID)
+	}
+
+	// PV does not exist in K8S, but volume exist in CNS cache
+	// FullSync should delete this volume from CNS cache
+	triggerFullSync(k8sclient, metadataSyncer)
+
+	// Verify if volume has been deleted from cache
+	queryResult, err = virtualCenter.QueryVolume(ctx, queryFilter)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(queryResult.Volumes) != 0 {
+		t.Fatalf("Full sync failed to remove volume")
+	}
+
+	// PV and PVC exist in K8S, but does not exist in CNS cache
+	// FullSync should create this volume in CNS cache
+
+	// Create PV in K8S with VolumeHandle of recently deleted Volume
+	pvLabel := make(map[string]string)
+	pvLabel[testPVLabelName] = testPVLabelValue
+	pv := getPersistentVolumeSpec(volumeID.Id, v1.PersistentVolumeReclaimRetain, pvLabel, v1.VolumeAvailable,"")
+	if pv, err = k8sclient.CoreV1().PersistentVolumes().Create(pv); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create PVC in K8S to bound to recently created PV
+	namespace := testNamespace
+	pvcLabel := make(map[string]string)
+	pvcLabel[testPVCLabelName] = testPVCLabelValue
+	pvc := getPersistentVolumeClaimSpec(namespace, pvcLabel, pv.Name)
+	if pvc, err = k8sclient.CoreV1().PersistentVolumeClaims(testNamespace).Create(pvc); err != nil {
+		t.Fatal(err)
+	}
+
+	// allocate pvc claimRef for PV spec
+	pv = getPersistentVolumeSpec(volumeID.Id, v1.PersistentVolumeReclaimRetain, pvLabel, v1.VolumeAvailable,pvc.Name)
+	if pv, err= k8sclient.CoreV1().PersistentVolumes().Update(pv); err != nil{
+		t.Fatal(err)
+	}
+
+	triggerFullSync(k8sclient, metadataSyncer)
+
+	// Verify pv label of volume matches that of updated metadata
+	if queryResult, err = metadataSyncer.vcenter.QueryVolume(ctx, queryFilter); err != nil {
+		t.Fatal(err)
+	}
+	if err = verifyUpdateOperation(queryResult, volumeID.Id, PV, pv.Name, testPVLabelValue); err != nil {
+		t.Fatal(err)
+	}
+
+	if err = verifyUpdateOperation(queryResult, volumeID.Id, PVC, pvc.Name, testPVCLabelValue); err != nil {
+		t.Fatal(err)
+	}
+
+
+	// PV, PVC is updated in K8S with new label value, CNS cache still hold the old label value
+	// FullSync should update the metadata in CNS cache with new label value
+
+	//  Update pv with new label
+	newPVLabel := make(map[string]string)
+	newPVLabel[testPVLabelName] = newTestPVLabelValue
+	pv.Labels = newPVLabel
+	if pv, err = k8sclient.CoreV1().PersistentVolumes().Update(pv); err != nil {
+		t.Fatal(err)
+	}
+
+	triggerFullSync(k8sclient, metadataSyncer)
+
+	// Verify pv label value has been updated in CNS cache
+
+	if queryResult, err = metadataSyncer.vcenter.QueryVolume(ctx, queryFilter); err != nil {
+		t.Fatal(err)
+	}
+	if err = verifyUpdateOperation(queryResult, volumeID.Id, PV, pv.Name, newTestPVLabelValue); err != nil {
+		t.Fatal(err)
+	}
+
+	//update pvc with new label
+	newPVCLabel := make(map[string]string)
+	newPVCLabel[testPVCLabelName] = newTestPVCLabelValue
+	pvc.Labels = newPVCLabel
+	if pvc, err = k8sclient.CoreV1().PersistentVolumeClaims(testNamespace).Update(pvc); err != nil {
+		t.Fatal(err)
+	}
+
+	triggerFullSync(k8sclient, metadataSyncer)
+
+	// Verify pvc label value has been updated in CNS cache
+
+	if queryResult, err = metadataSyncer.vcenter.QueryVolume(ctx, queryFilter); err != nil {
+		t.Fatal(err)
+	}
+	if err = verifyUpdateOperation(queryResult, volumeID.Id, PVC, pvc.Name, newTestPVCLabelValue); err != nil {
+		t.Fatal(err)
+	}
+
+	//  POD is created with PVC, CNS cache do not have the POD metadata
+	// fullsync should update the POD in CNS cache
+
+	// Create Pod on K8S with claim = recently created pvc
+	pod := getPodSpec(testNamespace, nil, pvc.Name, v1.PodRunning)
+	if pod, err = k8sclient.CoreV1().Pods(testNamespace).Create(pod); err != nil {
+		t.Fatal(err)
+	}
+
+	triggerFullSync(k8sclient, metadataSyncer)
+
+	// Verify POD metadata of volume matches that of updated metadata
+	if queryResult, err = metadataSyncer.vcenter.QueryVolume(ctx, queryFilter); err != nil {
+		t.Fatal(err)
+	}
+	if err = verifyUpdateOperation(queryResult, volumeID.Id, POD, pod.Name, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	// Cleanup in K8S
+	if err = k8sclient.CoreV1().PersistentVolumes().Delete(pv.Name, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err = k8sclient.CoreV1().PersistentVolumeClaims(testNamespace).Delete(pvc.Name, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err = k8sclient.CoreV1().Pods(testNamespace).Delete(pod.Name, nil); err != nil {
+		t.Fatal(err)
+	}
+
+
+	// Cleanup in CNS to delete the volume
+	if err = volumeManager.DeleteVolume(volumeID.Id, true); err != nil {
+		t.Logf("Failed to delete volume %v from CNS", volumeID.Id)
+	}
+	t.Log("TestFullSyncWorkflows end")
 }
 
 func getPodSpec(namespace string, labels map[string]string, pvcName string, phase v1.PodPhase) *v1.Pod {
