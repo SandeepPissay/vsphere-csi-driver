@@ -24,4 +24,4 @@ RUN tdnf clean all
 
 ADD vsphere-csi /bin/
 
-CMD ["/bin/vsphere-csi"]
+ENTRYPOINT ["/bin/vsphere-csi"]

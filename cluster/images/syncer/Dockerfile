@@ -14,4 +14,4 @@ FROM photon:2.0
 
 ADD vsphere-syncer /bin/
 
-CMD ["/bin/vsphere-syncer"]
+ENTRYPOINT ["/bin/vsphere-syncer"]

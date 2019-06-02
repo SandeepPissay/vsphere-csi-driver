@@ -18,7 +18,6 @@ package service
 
 import (
 	"context"
-	"flag"
 
 	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/block/vanilla"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/block/wcp"
@@ -98,18 +97,6 @@ func (s *service) BeforeServe(
 
 	// Get the SP's operating mode.
 	s.mode = csictx.Getenv(ctx, gocsi.EnvVarMode)
-
-	// Set klog level based on CSI debug being enabled
-	klogLevel := "2"
-	lvl := log.GetLevel()
-	if lvl == log.DebugLevel {
-		klogLevel = "4"
-	}
-
-	flag.Set("logtostderr", "true")
-	flag.Set("stderrthreshold", "INFO")
-	flag.Set("v", klogLevel)
-	flag.Parse()
 
 	if !strings.EqualFold(s.mode, "node") {
 		// Controller service is needed

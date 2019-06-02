@@ -25,16 +25,14 @@ spec:
       containers:
       - name: vsphere-csi-controller
         image: your-docker-repository/vsphere-csi:latest
+        args:
+          - --v=2
         imagePullPolicy: "Always"
         env:
         - name: CSI_ENDPOINT
           value: unix:///var/lib/csi/sockets/pluginproxy/csi.sock
         - name: X_CSI_MODE
           value: "controller"
-        - name: X_CSI_SPEC_REQ_VALIDATION
-          value: "false"
-        - name: X_CSI_DEBUG
-          value: "true"
         volumeMounts:
         - mountPath: /etc/cloud
           name: vsphere-config-volume

@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"flag"
 	"k8s.io/klog"
 	"os"
 	metadatasyncer "sigs.k8s.io/vsphere-csi-driver/pkg/syncer"
@@ -24,6 +25,8 @@ import (
 
 // main is ignored when this package is built as a go plug-in.
 func main() {
+	klog.InitFlags(nil)
+	flag.Parse()
 	metadataSyncer := metadatasyncer.NewInformer()
 	if err := metadataSyncer.Init(); err != nil {
 		klog.Errorf("Error initializing Metadata Syncer")

@@ -25,6 +25,8 @@ spec:
       containers:
       - name: vsphere-syncer
         image: your-docker-repository/syncer:latest
+        args:
+          - --v=2
         imagePullPolicy: "Always"
         volumeMounts:
         - mountPath: /etc/cloud
