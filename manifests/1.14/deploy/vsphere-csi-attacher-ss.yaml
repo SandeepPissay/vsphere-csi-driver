@@ -25,8 +25,9 @@ spec:
       - name: csi-attacher
         image: quay.io/k8scsi/csi-attacher:v1.1.1
         args:
-        - --v=5
+        - "--v=2"
         - "--csi-address=$(ADDRESS)"
+        - "--timeout=60s"
         env:
         - name: ADDRESS
           value: /csi/csi.sock
