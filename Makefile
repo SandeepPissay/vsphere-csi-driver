@@ -259,7 +259,7 @@ endif # ifndef X_BUILD_DISABLED
 ifndef PKGS_WITH_TESTS
 export PKGS_WITH_TESTS := $(sort $(shell find . -path ./tests -prune -o -name "*_test.go" -type f -exec dirname \{\} \;))
 endif
-TEST_FLAGS ?= -v -count=1
+TEST_FLAGS ?= -v -count=1 -coverprofile coverage_report.out
 .PHONY: unit build-unit-tests
 unit unit-test:
 	env -u VSPHERE_SERVER -u VSPHERE_PASSWORD -u VSPHERE_USER -u VSPHERE_STORAGE_POLICY_NAME -u KUBECONFIG go test $(TEST_FLAGS) $(PKGS_WITH_TESTS)
