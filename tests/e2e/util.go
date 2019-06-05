@@ -273,3 +273,17 @@ func getPersistentVolumeSpec(fcdID string, persistentVolumeReclaimPolicy v1.Pers
 	pv.Annotations = annotations
 	return pv
 }
+
+
+// invokeVCenterServiceControl invokes the given command for the given service
+// via service-control on the given vCenter host over SSH.
+func invokeVCenterServiceControl(command, service, host string) error {
+	sshCmd := fmt.Sprintf("service-control --%s %s", command, service)
+	framework.Logf("Invoking command %v on vCenter host %v", sshCmd, host)
+	result, err := framework.SSH(sshCmd, host, framework.TestContext.Provider)
+	if err != nil || result.Code != 0 {
+		framework.LogSSHResult(result)
+		return fmt.Errorf("couldn't execute command: %s on vCenter host: %v", sshCmd, err)
+	}
+	return nil
+}

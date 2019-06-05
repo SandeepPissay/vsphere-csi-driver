@@ -38,8 +38,11 @@ const (
 	pollTimeout                                = 5 * time.Minute
 	pollTimeoutShort                           = 1 * time.Minute / 2
 	envPandoraSyncWaitTime                     = "PANDORA_SYNC_WAIT_TIME"
+	envFullSyncWaitTime                        = "FULL_SYNC_WAIT_TIME"
 	defaultPandoraSyncWaitTime                 = 90
+	defaultFullSyncWaitTime                    = 1800
 	sleepTimeOut                               = 30
+	vsanhealthServiceName                      = "vsan-health"
 )
 
 // GetAndExpectStringEnvVar parses a string from env variable
