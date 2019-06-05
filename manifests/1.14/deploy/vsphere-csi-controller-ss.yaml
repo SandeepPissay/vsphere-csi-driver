@@ -33,6 +33,8 @@ spec:
           value: unix:///var/lib/csi/sockets/pluginproxy/csi.sock
         - name: X_CSI_MODE
           value: "controller"
+        - name: X_CSI_VSPHERE_CLOUD_CONFIG
+          value: "/etc/cloud/vsphere.conf" # here vsphere.conf is the name of the file used for creating config-map using "--from-file" flag
         volumeMounts:
         - mountPath: /etc/cloud
           name: vsphere-config-volume
