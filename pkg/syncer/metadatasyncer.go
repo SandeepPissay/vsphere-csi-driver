@@ -21,6 +21,7 @@ import (
 	"time"
 	"errors"
 	"fmt"
+	"strconv"
 	"github.com/davecgh/go-spew/spew"
 	csictx "github.com/rexray/gocsi/context"
 	"k8s.io/api/core/v1"
@@ -54,6 +55,28 @@ func NewInformer() *metadataSyncInformer {
 	return &metadataSyncInformer{}
 }
 
+// getFullSyncIntervalInMin return the FullSyncInterval
+// If enviroment variable X_CSI_FULL_SYNC_INTERVAL_MINUTES is set and valid,
+// return the interval value read from enviroment variable
+// otherwise, use the default value 30 minutes
+func getFullSyncIntervalInMin() int {
+	fullSyncIntervalInMin := defaultFullSyncIntervalInMin
+	if v := os.Getenv("X_CSI_FULL_SYNC_INTERVAL_MINUTES"); v != ""  {
+		if value, err := strconv.Atoi(v); err == nil {
+			if (value <= 0) {
+				klog.Warningf("CSPFullSync: fullSync interval set in env variable X_CSI_FULL_SYNC_INTERVAL_MINUTES %s is equal or less than 0, will use the default interval", v)
+			} else if (value > defaultFullSyncIntervalInMin) {
+				klog.Warningf("CSPFullSync: fullSync interval set in env variable X_CSI_FULL_SYNC_INTERVAL_MINUTES %s is larger than max vlaue can be set, will use the default interval", v)
+			} else {
+				fullSyncIntervalInMin = value
+				klog.V(2).Infof("CSPFullSync: fullSync interval is set to %d minutes", fullSyncIntervalInMin)
+			}
+		} else {
+			klog.Warningf("CSPFullSync: fullSync interval set in env variable X_CSI_FULL_SYNC_INTERVAL_MINUTES %s is invalid, will use the default interval", v)
+		}
+	}
+	return fullSyncIntervalInMin
+}
 // Initializes the Metadata Sync Informer
 func (metadataSyncer *metadataSyncInformer) Init() error {
 	var err error
@@ -96,7 +119,7 @@ func (metadataSyncer *metadataSyncInformer) Init() error {
 		return err
 	}
 
-	ticker := time.NewTicker(time.Duration(defaultFullSyncIntervalInMin)*time.Minute)
+	ticker := time.NewTicker(time.Duration(getFullSyncIntervalInMin())*time.Minute)
 	// Trigger full sync
 	go func() {
 		for _ = range ticker.C {

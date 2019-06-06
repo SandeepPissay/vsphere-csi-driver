@@ -29,6 +29,8 @@ spec:
         - --v=2
         imagePullPolicy: "Always"
         env:
+        - name: X_CSI_FULL_SYNC_INTERVAL_MINUTES
+          value: "30"
         - name: X_CSI_VSPHERE_CLOUD_CONFIG
           value: "/etc/cloud/vsphere.conf" # here vsphere.conf is the name of the file used for creating config-map using "--from-file" flag
         volumeMounts:
