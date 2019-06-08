@@ -18,8 +18,6 @@ package vanilla
 
 import (
 	"fmt"
-	"strings"
-
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/vmware/govmomi/units"
 	"golang.org/x/net/context"
@@ -31,6 +29,7 @@ import (
 	"sigs.k8s.io/vsphere-csi-driver/pkg/common/config"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/block"
 	csitypes "sigs.k8s.io/vsphere-csi-driver/pkg/csi/types"
+	"strings"
 )
 
 var (
@@ -45,6 +44,7 @@ var (
 type NodeManagerInterface interface {
 	Initialize(serviceAccount string) error
 	GetSharedDatastoresInK8SCluster(ctx context.Context) ([]*cnsvsphere.DatastoreInfo, error)
+	GetSharedDatastoresInTopology(ctx context.Context, topologyRequirement *csi.TopologyRequirement, zoneKey string, regionKey string) ([]*cnsvsphere.DatastoreInfo, map[string]string, error)
 	GetNodeByName(nodeName string) (*cnsvsphere.VirtualMachine, error)
 }
 
@@ -119,7 +119,7 @@ func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 	var datastoreURL string
 	var storagePolicyName string
 
-	// Support case insensitive parameters 
+	// Support case insensitive parameters
 	for paramName := range req.Parameters {
 		if strings.ToLower(paramName) == block.AttributeDatastoreURL {
 			datastoreURL = req.Parameters[paramName]
@@ -135,8 +135,52 @@ func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 		DatastoreURL:      datastoreURL,
 		StoragePolicyName: storagePolicyName,
 	}
-	// Get shared datastores for the Kubernetes cluster
-	sharedDatastores, err := c.nodeMgr.GetSharedDatastoresInK8SCluster(ctx)
+	var sharedDatastores []*cnsvsphere.DatastoreInfo
+
+	// Get accessibility
+	topologyRequirement := req.GetAccessibilityRequirements()
+	var volumeAccessibleTopology = make(map[string]string)
+	if topologyRequirement != nil {
+		// Get shared accessible datastores for matching topology requirement
+		if c.manager.CnsConfig.Labels.Zone == "" || c.manager.CnsConfig.Labels.Region == "" {
+			// if zone and region label (vsphere categoy names) not specified in the csi-config configmap, then return
+			// NotFound error.
+			errMsg := fmt.Sprintf("Zone/Region vsphere categoy names not specified in the csi-config configmap")
+			klog.Errorf(errMsg)
+			return nil, status.Error(codes.NotFound, errMsg)
+		}
+		sharedDatastores, volumeAccessibleTopology, err = c.nodeMgr.GetSharedDatastoresInTopology(ctx, topologyRequirement, c.manager.CnsConfig.Labels.Zone, c.manager.CnsConfig.Labels.Region)
+		if err != nil {
+			msg := fmt.Sprintf("Failed to get shared datastores in topology. Error: %+v", err)
+			klog.Errorf(msg)
+			return nil, err
+		}
+		if createVolumeSpec.DatastoreURL != "" && len(volumeAccessibleTopology) != 0 {
+			// Check datastoreURL specified in the storageclass is accessible from topology
+			isDataStoreAccessible := false
+			for _, sharedDatastore := range sharedDatastores {
+				if sharedDatastore.Info.Url == createVolumeSpec.DatastoreURL {
+					isDataStoreAccessible = true
+					break
+				}
+			}
+			if !isDataStoreAccessible {
+				errMsg := fmt.Sprintf("DatastoreURL: %s specified in the storage class is not accessible from  zone [%s] "+
+					"and region [%s]", createVolumeSpec.DatastoreURL, volumeAccessibleTopology[LabelZoneFailureDomain], volumeAccessibleTopology[LabelZoneRegion])
+				klog.Errorf(errMsg)
+				return nil, status.Error(codes.InvalidArgument, errMsg)
+			}
+		}
+
+	} else {
+		// Get shared datastores for the Kubernetes cluster
+		sharedDatastores, err = c.nodeMgr.GetSharedDatastoresInK8SCluster(ctx)
+		if err != nil {
+			msg := fmt.Sprintf("Failed to get shared datastores in kubernetes cluster. Error: %+v", err)
+			klog.Errorf(msg)
+			return nil, err
+		}
+	}
 	volumeID, err := block.CreateVolumeUtil(ctx, c.manager, &createVolumeSpec, sharedDatastores)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to create volume. Error: %+v", err)
@@ -151,6 +195,12 @@ func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 			CapacityBytes: int64(units.FileSize(volSizeMB * block.MbInBytes)),
 			VolumeContext: attributes,
 		},
+	}
+	if len(volumeAccessibleTopology) != 0 {
+		volumeTopology := &csi.Topology{
+			Segments: volumeAccessibleTopology,
+		}
+		resp.Volume.AccessibleTopology = append(resp.Volume.AccessibleTopology, volumeTopology)
 	}
 	return resp, nil
 }

@@ -34,12 +34,18 @@ type Config struct {
 		// Datacenter in which Node VMs are located.
 		Datacenters string `gcfg:"datacenters"`
 		// The kubernetes service account used to launch the cloud controller manager.
-		// Default: cloud-controller-manager
+		// Default: vsphere-csi-controller
 		ServiceAccount string `gcfg:"service-account"`
 	}
 
 	// Virtual Center configurations
 	VirtualCenter map[string]*VirtualCenterConfig
+
+	// Tag categories and tags which correspond to "built-in node labels: zones and region"
+	Labels struct {
+		Zone   string `gcfg:"zone"`
+		Region string `gcfg:"region"`
+	}
 }
 
 // VirtualCenterConfig contains information used to access a remote vCenter

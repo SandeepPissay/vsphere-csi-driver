@@ -122,6 +122,12 @@ func FromEnv(cfg *Config) error {
 			cfg.Global.InsecureFlag = InsecureFlag
 		}
 	}
+	if v := os.Getenv("VSPHERE_LABEL_REGION"); v != "" {
+		cfg.Labels.Region = v
+	}
+	if v := os.Getenv("VSPHERE_LABEL_ZONE"); v != "" {
+		cfg.Labels.Zone = v
+	}
 	//Build VirtualCenter from ENVs
 	for _, e := range os.Environ() {
 		pair := strings.Split(e, "=")

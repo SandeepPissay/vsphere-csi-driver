@@ -121,7 +121,7 @@ func GetVirtualMachineByUUID(uuid string, instanceUUID bool) (*VirtualMachine, e
 	dcsChan, errChan := AsyncGetAllDatacenters(ctx, dcBufferSize)
 
 	var wg sync.WaitGroup
-	var vm *VirtualMachine
+	var nodeVM *VirtualMachine
 	var poolErr error
 
 	for i := 0; i < poolSize; i++ {
@@ -155,9 +155,7 @@ func GetVirtualMachineByUUID(uuid string, instanceUUID bool) (*VirtualMachine, e
 
 					// Found some Datacenter object.
 					klog.V(2).Infof("AsyncGetAllDatacenters with uuid %s sent a dc %v", uuid, dc)
-
-					var err error
-					if vm, err = dc.GetVirtualMachineByUUID(context.Background(), uuid, instanceUUID); err != nil {
+					if vm, err := dc.GetVirtualMachineByUUID(context.Background(), uuid, instanceUUID); err != nil {
 						if err == ErrVMNotFound {
 							// Didn't find VM on this DC, so, continue searching on other DCs.
 							klog.V(2).Infof("Couldn't find VM given uuid %s on DC %v with err: %v, continuing search", uuid, dc, err)
@@ -172,6 +170,7 @@ func GetVirtualMachineByUUID(uuid string, instanceUUID bool) (*VirtualMachine, e
 					} else {
 						// Virtual machine was found, so stop the async function.
 						klog.V(2).Infof("Found VM %v given uuid %s on DC %v, canceling context", vm, uuid, dc)
+						nodeVM = vm
 						cancel()
 						return
 					}
@@ -181,9 +180,9 @@ func GetVirtualMachineByUUID(uuid string, instanceUUID bool) (*VirtualMachine, e
 	}
 	wg.Wait()
 
-	if vm != nil {
-		klog.V(2).Infof("Returning VM %v for UUID %s", vm, uuid)
-		return vm, nil
+	if nodeVM != nil {
+		klog.V(2).Infof("Returning VM %v for UUID %s", nodeVM, uuid)
+		return nodeVM, nil
 	} else if poolErr != nil {
 		klog.Errorf("Returning err: %v for UUID %s", poolErr, uuid)
 		return nil, poolErr

@@ -73,6 +73,9 @@ func GetVirtualCenterConfig(cfg *config.Config) (*VirtualCenterConfig, error) {
 		Insecure:        cfg.VirtualCenter[host].InsecureFlag,
 		DatacenterPaths: strings.Split(cfg.VirtualCenter[host].Datacenters, ","),
 	}
+	for idx := range vcConfig.DatacenterPaths {
+		vcConfig.DatacenterPaths[idx] = strings.TrimSpace(vcConfig.DatacenterPaths[idx])
+	}
 	return vcConfig, nil
 }
 
@@ -91,17 +94,17 @@ func GetVcenterIPs(cfg *config.Config) ([]string, error) {
 
 // CompareK8sandCNSVolumeMetadata compare the metadata list from K8S and metadata list from CNS are same or not
 func CompareK8sandCNSVolumeMetadata(pvMetadata []cnstypes.BaseCnsEntityMetadata, cnsMetadata []cnstypes.BaseCnsEntityMetadata) bool {
-	if len(pvMetadata) != len(cnsMetadata){
+	if len(pvMetadata) != len(cnsMetadata) {
 		return false
 	}
-	metadataMap :=make(map[string]*cnstypes.CnsKubernetesEntityMetadata)
-	for _, metadata := range cnsMetadata{
+	metadataMap := make(map[string]*cnstypes.CnsKubernetesEntityMetadata)
+	for _, metadata := range cnsMetadata {
 		cnsKubernetesMetadata := metadata.(*cnstypes.CnsKubernetesEntityMetadata)
 		metadataMap[cnsKubernetesMetadata.EntityType] = cnsKubernetesMetadata
 	}
-	for _, k8sMetadata := range pvMetadata{
+	for _, k8sMetadata := range pvMetadata {
 		k8sKubernetesMetadata := k8sMetadata.(*cnstypes.CnsKubernetesEntityMetadata)
-		if !CompareKubernetesMetadata(k8sKubernetesMetadata,metadataMap[k8sKubernetesMetadata.EntityType]){
+		if !CompareKubernetesMetadata(k8sKubernetesMetadata, metadataMap[k8sKubernetesMetadata.EntityType]) {
 			return false
 		}
 	}
@@ -128,4 +131,3 @@ func CompareKubernetesMetadata(pvMetaData *cnstypes.CnsKubernetesEntityMetadata,
 	}
 	return true
 }
-

@@ -111,7 +111,7 @@ func (vc *VirtualCenter) newClient(ctx context.Context) (*govmomi.Client, error)
 		return nil, err
 	}
 
-	vimClient.UserAgent = "common-csp"
+	vimClient.UserAgent = "k8s-csi-useragent"
 
 	client := &govmomi.Client{
 		Client:         vimClient,
