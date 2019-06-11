@@ -18,89 +18,32 @@ package wcp
 
 import (
 	"fmt"
-	"strconv"
-	"strings"
-
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"k8s.io/klog"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/block"
+	"strings"
 )
 
-const (
-	// MinSupportedVCenterMajor is the minimum, major version of vCenter
-	// on which WCP CSI controller is supported.
-	MinSupportedVCenterMajor int = 6
-
-	// MinSupportedVCenterMinor is the minimum, minor version of vCenter
-	// on which WCP CSI controller is supported.
-	MinSupportedVCenterMinor int = 7
-)
-
-// checkAPI checks if specified version is 6.7.1 or higher
-func checkAPI(version string) error {
-	items := strings.Split(version, ".")
-	if len(items) <= 1 || len(items) > 3 {
-		return fmt.Errorf("Invalid API Version format")
-	}
-	major, err := strconv.Atoi(items[0])
-	if err != nil {
-		return fmt.Errorf("Invalid Major Version value")
-	}
-	minor, err := strconv.Atoi(items[1])
-	if err != nil {
-		return fmt.Errorf("Invalid Minor Version value")
-	}
-
-	if major < MinSupportedVCenterMajor || (major == MinSupportedVCenterMajor && minor < MinSupportedVCenterMinor) {
-		return fmt.Errorf("The minimum supported vCenter is 6.7.1")
-	}
-
-	if major == MinSupportedVCenterMajor && minor == MinSupportedVCenterMinor && len(items) == 2 {
-		patch, err := strconv.Atoi(items[2])
-		if err != nil || patch < 1 {
-			return fmt.Errorf("Invalid patch version value")
-		}
-	}
-	return nil
-}
-
-// validateCreateVolumeRequest is the helper function to validate
-// CreateVolumeRequest. Function returns error if validation fails otherwise returns nil.
-func validateCreateVolumeRequest(req *csi.CreateVolumeRequest) error {
+// ValidateCreateVolumeRequest is the helper function to validate
+// CreateVolumeRequest for WCP CSI driver.
+// Function returns error if validation fails otherwise returns nil.
+func validateWCPCreateVolumeRequest(req *csi.CreateVolumeRequest) error {
 	// Get create params
 	params := req.GetParameters()
-	// Validate volume parameters
-	if params != nil {
-		for paramName := range params {
-			paramName = strings.ToLower(paramName)
-			if paramName != block.AttributeStoragePolicyID {
-				msg := fmt.Sprintf("Volume parameter %s is not a valid parameter.", paramName)
-				return status.Error(codes.InvalidArgument, msg)
-			}
+	for paramName := range params {
+		paramName = strings.ToLower(paramName)
+		if paramName != block.AttributeStoragePolicyID {
+			msg := fmt.Sprintf("Volume parameter %s is not a valid WCP CSI parameter.", paramName)
+			return status.Error(codes.InvalidArgument, msg)
 		}
 	}
+	return block.ValidateCreateVolumeRequest(req)
+}
 
-	// Volume Name
-	volName := req.GetName()
-	if len(volName) == 0 {
-		msg := "Volume name is a required parameter."
-		klog.Error(msg)
-		return status.Error(codes.InvalidArgument, msg)
-	}
-	// Validate Volume Capabilities
-	volCaps := req.GetVolumeCapabilities()
-	if len(volCaps) == 0 {
-		return status.Error(codes.InvalidArgument, "Volume capabilities not provided")
-	}
-	if !block.IsValidVolumeCapabilities(volCaps) {
-		return status.Error(codes.InvalidArgument, "Volume capabilities not supported")
-	}
-
-	// Validate volume size exists in spec
-	if req.GetCapacityRange() == nil || req.GetCapacityRange().RequiredBytes == 0 {
-		return status.Error(codes.InvalidArgument, "Volume size is a required parameter")
-	}
-	return nil
+// validateWCPDeleteVolumeRequest is the helper function to validate
+// DeleteVolumeRequest for WCP CSI driver.
+// Function returns error if validation fails otherwise returns nil.
+func validateWCPDeleteVolumeRequest(req *csi.DeleteVolumeRequest) error {
+	return block.ValidateDeleteVolumeRequest(req)
 }

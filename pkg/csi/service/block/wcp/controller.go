@@ -82,7 +82,7 @@ func (c *controller) Init(config *config.Config) error {
 		return err
 	}
 	// Check vCenter API Version
-	if err = checkAPI(vc.Client.ServiceContent.About.ApiVersion); err != nil {
+	if err = block.CheckAPI(vc.Client.ServiceContent.About.ApiVersion); err != nil {
 		klog.Errorf("checkAPI failed err=%v", err)
 		return err
 	}
@@ -94,8 +94,9 @@ func (c *controller) Init(config *config.Config) error {
 func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) (
 	*csi.CreateVolumeResponse, error) {
 	klog.V(4).Infof("CreateVolume: called with args %+v", *req)
-	err := validateCreateVolumeRequest(req)
+	err := validateWCPCreateVolumeRequest(req)
 	if err != nil {
+		klog.Errorf("Failed to validate Create Volume Request with err: %v", err)
 		return nil, err
 	}
 
@@ -135,7 +136,7 @@ func (c *controller) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequ
 	*csi.DeleteVolumeResponse, error) {
 	klog.V(4).Infof("DeleteVolume: called with args: %+v", *req)
 	var err error
-	err = block.ValidateDeleteVolumeRequest(req)
+	err = validateWCPDeleteVolumeRequest(req)
 	if err != nil {
 		return nil, err
 	}

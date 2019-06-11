@@ -50,4 +50,16 @@ const (
 
 	// BlockVolumeType is the VolumeType for CNS Volume
 	BlockVolumeType = "BLOCK"
+
+	// MinSupportedVCenterMajor is the minimum, major version of vCenter
+	// on which CNS is supported.
+	MinSupportedVCenterMajor int = 6
+
+	// MinSupportedVCenterMinor is the minimum, minor version of vCenter
+	// on which CNS is supported.
+	MinSupportedVCenterMinor int = 7
+
+	// MinSupportedVCenterMajor is the minimum, major version of vCenter
+	// on which CNS is supported.
+	MinSupportedVCenterPatch int = 3
 )
