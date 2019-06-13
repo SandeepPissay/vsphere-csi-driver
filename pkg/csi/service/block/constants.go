@@ -31,15 +31,15 @@ const (
 
 	// AttributeDatastoreURL represents URL of the datastore in the StorageClass
 	// For Example: DatastoreURL: "ds:///vmfs/volumes/5c9bb20e-009c1e46-4b85-0200483b2a97/"
-	AttributeDatastoreURL = "DatastoreURL"
+	AttributeDatastoreURL = "datastoreurl"
 
 	// AttributeStoragePolicyName represents name of the Storage Policy in the Storage Class
 	// For Example: StoragePolicy: "vSAN Default Storage Policy"
-	AttributeStoragePolicyName = "StoragePolicy"
+	AttributeStoragePolicyName = "storagepolicyname"
 
 	// AttributeStoragePolicyID represents Storage Policy Id in the Storage Classs
 	// For Example: StoragePolicyId: "251bce41-cb24-41df-b46b-7c75aed3c4ee"
-	AttributeStoragePolicyID = "StoragePolicyId"
+	AttributeStoragePolicyID = "storagepolicyid"
 
 	//ProviderPrefix is the prefix used for the ProviderID set on the node
 	// Example: vsphere://4201794a-f26b-8914-d95a-edeb7ecc4a8f
