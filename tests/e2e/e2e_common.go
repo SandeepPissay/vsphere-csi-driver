@@ -33,7 +33,7 @@ const (
 	envVolumeOperationsScale                   = "VOLUME_OPS_SCALE"
 	envStoragePolicyNameForSharedDatastores    = "STORAGE_POLICY_FOR_SHARED_DATASTORES"
 	envStoragePolicyNameForNonSharedDatastores = "STORAGE_POLICY_FOR_NONSHARED_DATASTORES"
-	scParamStoragePolicyName                   = "StoragePolicy"
+	scParamStoragePolicyName                   = "StoragePolicyName"
 	poll                                       = 2 * time.Second
 	pollTimeout                                = 5 * time.Minute
 	pollTimeoutShort                           = 1 * time.Minute / 2

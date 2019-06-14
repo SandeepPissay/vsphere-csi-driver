@@ -18,6 +18,7 @@ package vanilla
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/vmware/govmomi/units"
@@ -116,10 +117,17 @@ func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 	volSizeMB := int64(block.RoundUpSize(volSizeBytes, block.MbInBytes))
 
 	var datastoreURL string
-	datastoreURL = req.Parameters[block.AttributeDatastoreURL]
-
 	var storagePolicyName string
-	storagePolicyName = req.Parameters[block.AttributeStoragePolicyName]
+
+	// Support case insensitive parameters 
+	for paramName := range req.Parameters {
+		if strings.ToLower(paramName) == block.AttributeDatastoreURL {
+			datastoreURL = req.Parameters[paramName]
+		}
+		if strings.ToLower(paramName) == block.AttributeStoragePolicyName {
+			storagePolicyName = req.Parameters[paramName]
+		}
+	}
 
 	var createVolumeSpec = block.CreateVolumeSpec{
 		CapacityMB:        volSizeMB,

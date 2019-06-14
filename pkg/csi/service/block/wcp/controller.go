@@ -18,6 +18,7 @@ package wcp
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/vmware/govmomi/units"
@@ -104,7 +105,12 @@ func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 	volSizeMB := int64(block.RoundUpSize(volSizeBytes, block.MbInBytes))
 
 	var storagePolicyID string
-	storagePolicyID = req.Parameters[block.AttributeStoragePolicyID]
+	// Support case insensitive parameters
+	for paramName := range req.Parameters {
+		if strings.ToLower(paramName) == block.AttributeStoragePolicyID {
+			storagePolicyID = req.Parameters[paramName]
+		}
+	}
 
 	var createVolumeSpec = block.CreateVolumeSpec{
 		CapacityMB:      volSizeMB,
