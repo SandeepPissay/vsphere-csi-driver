@@ -68,34 +68,29 @@ func ValidateDeleteVolumeRequest(req *csi.DeleteVolumeRequest) error {
 // CheckAPI checks if specified version is 6.7.3 or higher
 func CheckAPI(version string) error {
 	items := strings.Split(version, ".")
-	if len(items) <= 2 || len(items) > 3 {
+	if len(items) < 2 || len(items) > 3 {
 		return fmt.Errorf("Invalid API Version format")
 	}
 	major, err := strconv.Atoi(items[0])
 	if err != nil {
 		return fmt.Errorf("Invalid Major Version value")
 	}
-	// If major version is 7 or above, return nil
-	if major > MinSupportedVCenterMajor {
-		return nil
-	}
-	// If major version is 6, should be 6.7.3 or higher
-	if len(items) != 3 {
-		return fmt.Errorf("Invalid API Version format")
-	}
 	minor, err := strconv.Atoi(items[1])
 	if err != nil {
 		return fmt.Errorf("Invalid Minor Version value")
 	}
-	patch, err := strconv.Atoi(items[2])
-	if err != nil {
-		return fmt.Errorf("Invalid Patch Version value")
-	}
 
-	if major < MinSupportedVCenterMajor || (major == MinSupportedVCenterMajor && minor < MinSupportedVCenterMinor) ||
-		(major == MinSupportedVCenterMajor && minor == MinSupportedVCenterMinor && patch < MinSupportedVCenterPatch) {
+	if major < MinSupportedVCenterMajor || (major == MinSupportedVCenterMajor && minor < MinSupportedVCenterMinor) {
 		return fmt.Errorf("The minimum supported vCenter is 6.7.3")
 	}
 
+	if major == MinSupportedVCenterMajor && minor == MinSupportedVCenterMinor {
+		if len(items) == 3 {
+			patch, err := strconv.Atoi(items[2])
+			if err != nil || patch < MinSupportedVCenterPatch {
+				return fmt.Errorf("Invalid patch version value")
+			}
+		}
+	}
 	return nil
 }

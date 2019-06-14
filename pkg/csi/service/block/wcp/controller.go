@@ -83,7 +83,7 @@ func (c *controller) Init(config *config.Config) error {
 	}
 	// Check vCenter API Version
 	if err = block.CheckAPI(vc.Client.ServiceContent.About.ApiVersion); err != nil {
-		klog.Errorf("checkAPI failed err=%v", err)
+		klog.Errorf("checkAPI failed for vcenter API version: %s, err=%v", vc.Client.ServiceContent.About.ApiVersion, err)
 		return err
 	}
 	return nil
