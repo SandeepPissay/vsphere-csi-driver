@@ -22,6 +22,7 @@ spec:
       - operator: "Exists"
         key: node-role.kubernetes.io/master
         effect: NoSchedule
+      hostNetwork: true
       containers:
       - name: vsphere-syncer
         image: your-docker-repository/syncer:latest

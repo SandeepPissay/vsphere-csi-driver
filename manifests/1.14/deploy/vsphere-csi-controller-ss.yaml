@@ -22,6 +22,7 @@ spec:
       - operator: "Exists"
         key: node-role.kubernetes.io/master
         effect: NoSchedule
+      hostNetwork: true
       containers:
       - name: vsphere-csi-controller
         image: your-docker-repository/vsphere-csi:latest

@@ -39,6 +39,7 @@ spec:
           mountPath: /registration
       - name: vsphere-csi-node
         image: your-docker-repository/vsphere-csi:latest
+        imagePullPolicy: "Always"
         env:
         - name: CSI_ENDPOINT
           value: unix:///csi/csi.sock
