@@ -6,5 +6,6 @@ metadata:
     storageclass.kubernetes.io/is-default-class: "true"
 provisioner: block.vsphere.csi.vmware.com
 parameters:
-  datastoreurl: "ds:///vmfs/volumes/vsan:52cdfa80721ff516-ea1e993113acfc77/" #Case insensitive optional Parameter
-  storagepolicyname: "vSAN Default Storage Policy"  #Case insensitive optional Parameter
+  datastoreurl: "ds:///vmfs/volumes/vsan:52cdfa80721ff516-ea1e993113acfc77/" #Optional Parameter
+  storagepolicyname: "vSAN Default Storage Policy"  #Optional Parameter
+  fstype: "ext4" #Optional Parameter

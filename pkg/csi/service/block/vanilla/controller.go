@@ -118,14 +118,17 @@ func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 
 	var datastoreURL string
 	var storagePolicyName string
+	var fsType string
 
 	// Support case insensitive parameters
 	for paramName := range req.Parameters {
-		if strings.ToLower(paramName) == block.AttributeDatastoreURL {
+		param := strings.ToLower(paramName)
+		if param == block.AttributeDatastoreURL {
 			datastoreURL = req.Parameters[paramName]
-		}
-		if strings.ToLower(paramName) == block.AttributeStoragePolicyName {
+		} else if param == block.AttributeStoragePolicyName {
 			storagePolicyName = req.Parameters[paramName]
+		} else if param == block.AttributeFsType {
+			fsType = req.Parameters[block.AttributeFsType]
 		}
 	}
 
@@ -189,6 +192,7 @@ func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 	}
 	attributes := make(map[string]string)
 	attributes[block.AttributeDiskType] = block.DiskTypeString
+	attributes[block.AttributeFsType] = fsType
 	resp := &csi.CreateVolumeResponse{
 		Volume: &csi.Volume{
 			VolumeId:      volumeID,

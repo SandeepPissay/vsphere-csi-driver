@@ -32,6 +32,7 @@ import (
 	"path/filepath"
 	cnsvsphere "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vsphere"
 	cnsconfig "sigs.k8s.io/vsphere-csi-driver/pkg/common/config"
+	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/block"
 	csitypes "sigs.k8s.io/vsphere-csi-driver/pkg/csi/types"
 	"strings"
 )
@@ -111,10 +112,18 @@ func (s *service) NodeStageVolume(
 			err.Error())
 	}
 
+	attributes := req.VolumeContext
+	fsType, _ := attributes[block.AttributeFsType]
+	log.WithField("fsType", fsType).Info("Get fsType from VolumeContext")
+	if fsType == "" {
+		// no fsType is set in VolumeContext, use default "ext4"
+		fsType = block.DefaultFsType
+		log.WithField("fsType", fsType).Info("fsType is not set in VolumeContext, use default type")
+	}
 	if len(mnts) == 0 {
 		// Device isn't mounted anywhere, stage the volume
 		if fs == "" {
-			fs = "ext4"
+			fs = fsType
 		}
 
 		// If read-only access mode, we don't allow formatting

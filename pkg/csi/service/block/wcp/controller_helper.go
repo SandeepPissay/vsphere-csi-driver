@@ -33,7 +33,7 @@ func validateWCPCreateVolumeRequest(req *csi.CreateVolumeRequest) error {
 	params := req.GetParameters()
 	for paramName := range params {
 		paramName = strings.ToLower(paramName)
-		if paramName != block.AttributeStoragePolicyID {
+		if paramName != block.AttributeStoragePolicyID && paramName != block.AttributeFsType {
 			msg := fmt.Sprintf("Volume parameter %s is not a valid WCP CSI parameter.", paramName)
 			return status.Error(codes.InvalidArgument, msg)
 		}

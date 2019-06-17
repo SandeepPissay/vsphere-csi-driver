@@ -34,7 +34,7 @@ func validateVanillaCreateVolumeRequest(req *csi.CreateVolumeRequest) error {
 	params := req.GetParameters()
 	for paramName := range params {
 		paramName = strings.ToLower(paramName)
-		if paramName != block.AttributeDatastoreURL && paramName != block.AttributeStoragePolicyName {
+		if paramName != block.AttributeDatastoreURL && paramName != block.AttributeStoragePolicyName && paramName != block.AttributeFsType {
 			msg := fmt.Sprintf("Volume parameter %s is not a valid Vanilla CSI parameter.", paramName)
 			return status.Error(codes.InvalidArgument, msg)
 		}
