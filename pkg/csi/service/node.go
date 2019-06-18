@@ -380,9 +380,9 @@ func (s *service) NodeGetInfo(
 			"Unable to retrieve Node ID, err: %s", err)
 	}
 	var cfg *cnsconfig.Config
-	cfgPath = csictx.Getenv(ctx, csitypes.EnvCloudConfig)
+	cfgPath = csictx.Getenv(ctx, cnsconfig.EnvCloudConfig)
 	if cfgPath == "" {
-		cfgPath = csitypes.DefaultCloudConfigPath
+		cfgPath = cnsconfig.DefaultCloudConfigPath
 	}
 	cfg, err = cnsconfig.GetCnsconfig(cfgPath)
 	if err != nil {

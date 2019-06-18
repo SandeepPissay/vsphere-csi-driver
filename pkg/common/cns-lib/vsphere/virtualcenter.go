@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"sync"
 
+	csictx "github.com/rexray/gocsi/context"
 	"github.com/vmware/govmomi"
 	"github.com/vmware/govmomi/find"
 	"github.com/vmware/govmomi/object"
@@ -35,6 +36,7 @@ import (
 	"github.com/vmware/govmomi/vim25/soap"
 	"github.com/vmware/govmomi/vim25/types"
 	"k8s.io/klog"
+	cnsconfig "sigs.k8s.io/vsphere-csi-driver/pkg/common/config"
 )
 
 const (
@@ -185,18 +187,27 @@ func (vc *VirtualCenter) Connect(ctx context.Context) error {
 		return err
 	}
 	klog.V(2).Infof("Invalid credentials. Cannot connect to server %q. "+
-		"Fetching credentials from secrets.", vc.Config.Host)
-	store, err := GetCredentialManager().GetCredentialStore()
+		"Fetching credentials from secret.", vc.Config.Host)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	cfgPath := csictx.Getenv(ctx, cnsconfig.EnvCloudConfig)
+	if cfgPath == "" {
+		cfgPath = cnsconfig.DefaultCloudConfigPath
+	}
+
+	cfg, err := cnsconfig.GetCnsconfig(cfgPath)
 	if err != nil {
-		klog.Errorf("Cannot get credential store with err: %v", err)
+		klog.Errorf("Failed to read config with err: %v", err)
 		return err
 	}
-	credential, err := store.GetCredential(vc.Config.Host)
+	vcenterconfig, err := GetVirtualCenterConfig(cfg)
 	if err != nil {
-		klog.Errorf("Cannot get credentials from credential store with err: %v", err)
+		klog.Errorf("Failed to get VirtualCenterConfig. err=%v", err)
 		return err
 	}
-	vc.UpdateCredentials(credential.User, credential.Password)
+	vc.UpdateCredentials(vcenterconfig.Username, vcenterconfig.Password)
 	return vc.connect(ctx)
 }
 

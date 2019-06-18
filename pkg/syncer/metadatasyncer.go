@@ -33,7 +33,6 @@ import (
 	cnsconfig "sigs.k8s.io/vsphere-csi-driver/pkg/common/config"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/block"
-	csitypes "sigs.k8s.io/vsphere-csi-driver/pkg/csi/types"
 	k8s "sigs.k8s.io/vsphere-csi-driver/pkg/kubernetes"
 	"strconv"
 	"time"
@@ -85,9 +84,9 @@ func (metadataSyncer *metadataSyncInformer) Init() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	cfgPath := csictx.Getenv(ctx, csitypes.EnvCloudConfig)
+	cfgPath := csictx.Getenv(ctx, cnsconfig.EnvCloudConfig)
 	if cfgPath == "" {
-		cfgPath = csitypes.DefaultCloudConfigPath
+		cfgPath = cnsconfig.DefaultCloudConfigPath
 	}
 	metadataSyncer.cfg, err = cnsconfig.GetCnsconfig(cfgPath)
 	if err != nil {

@@ -17,14 +17,6 @@ limitations under the License.
 package types
 
 const (
-	// DefaultCloudConfigPath is /etc/cloud/vsphere.conf
-	DefaultCloudConfigPath = "/etc/cloud/vsphere.conf"
-)
-
-const (
 	// EnvAPI is the name of the API to use with vSphere
 	EnvControllerType = "X_CSI_CONTROLLER_TYPE"
-
-	// EnvCloudConfig contains the path to the vSphere Cloud Config
-	EnvCloudConfig = "X_CSI_VSPHERE_CLOUD_CONFIG"
 )

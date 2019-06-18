@@ -35,7 +35,7 @@ spec:
         - name: X_CSI_MODE
           value: "controller"
         - name: X_CSI_VSPHERE_CLOUD_CONFIG
-          value: "/etc/cloud/vsphere.conf" # here vsphere.conf is the name of the file used for creating config-map using "--from-file" flag
+          value: "/etc/cloud/vsphere.conf" # here vsphere.conf is the name of the file used for creating secret using "--from-file" flag
         volumeMounts:
         - mountPath: /etc/cloud
           name: vsphere-config-volume
@@ -54,8 +54,8 @@ spec:
           name: socket-dir
       volumes:
       - name: vsphere-config-volume
-        configMap:
-          name: csi-config
+        secret:
+          secretName: credentials-secret
       - name: socket-dir
         hostPath:
           path: /var/lib/csi/sockets/pluginproxy/block.vsphere.csi.vmware.com

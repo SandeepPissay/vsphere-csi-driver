@@ -148,7 +148,7 @@ func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 		if c.manager.CnsConfig.Labels.Zone == "" || c.manager.CnsConfig.Labels.Region == "" {
 			// if zone and region label (vsphere categoy names) not specified in the csi-config configmap, then return
 			// NotFound error.
-			errMsg := fmt.Sprintf("Zone/Region vsphere categoy names not specified in the csi-config configmap")
+			errMsg := fmt.Sprintf("Zone/Region vsphere category names not specified in the csi credentials secret")
 			klog.Errorf(errMsg)
 			return nil, status.Error(codes.NotFound, errMsg)
 		}

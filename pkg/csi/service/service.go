@@ -28,7 +28,6 @@ import (
 	"strings"
 
 	cnsconfig "sigs.k8s.io/vsphere-csi-driver/pkg/common/config"
-	csitypes "sigs.k8s.io/vsphere-csi-driver/pkg/csi/types"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/rexray/gocsi"
@@ -52,7 +51,7 @@ const (
 
 var (
 	controllerType = defaultController
-	cfgPath        = vTypes.DefaultCloudConfigPath
+	cfgPath        = cnsconfig.DefaultCloudConfigPath
 )
 
 // Service is a CSI SP and idempotency.Provider.
@@ -103,9 +102,9 @@ func (s *service) BeforeServe(
 	if !strings.EqualFold(s.mode, "node") {
 		// Controller service is needed
 		var cfg *cnsconfig.Config
-		cfgPath = csictx.Getenv(ctx, csitypes.EnvCloudConfig)
+		cfgPath = csictx.Getenv(ctx, cnsconfig.EnvCloudConfig)
 		if cfgPath == "" {
-			cfgPath = csitypes.DefaultCloudConfigPath
+			cfgPath = cnsconfig.DefaultCloudConfigPath
 		}
 		cfg, err := cnsconfig.GetCnsconfig(cfgPath)
 		if err != nil {
