@@ -115,7 +115,7 @@ func (nodes *Nodes) GetSharedDatastoresInTopology(ctx context.Context, topologyR
 	// getNodesInZoneRegion takes zone and region as parameter and returns list of node VMs which belongs to specified
 	// zone and region.
 	getNodesInZoneRegion := func(zoneValue string, regionValue string) ([]*cnsvsphere.VirtualMachine, error) {
-		klog.V(4).Infof("getNoedsInZoneRegion: called with zoneValue: %s, regionValue: %s", zoneValue, regionValue)
+		klog.V(4).Infof("getNodesInZoneRegion: called with zoneValue: %s, regionValue: %s", zoneValue, regionValue)
 		var nodeVMsInZoneAndRegion []*cnsvsphere.VirtualMachine
 		for _, nodeVM := range nodeVMs {
 			isNodeInZoneRegion, err := nodeVM.IsInZoneRegion(ctx, zoneCategoryName, regionCategoryName, zoneValue, regionValue)

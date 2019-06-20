@@ -109,7 +109,7 @@ func (s *service) BeforeServe(
 		}
 		cfg, err := cnsconfig.GetCnsconfig(cfgPath)
 		if err != nil {
-			klog.Errorf("failed to read cnsconfig. Error: %v", err)
+			klog.Errorf("Failed to read cnsconfig. Error: %v", err)
 			return err
 		}
 		if err := s.cnscs.Init(cfg); err != nil {

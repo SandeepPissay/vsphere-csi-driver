@@ -196,7 +196,7 @@ func GetVirtualMachineByUUID(uuid string, instanceUUID bool) (*VirtualMachine, e
 	}
 }
 
-// GetHostMoref returns HostSystem object of the virtual machine
+// GetHostSystem returns HostSystem object of the virtual machine
 func (vm *VirtualMachine) GetHostSystem(ctx context.Context) (*object.HostSystem, error) {
 	vmHost, err := vm.VirtualMachine.HostSystem(ctx)
 	if err != nil {
@@ -209,7 +209,7 @@ func (vm *VirtualMachine) GetHostSystem(ctx context.Context) (*object.HostSystem
 		klog.Errorf("Failed to get host system properties. err: %+v", err)
 		return nil, err
 	}
-	klog.V(4).Infof("Host owning node vm is %s", oHost.Summary.Config.Name)
+	klog.V(4).Infof("Host owning node vm: %v is %s", vm, oHost.Summary.Config.Name)
 	return vmHost, nil
 }
 
@@ -245,7 +245,7 @@ func (vm *VirtualMachine) GetAncestors(ctx context.Context) ([]mo.ManagedEntity,
 		klog.Errorf("GetAncestors failed for %s with err %v", vmHost.Reference(), err)
 		return nil, err
 	}
-	klog.V(4).Infof("Ancestors of node vm : %+v", objects)
+	klog.V(4).Infof("Ancestors of node vm: %v are : [%+v]", vm, objects)
 	return objects, nil
 }
 
@@ -303,7 +303,7 @@ func (vm *VirtualMachine) GetZoneRegion(ctx context.Context, zoneCategoryName st
 	return zone, region, err
 }
 
-// IsMoRefInZoneRegion checks if virtual machine belongs to specified zone and region
+// IsInZoneRegion checks if virtual machine belongs to specified zone and region
 // This function returns true if virtual machine belongs to specified zone/region, else returns false.
 func (vm *VirtualMachine) IsInZoneRegion(ctx context.Context, zoneCategoryName string, regionCategoryName string, zoneValue string, regionValue string) (bool, error) {
 	klog.V(4).Infof("IsInZoneRegion: called with zoneCategoryName: %s, regionCategoryName: %s, zoneValue: %s, regionValue: %s", zoneCategoryName, regionCategoryName, zoneValue, regionValue)
@@ -328,11 +328,9 @@ func (vm *VirtualMachine) IsInZoneRegion(ctx context.Context, zoneCategoryName s
 		klog.V(4).Infof("MoRef [%v] belongs to region [%s]", vm.Reference(), regionValue)
 		return true, nil
 	}
-	if vmZone != "" && vmRegion != "" {
-		if vmRegion == regionValue && vmZone == zoneValue {
-			klog.V(4).Infof("MoRef [%v] belongs to zone [%s] and region [%s]", vm.Reference(), zoneValue, regionValue)
-			return true, nil
-		}
+	if vmZone != "" && vmRegion != "" && vmRegion == regionValue && vmZone == zoneValue {
+		klog.V(4).Infof("MoRef [%v] belongs to zone [%s] and region [%s]", vm.Reference(), zoneValue, regionValue)
+		return true, nil
 	}
 	return false, nil
 }
