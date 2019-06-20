@@ -166,7 +166,7 @@ func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 			}
 			if !isDataStoreAccessible {
 				errMsg := fmt.Sprintf("DatastoreURL: %s specified in the storage class is not accessible from  zone [%s] "+
-					"and region [%s]", createVolumeSpec.DatastoreURL, volumeAccessibleTopology[LabelZoneFailureDomain], volumeAccessibleTopology[LabelZoneRegion])
+					"and region [%s]", createVolumeSpec.DatastoreURL, volumeAccessibleTopology[csitypes.LabelZoneFailureDomain], volumeAccessibleTopology[csitypes.LabelRegionFailureDomain])
 				klog.Errorf(errMsg)
 				return nil, status.Error(codes.InvalidArgument, errMsg)
 			}

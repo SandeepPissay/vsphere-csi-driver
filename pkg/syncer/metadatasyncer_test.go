@@ -44,41 +44,41 @@ import (
 )
 
 const (
-	testVolumeName      = "test-pv"
-	testPVCName         = "test-pvc"
-	testPodName         = "test-pod"
-	testClusterName     = "test-cluster"
-	gbInMb              = 1024
-	testVolumeType      = "BLOCK"
-	testPVCLabelName    = "test-PVC-label"
-	testPVCLabelValue   = "test-PVC-value"
-	testPVLabelName     = "test-PV-label"
-	testPVLabelValue    = "test-PV-value"
-	testPodLabelName    = "test-Pod-label"
-	testPodLabelValue   = "test-Pod-value"
-	newTestPVLabelValue = "new-test-PV-value"
+	testVolumeName       = "test-pv"
+	testPVCName          = "test-pvc"
+	testPodName          = "test-pod"
+	testClusterName      = "test-cluster"
+	gbInMb               = 1024
+	testVolumeType       = "BLOCK"
+	testPVCLabelName     = "test-PVC-label"
+	testPVCLabelValue    = "test-PVC-value"
+	testPVLabelName      = "test-PV-label"
+	testPVLabelValue     = "test-PV-value"
+	testPodLabelName     = "test-Pod-label"
+	testPodLabelValue    = "test-Pod-value"
+	newTestPVLabelValue  = "new-test-PV-value"
 	newTestPVCLabelValue = "new-test-PVC-value"
-	PVC                 = "PVC"
-	PV                  = "PV"
-	POD                 = "POD"
-	testNamespace       = "default"
+	PVC                  = "PVC"
+	PV                   = "PV"
+	POD                  = "POD"
+	testNamespace        = "default"
 )
 
 var (
-	config                  *cnsconfig.Config
-	ctx                     context.Context
-	cnsVCenterConfig        *cnsvsphere.VirtualCenterConfig
-	err                     error
+	config               *cnsconfig.Config
+	ctx                  context.Context
+	cnsVCenterConfig     *cnsvsphere.VirtualCenterConfig
+	err                  error
 	virtualCenterManager cnsvsphere.VirtualCenterManager
 	virtualCenter        *cnsvsphere.VirtualCenter
-	metadataSyncer          *metadataSyncInformer
-	k8sclient               clientset.Interface
-	dc                      []*cnsvsphere.Datacenter
+	metadataSyncer       *metadataSyncInformer
+	k8sclient            clientset.Interface
+	dc                   []*cnsvsphere.Datacenter
 	volumeManager        volume.Manager
-	sharedDatastore         string
-	datastoreObj            *cnsvsphere.Datastore
-	dsList                  []vimtypes.ManagedObjectReference
-	cancel                  context.CancelFunc
+	sharedDatastore      string
+	datastoreObj         *cnsvsphere.Datastore
+	dsList               []vimtypes.ManagedObjectReference
+	cancel               context.CancelFunc
 )
 
 // configFromSim starts a vcsim instance and returns config for use against the vcsim instance.
@@ -311,8 +311,8 @@ func runTestMetadataSyncInformer(t *testing.T) {
 	newLabel[testPVLabelName] = testPVLabelValue
 
 	// Test pvUpdate workflow for dynamic provisioning of Volume
-	oldPv := getPersistentVolumeSpec(volumeID.Id, v1.PersistentVolumeReclaimRetain, oldLabel, v1.VolumeAvailable,"")
-	newPv := getPersistentVolumeSpec(volumeID.Id, v1.PersistentVolumeReclaimRetain, newLabel, v1.VolumeAvailable,"")
+	oldPv := getPersistentVolumeSpec(volumeID.Id, v1.PersistentVolumeReclaimRetain, oldLabel, v1.VolumeAvailable, "")
+	newPv := getPersistentVolumeSpec(volumeID.Id, v1.PersistentVolumeReclaimRetain, newLabel, v1.VolumeAvailable, "")
 
 	pvUpdated(oldPv, newPv, metadataSyncer)
 
@@ -328,15 +328,15 @@ func runTestMetadataSyncInformer(t *testing.T) {
 	err = volumeManager.DeleteVolume(volumeID.Id, false)
 
 	// Create PV on K8S with VolumeHandle of recently deleted Volume
-	pv := getPersistentVolumeSpec(volumeID.Id, v1.PersistentVolumeReclaimRetain, nil, v1.VolumeAvailable,"")
+	pv := getPersistentVolumeSpec(volumeID.Id, v1.PersistentVolumeReclaimRetain, nil, v1.VolumeAvailable, "")
 	if pv, err = k8sclient.CoreV1().PersistentVolumes().Create(pv); err != nil {
 		t.Fatal(err)
 	}
 
 	// Test pvUpdate workflow on VC for static provisioning of Volume
 	// pvUpdate should create the volume on vc for static provisioning
-	oldPv = getPersistentVolumeSpec(volumeID.Id, v1.PersistentVolumeReclaimRetain, oldLabel, v1.VolumePending,"")
-	newPv = getPersistentVolumeSpec(volumeID.Id, v1.PersistentVolumeReclaimRetain, newLabel, v1.VolumeAvailable,"")
+	oldPv = getPersistentVolumeSpec(volumeID.Id, v1.PersistentVolumeReclaimRetain, oldLabel, v1.VolumePending, "")
+	newPv = getPersistentVolumeSpec(volumeID.Id, v1.PersistentVolumeReclaimRetain, newLabel, v1.VolumeAvailable, "")
 
 	pvUpdated(oldPv, newPv, metadataSyncer)
 
@@ -389,7 +389,7 @@ func runTestMetadataSyncInformer(t *testing.T) {
 	if queryResult, err = metadataSyncer.vcenter.QueryVolume(ctx, queryFilter); err != nil {
 		t.Fatal(err)
 	}
-	if err = verifyUpdateOperation(queryResult, volumeID.Id, POD, newPod.Name,""); err != nil {
+	if err = verifyUpdateOperation(queryResult, volumeID.Id, POD, newPod.Name, ""); err != nil {
 		t.Fatal(err)
 	}
 
@@ -492,7 +492,7 @@ func getPersistentVolumeSpec(volumeHandle string, persistentVolumeReclaimPolicy 
 	var claimRef *v1.ObjectReference
 	if claimRefName != "" {
 		claimRef = &v1.ObjectReference{
-			Name:claimRefName,
+			Name: claimRefName,
 		}
 	}
 	pv = &v1.PersistentVolume{
@@ -613,7 +613,7 @@ func runTestFullSyncWorkflows(t *testing.T) {
 	// Set volume id to be queried
 	queryFilter := cnstypes.CnsQueryFilter{
 		VolumeIds: []cnstypes.CnsVolumeId{
-			cnstypes.CnsVolumeId{
+			{
 				Id: volumeID.Id,
 			},
 		},
@@ -649,7 +649,7 @@ func runTestFullSyncWorkflows(t *testing.T) {
 	// Create PV in K8S with VolumeHandle of recently deleted Volume
 	pvLabel := make(map[string]string)
 	pvLabel[testPVLabelName] = testPVLabelValue
-	pv := getPersistentVolumeSpec(volumeID.Id, v1.PersistentVolumeReclaimRetain, pvLabel, v1.VolumeAvailable,"")
+	pv := getPersistentVolumeSpec(volumeID.Id, v1.PersistentVolumeReclaimRetain, pvLabel, v1.VolumeAvailable, "")
 	if pv, err = k8sclient.CoreV1().PersistentVolumes().Create(pv); err != nil {
 		t.Fatal(err)
 	}
@@ -664,8 +664,8 @@ func runTestFullSyncWorkflows(t *testing.T) {
 	}
 
 	// allocate pvc claimRef for PV spec
-	pv = getPersistentVolumeSpec(volumeID.Id, v1.PersistentVolumeReclaimRetain, pvLabel, v1.VolumeAvailable,pvc.Name)
-	if pv, err= k8sclient.CoreV1().PersistentVolumes().Update(pv); err != nil{
+	pv = getPersistentVolumeSpec(volumeID.Id, v1.PersistentVolumeReclaimRetain, pvLabel, v1.VolumeAvailable, pvc.Name)
+	if pv, err = k8sclient.CoreV1().PersistentVolumes().Update(pv); err != nil {
 		t.Fatal(err)
 	}
 
@@ -682,7 +682,6 @@ func runTestFullSyncWorkflows(t *testing.T) {
 	if err = verifyUpdateOperation(queryResult, volumeID.Id, PVC, pvc.Name, testPVCLabelValue); err != nil {
 		t.Fatal(err)
 	}
-
 
 	// PV, PVC is updated in K8S with new label value, CNS cache still hold the old label value
 	// FullSync should update the metadata in CNS cache with new label value
@@ -754,7 +753,6 @@ func runTestFullSyncWorkflows(t *testing.T) {
 	if err = k8sclient.CoreV1().Pods(testNamespace).Delete(pod.Name, nil); err != nil {
 		t.Fatal(err)
 	}
-
 
 	// Cleanup in CNS to delete the volume
 	if err = volumeManager.DeleteVolume(volumeID.Id, true); err != nil {

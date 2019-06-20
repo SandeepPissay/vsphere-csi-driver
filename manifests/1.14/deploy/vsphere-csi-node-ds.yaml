@@ -20,7 +20,7 @@ spec:
         lifecycle:
           preStop:
             exec:
-              command: ["/bin/sh", "-c", "rm -rf /registration/block.vsphere.csi.vmware.com /var/lib/kubelet/plugins_registry/block.vsphere.csi.vmware.com/csi.sock"]
+              command: ["/bin/sh", "-c", "rm -rf /registration/block.vsphere.csi.vmware.com /var/lib/kubelet/plugins_registry/block.vsphere.csi.vmware.com /var/lib/kubelet/plugins_registry/block.vsphere.csi.vmware.com-reg.sock"]
         args:
         - "--v=5"
         - "--csi-address=$(ADDRESS)"
@@ -47,14 +47,21 @@ spec:
           value: "node"
         - name: X_CSI_SPEC_REQ_VALIDATION
           value: "false"
+        - name: X_CSI_VSPHERE_CLOUD_CONFIG
+          value: "/etc/cloud/vsphere.conf" # here vsphere.conf is the name of the file used for creating config-map using "--from-file" flag
         - name: X_CSI_DEBUG
           value: "true"
+        args:
+          - "--v=4"
         securityContext:
           privileged: true
           capabilities:
             add: ["SYS_ADMIN"]
           allowPrivilegeEscalation: true
         volumeMounts:
+        - name: vsphere-config-volume
+          mountPath: /etc/cloud
+          readOnly: true
         - name: plugin-dir
           mountPath: /csi
         - name: pods-mount-dir
@@ -75,6 +82,9 @@ spec:
         - name: plugin-dir
           mountPath: /csi
       volumes:
+      - name: vsphere-config-volume
+        configMap:
+          name: csi-config
       - name: registration-dir
         hostPath:
           path: /var/lib/kubelet/plugins_registry

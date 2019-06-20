@@ -18,6 +18,7 @@ package service
 
 import (
 	"context"
+	"k8s.io/klog"
 
 	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/block/vanilla"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/block/wcp"
@@ -27,6 +28,7 @@ import (
 	"strings"
 
 	cnsconfig "sigs.k8s.io/vsphere-csi-driver/pkg/common/config"
+	csitypes "sigs.k8s.io/vsphere-csi-driver/pkg/csi/types"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/rexray/gocsi"
@@ -100,31 +102,15 @@ func (s *service) BeforeServe(
 
 	if !strings.EqualFold(s.mode, "node") {
 		// Controller service is needed
-
-		cfgPath = csictx.Getenv(ctx, vTypes.EnvCloudConfig)
-		if cfgPath == "" {
-			cfgPath = vTypes.DefaultCloudConfigPath
-		}
-
 		var cfg *cnsconfig.Config
-		//Read in the vsphere.conf if it exists
-		if _, err := os.Stat(cfgPath); os.IsNotExist(err) {
-			// config from Env var only
-			cfg = &cnsconfig.Config{}
-			if err := cnsconfig.FromEnv(cfg); err != nil {
-				return err
-			}
-		} else {
-			config, err := os.Open(cfgPath)
-			if err != nil {
-				log.Errorf("Failed to open %s. Err: %v", cfgPath, err)
-				return err
-			}
-			cfg, err = cnsconfig.ReadConfig(config)
-			if err != nil {
-				log.Errorf("Failed to parse config. Err: %v", err)
-				return err
-			}
+		cfgPath = csictx.Getenv(ctx, csitypes.EnvCloudConfig)
+		if cfgPath == "" {
+			cfgPath = csitypes.DefaultCloudConfigPath
+		}
+		cfg, err := cnsconfig.GetCnsconfig(cfgPath)
+		if err != nil {
+			klog.Errorf("failed to read cnsconfig. Error: %v", err)
+			return err
 		}
 		if err := s.cnscs.Init(cfg); err != nil {
 			log.WithError(err).Error("Failed to init controller")

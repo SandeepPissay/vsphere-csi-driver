@@ -19,8 +19,10 @@ package config
 import (
 	"errors"
 	"fmt"
+
 	"io"
 	"os"
+
 	"strconv"
 	"strings"
 
@@ -257,6 +259,33 @@ func ReadConfig(config io.Reader) (*Config, error) {
 	// Env Vars should override config file entries if present
 	if err := FromEnv(cfg); err != nil {
 		return nil, err
+	}
+	return cfg, nil
+}
+
+// GetCnsconfig returns Config from specified config file path
+func GetCnsconfig(cfgPath string) (*Config, error) {
+	klog.V(4).Infof("GetCnsconfig called with cfgPath: %s", cfgPath)
+	var cfg *Config
+	//Read in the vsphere.conf if it exists
+	if _, err := os.Stat(cfgPath); os.IsNotExist(err) {
+		// config from Env var only
+		cfg = &Config{}
+		if err := FromEnv(cfg); err != nil {
+			klog.Errorf("Error reading vsphere.conf\n")
+			return cfg, err
+		}
+	} else {
+		config, err := os.Open(cfgPath)
+		if err != nil {
+			klog.Errorf("Failed to open %s. Err: %v", cfgPath, err)
+			return cfg, err
+		}
+		cfg, err = ReadConfig(config)
+		if err != nil {
+			klog.Errorf("Failed to parse config. Err: %v", err)
+			return cfg, err
+		}
 	}
 	return cfg, nil
 }

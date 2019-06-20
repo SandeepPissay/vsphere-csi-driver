@@ -18,10 +18,8 @@ package syncer
 
 import (
 	"context"
-	"time"
 	"errors"
 	"fmt"
-	"strconv"
 	"github.com/davecgh/go-spew/spew"
 	csictx "github.com/rexray/gocsi/context"
 	"k8s.io/api/core/v1"
@@ -35,8 +33,10 @@ import (
 	cnsconfig "sigs.k8s.io/vsphere-csi-driver/pkg/common/config"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/block"
-	vTypes "sigs.k8s.io/vsphere-csi-driver/pkg/csi/types"
+	csitypes "sigs.k8s.io/vsphere-csi-driver/pkg/csi/types"
 	k8s "sigs.k8s.io/vsphere-csi-driver/pkg/kubernetes"
+	"strconv"
+	"time"
 )
 
 type metadataSyncInformer struct {
@@ -48,6 +48,7 @@ type metadataSyncInformer struct {
 	pvLister             corelisters.PersistentVolumeLister
 	pvcLister            corelisters.PersistentVolumeClaimLister
 }
+
 const defaultFullSyncIntervalInMin = 30
 
 // new Returns uninitialized metadataSyncInformer
@@ -61,11 +62,11 @@ func NewInformer() *metadataSyncInformer {
 // otherwise, use the default value 30 minutes
 func getFullSyncIntervalInMin() int {
 	fullSyncIntervalInMin := defaultFullSyncIntervalInMin
-	if v := os.Getenv("X_CSI_FULL_SYNC_INTERVAL_MINUTES"); v != ""  {
+	if v := os.Getenv("X_CSI_FULL_SYNC_INTERVAL_MINUTES"); v != "" {
 		if value, err := strconv.Atoi(v); err == nil {
-			if (value <= 0) {
+			if value <= 0 {
 				klog.Warningf("CSPFullSync: fullSync interval set in env variable X_CSI_FULL_SYNC_INTERVAL_MINUTES %s is equal or less than 0, will use the default interval", v)
-			} else if (value > defaultFullSyncIntervalInMin) {
+			} else if value > defaultFullSyncIntervalInMin {
 				klog.Warningf("CSPFullSync: fullSync interval set in env variable X_CSI_FULL_SYNC_INTERVAL_MINUTES %s is larger than max vlaue can be set, will use the default interval", v)
 			} else {
 				fullSyncIntervalInMin = value
@@ -77,12 +78,18 @@ func getFullSyncIntervalInMin() int {
 	}
 	return fullSyncIntervalInMin
 }
+
 // Initializes the Metadata Sync Informer
 func (metadataSyncer *metadataSyncInformer) Init() error {
 	var err error
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	// Create and read config from vsphere.conf
-	metadataSyncer.cfg, err = createAndReadConfig()
+	cfgPath := csictx.Getenv(ctx, csitypes.EnvCloudConfig)
+	if cfgPath == "" {
+		cfgPath = csitypes.DefaultCloudConfigPath
+	}
+	metadataSyncer.cfg, err = cnsconfig.GetCnsconfig(cfgPath)
 	if err != nil {
 		klog.Errorf("Failed to parse config. Err: %v", err)
 		return err
@@ -105,8 +112,6 @@ func (metadataSyncer *metadataSyncInformer) Init() error {
 	}
 
 	// Connect to VC
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	err = metadataSyncer.vcenter.Connect(ctx)
 	if err != nil {
 		klog.Errorf("Failed to connect to VirtualCenter host: %q. err=%v", metadataSyncer.vcconfig.Host, err)
@@ -119,10 +124,10 @@ func (metadataSyncer *metadataSyncInformer) Init() error {
 		return err
 	}
 
-	ticker := time.NewTicker(time.Duration(getFullSyncIntervalInMin())*time.Minute)
+	ticker := time.NewTicker(time.Duration(getFullSyncIntervalInMin()) * time.Minute)
 	// Trigger full sync
 	go func() {
-		for _ = range ticker.C {
+		for range ticker.C {
 			klog.V(2).Infof("fullSync is triggered")
 			triggerFullSync(k8sclient, metadataSyncer)
 		}
@@ -163,41 +168,6 @@ func (metadataSyncer *metadataSyncInformer) Init() error {
 	<-(stopCh)
 	<-(stopFullSync)
 	return nil
-}
-
-func createAndReadConfig() (*cnsconfig.Config, error) {
-	var cfg *cnsconfig.Config
-	var cfgPath = vTypes.DefaultCloudConfigPath
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	cfgPath = csictx.Getenv(ctx, vTypes.EnvCloudConfig)
-	if cfgPath == "" {
-		cfgPath = vTypes.DefaultCloudConfigPath
-	}
-
-	//Read in the vsphere.conf if it exists
-	if _, err := os.Stat(cfgPath); os.IsNotExist(err) {
-		// config from Env var only
-		cfg = &cnsconfig.Config{}
-		if err := cnsconfig.FromEnv(cfg); err != nil {
-			klog.Errorf("error reading vsphere.conf\n")
-			return cfg, err
-		}
-	} else {
-		config, err := os.Open(cfgPath)
-		if err != nil {
-			klog.Errorf("Failed to open %s. Err: %v", cfgPath, err)
-			return cfg, err
-		}
-		cfg, err = cnsconfig.ReadConfig(config)
-		if err != nil {
-			klog.Errorf("Failed to parse config. Err: %v", err)
-			return cfg, err
-		}
-	}
-	return cfg, nil
 }
 
 // pvcUpdated updates persistent volume claim metadata on VC when pvc labels on K8S cluster have been updated

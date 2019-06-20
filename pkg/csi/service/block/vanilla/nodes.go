@@ -18,8 +18,7 @@ package vanilla
 
 import (
 	"fmt"
-	csi "github.com/container-storage-interface/spec/lib/go/csi"
-	"github.com/vmware/govmomi/vim25/mo"
+	"github.com/container-storage-interface/spec/lib/go/csi"
 	"golang.org/x/net/context"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -27,6 +26,7 @@ import (
 	cnsnode "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/node"
 	cnsvsphere "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vsphere"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/block"
+	csitypes "sigs.k8s.io/vsphere-csi-driver/pkg/csi/types"
 	k8s "sigs.k8s.io/vsphere-csi-driver/pkg/kubernetes"
 )
 
@@ -99,8 +99,8 @@ func (nodes *Nodes) GetNodeByName(nodeName string) (*cnsvsphere.VirtualMachine, 
 
 // GetSharedDatastoresInTopology returns shared accessible datastores for specified topologyRequirement and
 // volumeAccessibleTopology containing zone and region where volume needs be provisioned
-func (nodes *Nodes) GetSharedDatastoresInTopology(ctx context.Context, topologyRequirement *csi.TopologyRequirement, zoneKey string, regionKey string) ([]*cnsvsphere.DatastoreInfo, map[string]string, error) {
-	klog.V(4).Infof("GetSharedDatastoresInTopology: called with topologyRequirement: %+v, zoneKey: %s, regionKey: %s", topologyRequirement, zoneKey, regionKey)
+func (nodes *Nodes) GetSharedDatastoresInTopology(ctx context.Context, topologyRequirement *csi.TopologyRequirement, zoneCategoryName string, regionCategoryName string) ([]*cnsvsphere.DatastoreInfo, map[string]string, error) {
+	klog.V(4).Infof("GetSharedDatastoresInTopology: called with topologyRequirement: %+v, zoneCategoryName: %s, regionCategoryName: %s", topologyRequirement, zoneCategoryName, regionCategoryName)
 	nodeVMs, err := nodes.cnsNodeManager.GetAllNodes()
 	if err != nil {
 		klog.Errorf("Failed to get Nodes from nodeManager with err %+v", err)
@@ -115,22 +115,10 @@ func (nodes *Nodes) GetSharedDatastoresInTopology(ctx context.Context, topologyR
 	// getNodesInZoneRegion takes zone and region as parameter and returns list of node VMs which belongs to specified
 	// zone and region.
 	getNodesInZoneRegion := func(zoneValue string, regionValue string) ([]*cnsvsphere.VirtualMachine, error) {
-		klog.V(4).Infof("getNoedsInZoneRegion: called with zonevalue: %s, regionvalue: %s", zoneValue, regionValue)
+		klog.V(4).Infof("getNoedsInZoneRegion: called with zoneValue: %s, regionValue: %s", zoneValue, regionValue)
 		var nodeVMsInZoneAndRegion []*cnsvsphere.VirtualMachine
 		for _, nodeVM := range nodeVMs {
-			vmHost, err := nodeVM.VirtualMachine.HostSystem(ctx)
-			if err != nil {
-				klog.Errorf("Failed to get host system for VM: %q. err: %+v", nodeVM.InventoryPath, err)
-				return nil, err
-			}
-			var oHost mo.HostSystem
-			err = vmHost.Properties(ctx, vmHost.Reference(), []string{"summary"}, &oHost)
-			if err != nil {
-				klog.Errorf("Failed to get host system properties. err: %+v", err)
-				return nil, err
-			}
-			klog.V(4).Infof("Host owning VM is %s", oHost.Summary.Config.Name)
-			isNodeInZoneRegion, err := nodeVM.Datacenter.IsMoRefInZoneRegion(ctx, vmHost.Reference(), zoneKey, regionKey, zoneValue, regionValue)
+			isNodeInZoneRegion, err := nodeVM.IsInZoneRegion(ctx, zoneCategoryName, regionCategoryName, zoneValue, regionValue)
 			if err != nil {
 				klog.Errorf("Failed to get zone/region for node VM: %q. err: %+v", nodeVM.InventoryPath, err)
 				return nil, err
@@ -150,8 +138,8 @@ func (nodes *Nodes) GetSharedDatastoresInTopology(ctx context.Context, topologyR
 		var volumeAccessibleTopology = make(map[string]string)
 		for _, topology := range topologyArr {
 			segments := topology.GetSegments()
-			zone := segments[LabelZoneFailureDomain]
-			region := segments[LabelZoneRegion]
+			zone := segments[csitypes.LabelZoneFailureDomain]
+			region := segments[csitypes.LabelRegionFailureDomain]
 			klog.V(4).Info(fmt.Sprintf("getting shared datastores for zone [%s] and region [%s]", zone, region))
 			nodeVMsInZoneAndRegion, err = getNodesInZoneRegion(zone, region)
 			if err != nil {
@@ -165,10 +153,10 @@ func (nodes *Nodes) GetSharedDatastoresInTopology(ctx context.Context, topologyR
 			}
 			if len(sharedDatastores) > 0 {
 				if zone != "" {
-					volumeAccessibleTopology[LabelZoneFailureDomain] = zone
+					volumeAccessibleTopology[csitypes.LabelZoneFailureDomain] = zone
 				}
 				if region != "" {
-					volumeAccessibleTopology[LabelZoneRegion] = region
+					volumeAccessibleTopology[csitypes.LabelRegionFailureDomain] = region
 				}
 				break
 			}

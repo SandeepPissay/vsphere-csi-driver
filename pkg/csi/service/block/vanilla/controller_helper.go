@@ -26,15 +26,6 @@ import (
 	"strings"
 )
 
-const (
-	// For more information please see
-	// https://kubernetes.io/docs/reference/kubernetes-api/labels-annotations-taints/#failure-domain-beta-kubernetes-io-region.
-	// LabelZoneRegion is label placed on nodes and PV containing region detail
-	LabelZoneRegion = "failure-domain.beta.kubernetes.io/region"
-	// LabelZoneFailureDomain is label placed on nodes and PV containing zone detail
-	LabelZoneFailureDomain = "failure-domain.beta.kubernetes.io/zone"
-)
-
 // validateVanillaCreateVolumeRequest is the helper function to validate
 // CreateVolumeRequest for Vanilla CSI driver.
 // Function returns error if validation fails otherwise returns nil.

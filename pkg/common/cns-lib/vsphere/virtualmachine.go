@@ -18,6 +18,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/vmware/govmomi/vapi/rest"
+	"github.com/vmware/govmomi/vapi/tags"
+	"github.com/vmware/govmomi/vim25/mo"
+	"net/url"
 	"sync"
 
 	"github.com/vmware/govmomi/object"
@@ -190,4 +194,145 @@ func GetVirtualMachineByUUID(uuid string, instanceUUID bool) (*VirtualMachine, e
 		klog.Errorf("Returning VM not found err for UUID %s", uuid)
 		return nil, ErrVMNotFound
 	}
+}
+
+// GetHostMoref returns HostSystem object of the virtual machine
+func (vm *VirtualMachine) GetHostSystem(ctx context.Context) (*object.HostSystem, error) {
+	vmHost, err := vm.VirtualMachine.HostSystem(ctx)
+	if err != nil {
+		klog.Errorf("Failed to get host system for vm: %v. err: %+v", vm, err)
+		return nil, err
+	}
+	var oHost mo.HostSystem
+	err = vmHost.Properties(ctx, vmHost.Reference(), []string{"summary"}, &oHost)
+	if err != nil {
+		klog.Errorf("Failed to get host system properties. err: %+v", err)
+		return nil, err
+	}
+	klog.V(4).Infof("Host owning node vm is %s", oHost.Summary.Config.Name)
+	return vmHost, nil
+}
+
+// GetTagManager returns tagManager using vm client
+func (vm *VirtualMachine) GetTagManager(ctx context.Context) (*tags.Manager, error) {
+	tagManager := tags.NewManager(rest.NewClient(vm.Client()))
+	virtualCenter, err := GetVirtualCenterManager().GetVirtualCenter(vm.VirtualCenterHost)
+	if err != nil {
+		klog.Errorf("Failed to get virtualCenter. Error: %v", err)
+		return nil, err
+	}
+	user := url.UserPassword(virtualCenter.Config.Username, virtualCenter.Config.Password)
+	if err := tagManager.Login(ctx, user); err != nil {
+		klog.Errorf("Failed to login for tagManager. err %v", err)
+		return nil, err
+	}
+	return tagManager, nil
+}
+
+// GetAncestors returns ancestors of VM
+// example result: "Folder", "Datacenter", "Cluster"
+func (vm *VirtualMachine) GetAncestors(ctx context.Context) ([]mo.ManagedEntity, error) {
+	vmHost, err := vm.GetHostSystem(ctx)
+	if err != nil {
+		klog.Errorf("Failed to get host system for vm: %v. err: %+v", vm, err)
+		return nil, err
+	}
+	var objects []mo.ManagedEntity
+	pc := vm.Datacenter.Client().ServiceContent.PropertyCollector
+	// example result: ["Folder", "Datacenter", "Cluster"]
+	objects, err = mo.Ancestors(ctx, vm.Datacenter.Client(), pc, vmHost.Reference())
+	if err != nil {
+		klog.Errorf("GetAncestors failed for %s with err %v", vmHost.Reference(), err)
+		return nil, err
+	}
+	klog.V(4).Infof("Ancestors of node vm : %+v", objects)
+	return objects, nil
+}
+
+// GetZoneRegion returns zone and region of the node vm
+func (vm *VirtualMachine) GetZoneRegion(ctx context.Context, zoneCategoryName string, regionCategoryName string) (zone string, region string, err error) {
+	klog.V(4).Infof("GetZoneRegion: called with zoneCategoryName: %s, regionCategoryName: %s", zoneCategoryName, regionCategoryName)
+	tagManager, err := vm.GetTagManager(ctx)
+	if err != nil {
+		klog.Errorf("Failed to get tagManager. Error: %v", err)
+		return "", "", err
+	}
+	defer tagManager.Logout(ctx)
+	var objects []mo.ManagedEntity
+	objects, err = vm.GetAncestors(ctx)
+	if err != nil {
+		klog.Errorf("GetAncestors failed for %s with err %v", vm.Reference(), err)
+		return "", "", err
+	}
+	// search the hierarchy, example order: ["Host", "Cluster", "Datacenter", "Folder"]
+	for i := range objects {
+		obj := objects[len(objects)-1-i]
+		klog.V(4).Infof("Name: %s, Type: %s", obj.Self.Value, obj.Self.Type)
+		tags, err := tagManager.ListAttachedTags(ctx, obj)
+		if err != nil {
+			klog.Errorf("Cannot list attached tags. Err: %v", err)
+			return "", "", err
+		}
+		if len(tags) > 0 {
+			klog.V(4).Infof("Object [%v] has attached Tags [%v]", obj, tags)
+		}
+		for _, value := range tags {
+			tag, err := tagManager.GetTag(ctx, value)
+			if err != nil {
+				klog.Errorf("Failed to get tag:%s, error:%v", value, err)
+				return "", "", err
+			}
+			klog.V(4).Infof("Found tag: %s for object %v", tag.Name, obj)
+			category, err := tagManager.GetCategory(ctx, tag.CategoryID)
+			if err != nil {
+				klog.Errorf("Failed to get category for tag: %s, error: %v", tag.Name, tag)
+				return "", "", err
+			}
+			klog.V(4).Infof("Found category: %s for object %v with tag: %s", category.Name, obj, tag.Name)
+
+			if category.Name == zoneCategoryName && zone == "" {
+				zone = tag.Name
+			} else if category.Name == regionCategoryName && region == "" {
+				region = tag.Name
+			}
+			if zone != "" && region != "" {
+				return zone, region, nil
+			}
+		}
+	}
+	return zone, region, err
+}
+
+// IsMoRefInZoneRegion checks if virtual machine belongs to specified zone and region
+// This function returns true if virtual machine belongs to specified zone/region, else returns false.
+func (vm *VirtualMachine) IsInZoneRegion(ctx context.Context, zoneCategoryName string, regionCategoryName string, zoneValue string, regionValue string) (bool, error) {
+	klog.V(4).Infof("IsInZoneRegion: called with zoneCategoryName: %s, regionCategoryName: %s, zoneValue: %s, regionValue: %s", zoneCategoryName, regionCategoryName, zoneValue, regionValue)
+	tagManager, err := vm.GetTagManager(ctx)
+	if err != nil {
+		klog.Errorf("Failed to get tagManager. Error: %v", err)
+		return false, err
+	}
+	defer tagManager.Logout(ctx)
+	vmZone, vmRegion, err := vm.GetZoneRegion(ctx, zoneCategoryName, regionCategoryName)
+	if err != nil {
+		klog.Errorf("failed to get accessibleTopology for vm: %v, err: %v", vm.Reference(), err)
+		return false, err
+	}
+	if regionValue == "" && zoneValue != "" && vmZone == zoneValue {
+		// region is not specified, if zone matches with look up zone value, return true
+		klog.V(4).Infof("MoRef [%v] belongs to zone [%s]", vm.Reference(), zoneValue)
+		return true, nil
+	}
+	if zoneValue == "" && regionValue != "" && vmRegion == regionValue {
+		// zone is not specified, if region matches with look up region value, return true
+		klog.V(4).Infof("MoRef [%v] belongs to region [%s]", vm.Reference(), regionValue)
+		return true, nil
+	}
+	if vmZone != "" && vmRegion != "" {
+		if vmRegion == regionValue && vmZone == zoneValue {
+			klog.V(4).Infof("MoRef [%v] belongs to zone [%s] and region [%s]", vm.Reference(), zoneValue, regionValue)
+			return true, nil
+		}
+	}
+	return false, nil
 }

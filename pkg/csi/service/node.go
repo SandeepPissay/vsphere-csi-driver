@@ -18,18 +18,22 @@ package service
 
 import (
 	"fmt"
-	"io/ioutil"
-	"os"
-	"path"
-	"path/filepath"
-	"strings"
-
 	"github.com/akutz/gofsutil"
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	csictx "github.com/rexray/gocsi/context"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"io/ioutil"
+	"k8s.io/klog"
+	"os"
+	"path"
+	"path/filepath"
+	cnsvsphere "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vsphere"
+	cnsconfig "sigs.k8s.io/vsphere-csi-driver/pkg/common/config"
+	csitypes "sigs.k8s.io/vsphere-csi-driver/pkg/csi/types"
+	"strings"
 )
 
 const (
@@ -361,15 +365,72 @@ func (s *service) NodeGetInfo(
 	ctx context.Context,
 	req *csi.NodeGetInfoRequest) (
 	*csi.NodeGetInfoResponse, error) {
-
-	id, err := os.Hostname()
+	nodeid, err := os.Hostname()
 	if err != nil {
 		return nil, status.Errorf(codes.Internal,
 			"Unable to retrieve Node ID, err: %s", err)
 	}
+	var cfg *cnsconfig.Config
+	cfgPath = csictx.Getenv(ctx, csitypes.EnvCloudConfig)
+	if cfgPath == "" {
+		cfgPath = csitypes.DefaultCloudConfigPath
+	}
+	cfg, err = cnsconfig.GetCnsconfig(cfgPath)
+	if err != nil {
+		klog.Errorf("Failed to read cnsconfig. Error: %v", err)
+	}
+	var accessibleTopology map[string]string
+	topology := &csi.Topology{}
+
+	if cfg.Labels.Zone != "" && cfg.Labels.Region != "" {
+		vcenterconfig, err := cnsvsphere.GetVirtualCenterConfig(cfg)
+		if err != nil {
+			klog.Errorf("Failed to get VirtualCenterConfig from cns config. err=%v", err)
+			return nil, status.Errorf(codes.Internal, err.Error())
+		}
+		vcManager := cnsvsphere.GetVirtualCenterManager()
+		vcenter, err := vcManager.RegisterVirtualCenter(vcenterconfig)
+		if err != nil {
+			klog.Errorf("Failed to register vcenter with virtualCenterManager.")
+			return nil, status.Errorf(codes.Internal, err.Error())
+		}
+		defer vcManager.UnregisterAllVirtualCenters()
+		//Connect to vCenter
+		err = vcenter.Connect(ctx)
+		if err != nil {
+			klog.Errorf("Failed to connect to vcenter host: %s. err=%v", vcenter.Config.Host, err)
+		}
+		// Get VM UUID
+		uuid, err := getSystemUUID()
+		if err != nil {
+			klog.Errorf("Failed to get system uuid for node VM")
+			return nil, status.Errorf(codes.Internal, err.Error())
+		}
+		klog.V(4).Infof("Successfully retrieved uuid:%s  from the node: %s", uuid, nodeid)
+		nodeVM, err := cnsvsphere.GetVirtualMachineByUUID(uuid, false)
+		if err != nil || nodeVM == nil {
+			klog.Errorf("Failed to get nodeVM for uuid: %s. err: %+v", uuid, err)
+		}
+
+		zone, region, err := nodeVM.GetZoneRegion(ctx, cfg.Labels.Zone, cfg.Labels.Region)
+		if err != nil {
+			klog.Errorf("Failed to get accessibleTopology for vm: %v, err: %v", nodeVM.Reference(), err)
+			return nil, status.Errorf(codes.Internal, err.Error())
+		}
+		klog.V(4).Infof("zone: [%s], region: [%s], Node VM: [%s]", zone, region, nodeid)
+		if zone != "" && region != "" {
+			accessibleTopology = make(map[string]string)
+			accessibleTopology[csitypes.LabelRegionFailureDomain] = region
+			accessibleTopology[csitypes.LabelZoneFailureDomain] = zone
+		}
+	}
+	if len(accessibleTopology) > 0 {
+		topology.Segments = accessibleTopology
+	}
 
 	return &csi.NodeGetInfoResponse{
-		NodeId: id,
+		NodeId:             nodeid,
+		AccessibleTopology: topology,
 	}, nil
 }
 
@@ -723,10 +784,10 @@ func getSystemUUID() (string, error) {
 	if err != nil {
 		return "", err
 	}
-
+	klog.V(4).Infof("uuid in bytes: %v", idb)
 	id := strings.TrimSpace(string(idb))
-
-	return convertUUID(id), nil
+	klog.V(4).Infof("uuid in string: %s", id)
+	return strings.ToLower(id), nil
 }
 
 func getDiskID(volID string, pubCtx map[string]string) (string, error) {
@@ -750,17 +811,6 @@ func getDiskID(volID string, pubCtx map[string]string) (string, error) {
 	}
 
 	return diskID, nil
-}
-
-func convertUUID(id string) string {
-	// convert UUID to vSphere format
-	uuid := fmt.Sprintf("%s%s%s%s-%s%s-%s%s-%s-%s",
-		id[6:8], id[4:6], id[2:4], id[0:2],
-		id[11:13], id[9:11],
-		id[16:18], id[14:16],
-		id[19:23],
-		id[24:36])
-	return strings.ToLower(uuid)
 }
 
 func getDevFromMount(target string) (*Device, error) {

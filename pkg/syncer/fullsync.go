@@ -30,8 +30,8 @@ import (
 )
 
 const (
-	createOperation = "Create"
-	updateOperation = "Update"
+	createOperation      = "Create"
+	updateOperation      = "Update"
 	vSphereCSIDriverName = "block.vsphere.csi.vmware.com"
 )
 
@@ -54,7 +54,7 @@ func triggerFullSync(k8sclient clientset.Interface, metadataSyncer *metadataSync
 	// pvToPVCMap maps pv name to corresponding PVC
 	// pvcToPodMap maps pvc to the mounted Pod
 	pvToPVCMap, pvcToPodMap, err := buildPVCMapPodMap(k8sclient, k8sPVs)
-	if (err != nil) {
+	if err != nil {
 		// Failed to build map, cannot do fullsync
 		return
 	}
@@ -182,7 +182,7 @@ func buildVolumeMap(pvList []*v1.PersistentVolume, cnsVolumeList []cnstypes.CnsV
 			// PV exist in both K8S and CNS cache, check metadata has been changed or not
 			queryFilter := cnstypes.CnsQueryFilter{
 				VolumeIds: []cnstypes.CnsVolumeId{
-					cnstypes.CnsVolumeId{
+					{
 						Id: pv.Spec.CSI.VolumeHandle,
 					},
 				},
@@ -190,7 +190,7 @@ func buildVolumeMap(pvList []*v1.PersistentVolume, cnsVolumeList []cnstypes.CnsV
 
 			queryResult, err := volumes.GetManager(metadataSyncer.vcenter).QueryVolume(queryFilter)
 			if err == nil && queryResult != nil && len(queryResult.Volumes) > 0 {
-				if (&queryResult.Volumes[0].Metadata != nil) {
+				if &queryResult.Volumes[0].Metadata != nil {
 					cnsMetadata := queryResult.Volumes[0].Metadata.EntityMetadata
 					metadataList := buildMetadataList(pv, pvToPVCMap, pvcToPodMap)
 					if !cnsvsphere.CompareK8sandCNSVolumeMetadata(metadataList, cnsMetadata) {
@@ -223,7 +223,7 @@ func identifyVolumesToBeCreatedUpdated(pvList []*v1.PersistentVolume, k8sPVMap m
 		}
 	}
 
-	return pvToBeCreated,pvToBeUpdated
+	return pvToBeCreated, pvToBeUpdated
 }
 
 // identifyVolumesToBeDeleted return list of volumeId need to be deleted
@@ -305,7 +305,7 @@ func buildPVCMapPodMap(k8sclient clientset.Interface, pvList []*v1.PersistentVol
 			pods, err := k8sclient.CoreV1().Pods(pvc.Namespace).List(metav1.ListOptions{})
 			if err != nil {
 				klog.Warningf("CSPFullSync: Failed to get pods for namespace %v", pvc.Namespace)
-					return pvToPVCMap, pvcToPodMap, err
+				return pvToPVCMap, pvcToPodMap, err
 			}
 			for _, pod := range pods.Items {
 				if pod.Spec.Volumes != nil {
@@ -316,13 +316,12 @@ func buildPVCMapPodMap(k8sclient clientset.Interface, pvList []*v1.PersistentVol
 							pvcToPodMap[key] = &pod
 							klog.V(4).Infof("CSPFullSync: pvc %v is mounted by pod %v", key, pod.Name)
 							break
-								}
-							}
 						}
+					}
+				}
 			}
 
 		}
 	}
 	return pvToPVCMap, pvcToPodMap, nil
 }
-

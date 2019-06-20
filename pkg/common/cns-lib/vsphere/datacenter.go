@@ -17,9 +17,6 @@ package vsphere
 import (
 	"context"
 	"fmt"
-	"github.com/vmware/govmomi/vapi/rest"
-	"github.com/vmware/govmomi/vapi/tags"
-	"net/url"
 	"strings"
 
 	"github.com/vmware/govmomi/find"
@@ -224,88 +221,4 @@ func (dc *Datacenter) GetAllDatastores(ctx context.Context) (map[string]*Datasto
 			dsMo.Info.GetDatastoreInfo()}
 	}
 	return dsURLInfoMap, nil
-}
-
-// IsMoRefInZoneRegion checks specified moRef belongs to specified zone and region
-// This function returns true if moRef belongs to zone/region, else returns false.
-func (dc *Datacenter) IsMoRefInZoneRegion(ctx context.Context, moRef types.ManagedObjectReference, zoneKey string, regionKey string, zoneValue string, regionValue string) (bool, error) {
-	klog.V(4).Infof("IsMoRefInZoneRegion: called with moRef: %v, zonekey: %s, regionkey: %s, zonevalue: %s, regionvalue: %s", moRef, zoneKey, regionKey, zoneValue, regionValue)
-	var err error
-	result := make(map[string]string, 0)
-	tagManager := tags.NewManager(rest.NewClient(dc.Client()))
-	virtualCenter, err := GetVirtualCenterManager().GetVirtualCenter(dc.VirtualCenterHost)
-	if err != nil {
-		klog.Errorf("Failed to get virtualCenter. Error: %v", err)
-		return false, err
-	}
-	user := url.UserPassword(virtualCenter.Config.Username, virtualCenter.Config.Password)
-	if err := tagManager.Login(ctx, user); err != nil {
-		klog.Errorf("Failed to login for tagManager. err %v", moRef, err)
-		return false, err
-	}
-	defer tagManager.Logout(ctx)
-
-	var objects []mo.ManagedEntity
-	pc := dc.Client().ServiceContent.PropertyCollector
-	// example result: ["Folder", "Datacenter", "Cluster", "Host"]
-	objects, err = mo.Ancestors(ctx, dc.Client(), pc, moRef)
-	if err != nil {
-		klog.Errorf("Ancestors failed for %s with err %v", moRef, err)
-		return false, err
-	}
-	// search the hierarchy, example order: ["Host", "Cluster", "Datacenter", "Folder"]
-	for i := range objects {
-		obj := objects[len(objects)-1-i]
-		klog.V(4).Infof("Name: %s, Type: %s", obj.Self.Value, obj.Self.Type)
-		tags, err := tagManager.ListAttachedTags(ctx, obj)
-		if err != nil {
-			klog.Errorf("Cannot list attached tags. Err: %v", err)
-			return false, err
-		}
-		klog.V(4).Infof("Object [%v] has attached Tags [%v]", tags, obj)
-		for _, value := range tags {
-			tag, err := tagManager.GetTag(ctx, value)
-			if err != nil {
-				klog.Errorf("Failed to get tag:%s, error:%v", value, err)
-				return false, err
-			}
-			klog.V(4).Infof("Found tag: %s for object %v", tag.Name, obj)
-			category, err := tagManager.GetCategory(ctx, tag.CategoryID)
-			if err != nil {
-				klog.Errorf("Failed to get category for tag: %s, error: %v", tag.Name, tag)
-				return false, err
-			}
-			klog.V(4).Infof("Found category: %s for object %v with tag: %s", category.Name, obj, tag.Name)
-			found := func() {
-				klog.V(4).Infof("Found requested category: %s and tag: %s attached to %s", category.Name, tag.Name, moRef)
-			}
-
-			switch {
-			case category.Name == zoneKey:
-				result["zone"] = tag.Name
-				found()
-			case category.Name == regionKey:
-				result["region"] = tag.Name
-				found()
-			}
-
-			if regionValue == "" && zoneValue != "" && result["zone"] == zoneValue {
-				// region is not specified, if zone matches with look up zone value, return true
-				klog.V(4).Infof("MoRef [%v] belongs to zone [%s]", moRef, zoneValue)
-				return true, nil
-			}
-			if zoneValue == "" && regionValue != "" && result["region"] == regionValue {
-				// zone is not specified, if region matches with look up region value, return true
-				klog.V(4).Infof("MoRef [%v] belongs to region [%s]", moRef, regionValue)
-				return true, nil
-			}
-			if result["zone"] != "" && result["region"] != "" {
-				if result["region"] == regionValue && result["zone"] == zoneValue {
-					klog.V(4).Infof("MoRef [%v] belongs to zone [%s] and region [%s]", moRef, zoneValue, regionValue)
-					return true, nil
-				}
-			}
-		}
-	}
-	return false, nil
 }
