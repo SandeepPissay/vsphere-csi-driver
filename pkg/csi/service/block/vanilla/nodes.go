@@ -120,7 +120,7 @@ func (nodes *Nodes) GetSharedDatastoresInTopology(ctx context.Context, topologyR
 		for _, nodeVM := range nodeVMs {
 			isNodeInZoneRegion, err := nodeVM.IsInZoneRegion(ctx, zoneCategoryName, regionCategoryName, zoneValue, regionValue)
 			if err != nil {
-				klog.Errorf("Failed to get zone/region for node VM: %q. err: %+v", nodeVM.InventoryPath, err)
+				klog.Errorf("Error checking if node VM: %v belongs to zone [%s] and region [%s]. err: %+v", nodeVM, zoneValue, regionValue, err)
 				return nil, err
 			}
 			if isNodeInZoneRegion {

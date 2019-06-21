@@ -365,7 +365,7 @@ func (s *service) NodeGetInfo(
 	ctx context.Context,
 	req *csi.NodeGetInfoRequest) (
 	*csi.NodeGetInfoResponse, error) {
-	nodeid, err := os.Hostname()
+	nodeId, err := os.Hostname()
 	if err != nil {
 		return nil, status.Errorf(codes.Internal,
 			"Unable to retrieve Node ID, err: %s", err)
@@ -406,7 +406,7 @@ func (s *service) NodeGetInfo(
 			klog.Errorf("Failed to get system uuid for node VM")
 			return nil, status.Errorf(codes.Internal, err.Error())
 		}
-		klog.V(4).Infof("Successfully retrieved uuid:%s  from the node: %s", uuid, nodeid)
+		klog.V(4).Infof("Successfully retrieved uuid:%s  from the node: %s", uuid, nodeId)
 		nodeVM, err := cnsvsphere.GetVirtualMachineByUUID(uuid, false)
 		if err != nil || nodeVM == nil {
 			klog.Errorf("Failed to get nodeVM for uuid: %s. err: %+v", uuid, err)
@@ -417,7 +417,7 @@ func (s *service) NodeGetInfo(
 			klog.Errorf("Failed to get accessibleTopology for vm: %v, err: %v", nodeVM.Reference(), err)
 			return nil, status.Errorf(codes.Internal, err.Error())
 		}
-		klog.V(4).Infof("zone: [%s], region: [%s], Node VM: [%s]", zone, region, nodeid)
+		klog.V(4).Infof("zone: [%s], region: [%s], Node VM: [%s]", zone, region, nodeId)
 		if zone != "" && region != "" {
 			accessibleTopology = make(map[string]string)
 			accessibleTopology[csitypes.LabelRegionFailureDomain] = region
@@ -429,7 +429,7 @@ func (s *service) NodeGetInfo(
 	}
 
 	return &csi.NodeGetInfoResponse{
-		NodeId:             nodeid,
+		NodeId:             nodeId,
 		AccessibleTopology: topology,
 	}, nil
 }
