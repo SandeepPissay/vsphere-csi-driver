@@ -35,10 +35,10 @@ type Nodes struct {
 	informMgr      *k8s.InformerManager
 }
 
-func (nodes *Nodes) Initialize(serviceAccount string) error {
+func (nodes *Nodes) Initialize() error {
 	nodes.cnsNodeManager = cnsnode.GetManager()
 	// Create the kubernetes client
-	k8sclient, err := k8s.NewClient(serviceAccount)
+	k8sclient, err := k8s.NewClient()
 	if err != nil {
 		klog.Errorf("Creating Kubernetes client failed. Err: %v", err)
 		return err

@@ -116,9 +116,6 @@ func FromEnv(cfg *Config) error {
 	if v := os.Getenv("VSPHERE_DATACENTER"); v != "" {
 		cfg.Global.Datacenters = v
 	}
-	if v := os.Getenv("VSPHERE_SERVICE_ACCOUNT"); v != "" {
-		cfg.Global.ServiceAccount = v
-	}
 	if v := os.Getenv("VSPHERE_INSECURE"); v != "" {
 		InsecureFlag, err := strconv.ParseBool(v)
 		if err != nil {
@@ -200,9 +197,6 @@ func FromEnv(cfg *Config) error {
 
 func validateConfig(cfg *Config) error {
 	//Fix default global values
-	if cfg.Global.ServiceAccount == "" {
-		cfg.Global.ServiceAccount = DefaultK8sServiceAccount
-	}
 	if cfg.Global.VCenterPort == "" {
 		cfg.Global.VCenterPort = DefaultVCenterPort
 	}

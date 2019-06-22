@@ -18,44 +18,26 @@ package kubernetes
 
 import (
 	"k8s.io/api/core/v1"
-	"os"
-
 	"k8s.io/klog"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	restclient "k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 )
 
 // NewClient creates a newk8s client based on a service account
-func NewClient(name string) (clientset.Interface, error) {
-	kubecfgPath := os.Getenv(EnvKubeConfig)
-	if kubecfgPath == "*" {
-		kubecfgPath = DefaultKubeConfigPath
-	}
+func NewClient() (clientset.Interface, error) {
 
 	var config *restclient.Config
 	var err error
-	if kubecfgPath != "" {
-		klog.V(2).Info("k8s client using kubeconfig")
-		config, err = clientcmd.BuildConfigFromFlags("", kubecfgPath)
-		if err != nil {
-			klog.Errorf("BuildConfigFromFlags failed %q", err)
-			return nil, err
-		}
-	} else {
-		klog.V(2).Info("k8s client using in-cluster config")
-		config, err = restclient.InClusterConfig()
-		if err != nil {
-			klog.Errorf("InClusterConfig failed %q", err)
-			return nil, err
-		}
+	klog.V(2).Info("k8s client using in-cluster config")
+	config, err = restclient.InClusterConfig()
+	if err != nil {
+		klog.Errorf("InClusterConfig failed %q", err)
+		return nil, err
 	}
 
-	newConfig := restclient.AddUserAgent(config, name)
-
-	return clientset.NewForConfig(newConfig)
+	return clientset.NewForConfig(config)
 }
 
 // GetAllNodes returns all kubernetes nodes registered with the API server

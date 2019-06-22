@@ -42,7 +42,7 @@ var (
 )
 
 type NodeManagerInterface interface {
-	Initialize(serviceAccount string) error
+	Initialize() error
 	GetSharedDatastoresInK8SCluster(ctx context.Context) ([]*cnsvsphere.DatastoreInfo, error)
 	GetSharedDatastoresInTopology(ctx context.Context, topologyRequirement *csi.TopologyRequirement, zoneKey string, regionKey string) ([]*cnsvsphere.DatastoreInfo, map[string]string, error)
 	GetNodeByName(nodeName string) (*cnsvsphere.VirtualMachine, error)
@@ -94,7 +94,7 @@ func (c *controller) Init(config *config.Config) error {
 		return err
 	}
 	c.nodeMgr = &Nodes{}
-	err = c.nodeMgr.Initialize(config.Global.ServiceAccount)
+	err = c.nodeMgr.Initialize()
 	if err != nil {
 		klog.Errorf("Failed to initialize nodeMgr. err=%v", err)
 	}

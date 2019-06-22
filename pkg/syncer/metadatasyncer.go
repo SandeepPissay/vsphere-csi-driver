@@ -117,7 +117,7 @@ func (metadataSyncer *metadataSyncInformer) Init() error {
 		return err
 	}
 	// Create the kubernetes client from config
-	k8sclient, err := k8s.NewClient(metadataSyncer.cfg.Global.ServiceAccount)
+	k8sclient, err := k8s.NewClient()
 	if err != nil {
 		klog.Errorf("Creating Kubernetes client failed. Err: %v", err)
 		return err

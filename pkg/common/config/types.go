@@ -33,9 +33,6 @@ type Config struct {
 		InsecureFlag bool `gcfg:"insecure-flag"`
 		// Datacenter in which Node VMs are located.
 		Datacenters string `gcfg:"datacenters"`
-		// The kubernetes service account used to launch the cloud controller manager.
-		// Default: vsphere-csi-controller
-		ServiceAccount string `gcfg:"service-account"`
 	}
 
 	// Virtual Center configurations

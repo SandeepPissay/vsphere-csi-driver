@@ -142,7 +142,7 @@ func K8sClientFromEnvOrSim(metadataSyncer *metadataSyncInformer) (clientset.Inte
 	var k8sclient clientset.Interface
 	var err error
 	if k8senv := os.Getenv("KUBECONFIG"); k8senv != "" {
-		if k8sclient, err = k8s.NewClient(metadataSyncer.cfg.Global.ServiceAccount); err != nil {
+		if k8sclient, err = k8s.NewClient(); err != nil {
 			return nil, err
 		}
 	} else {

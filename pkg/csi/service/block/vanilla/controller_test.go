@@ -110,7 +110,7 @@ type FakeNodeManager struct {
 	sharedDatastoreURL string
 }
 
-func (f *FakeNodeManager) Initialize(serviceAccount string) error {
+func (f *FakeNodeManager) Initialize() error {
 	return nil
 }
 
