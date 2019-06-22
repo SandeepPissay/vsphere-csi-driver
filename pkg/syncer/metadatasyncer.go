@@ -308,6 +308,14 @@ func pvUpdated(oldObj, newObj interface{}, metadataSyncer *metadataSyncInformer)
 		klog.V(3).Infof("PVUpdated: PV labels have not changed")
 		return
 	}
+	if oldPv.Status.Phase == v1.VolumeBound && newPv.Status.Phase == v1.VolumeReleased && oldPv.Spec.PersistentVolumeReclaimPolicy == v1.PersistentVolumeReclaimDelete {
+		klog.V(3).Infof("PVUpdated: Volume will be deleted by controller")
+		return
+	}
+	if newPv.DeletionTimestamp != nil {
+		klog.V(3).Infof("PVUpdated: PV already deleted")
+		return
+	}
 
 	var metadataList []cnstypes.BaseCnsEntityMetadata
 	pvMetadata := cnsvsphere.GetCnsKubernetesEntityMetaData(newPv.Name, newPv.GetLabels(), false, string(cnstypes.CnsKubernetesEntityTypePV), newPv.Namespace)
@@ -364,13 +372,19 @@ func pvDeleted(obj interface{}, metadataSyncer *metadataSyncInformer) {
 		klog.V(3).Infof("PVDeleted: Not a vsphere volume: %+v", pv)
 		return
 	}
-
 	var deleteDisk bool
+	if pv.Spec.ClaimRef != nil && (pv.Status.Phase == v1.VolumeAvailable || pv.Status.Phase == v1.VolumeReleased) && pv.Spec.PersistentVolumeReclaimPolicy == v1.PersistentVolumeReclaimDelete {
+		klog.V(3).Infof("PVDeleted: Volume deletion will be handled by Controller")
+		return
+	}
+
 	if pv.Spec.ClaimRef == nil || (pv.Spec.PersistentVolumeReclaimPolicy != v1.PersistentVolumeReclaimDelete) {
+		klog.V(4).Infof("PVDeleted: Setting DeleteDisk to false")
 		deleteDisk = false
 	} else {
 		// We set delete disk=true for the case where PV status is failed after deletion of pvc
 		// In this case, metadatasyncer will remove the volume
+		klog.V(4).Infof("PVDeleted: Setting DeleteDisk to true")
 		deleteDisk = true
 	}
 
