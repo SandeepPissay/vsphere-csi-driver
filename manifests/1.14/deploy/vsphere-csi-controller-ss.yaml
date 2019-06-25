@@ -55,7 +55,7 @@ spec:
       volumes:
       - name: vsphere-config-volume
         secret:
-          secretName: credentials-secret
+          secretName: vsphere-config-secret
       - name: socket-dir
         hostPath:
           path: /var/lib/csi/sockets/pluginproxy/block.vsphere.csi.vmware.com

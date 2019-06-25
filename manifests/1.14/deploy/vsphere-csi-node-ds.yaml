@@ -83,8 +83,8 @@ spec:
           mountPath: /csi
       volumes:
       - name: vsphere-config-volume
-        configMap:
-          name: csi-config
+        secret:
+          secretName: vsphere-config-secret
       - name: registration-dir
         hostPath:
           path: /var/lib/kubelet/plugins_registry
