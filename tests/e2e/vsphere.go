@@ -82,7 +82,7 @@ func (vs *vSphere) getVMByUUID(ctx context.Context, vmUUID string) (object.Refer
 		s := object.NewSearchIndex(vs.Client.Client)
 		vmUUID = strings.ToLower(strings.TrimSpace(vmUUID))
 		vmMoRef, err := s.FindByUuid(ctx, datacenter, vmUUID, true, nil)
-		if err != nil {
+		if err != nil || vmMoRef == nil {
 			continue
 		}
 		return vmMoRef, nil
@@ -100,6 +100,8 @@ func (vs *vSphere) isVolumeAttachedToNode(client clientset.Interface, volumeID s
 	framework.Logf("VM uuid is: %s for node: %s", vmUUID, nodeName)
 	vmRef, err := vs.getVMByUUID(ctx, vmUUID)
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
+	framework.Logf("vmRef: %v for the VM uuid: %s", vmRef, vmUUID)
+	gomega.Expect(vmRef).NotTo(gomega.BeNil(), "vmRef should not be nil")
 	vm := object.NewVirtualMachine(vs.Client.Client, vmRef.Reference())
 	device, err := getVirtualDeviceByDiskID(ctx, vm, volumeID)
 	if err != nil {

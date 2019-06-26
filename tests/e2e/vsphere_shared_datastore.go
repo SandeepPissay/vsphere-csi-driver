@@ -24,6 +24,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/kubernetes/test/e2e/framework"
+	"strings"
 	"time"
 )
 
@@ -91,8 +92,9 @@ var _ = ginkgo.Describe("[csi-block-e2e] Datastore Based Volume Provisioning Wit
 		eventList, _ := client.CoreV1().Events(pvclaim.Namespace).List(metav1.ListOptions{})
 		actualErrMsg := eventList.Items[len(eventList.Items)-1].Message
 		fmt.Println(fmt.Sprintf("Actual failure message: %+q", actualErrMsg))
-		expectedErrMsg := "failed to provision volume with StorageClass \"" + storageclass.Name + "\": rpc error: code = Unknown desc = Datastore: " + nonSharedDatastoreURL + " specified in the storage class is not accessible to all nodes."
+		expectedErrMsg := "failed to provision volume with StorageClass \"" + storageclass.Name + "\""
 		fmt.Println(fmt.Sprintf("Expected failure message: %+q", expectedErrMsg))
-		gomega.Expect(actualErrMsg == expectedErrMsg).To(gomega.BeTrue(), fmt.Sprintf("actualErrMsg: %q does not match with expectedErrMsg: %q", actualErrMsg, expectedErrMsg))
+		gomega.Expect(strings.Contains(actualErrMsg, expectedErrMsg)).To(gomega.BeTrue(), fmt.Sprintf("actualErrMsg: %q does not contain expectedErrMsg: %q", actualErrMsg, expectedErrMsg))
+
 	})
 })

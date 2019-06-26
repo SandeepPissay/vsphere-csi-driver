@@ -97,27 +97,44 @@ func (nodes *Nodes) GetNodeByName(nodeName string) (*cnsvsphere.VirtualMachine, 
 	return nodes.cnsNodeManager.GetNodeByName(nodeName)
 }
 
-// GetSharedDatastoresInTopology returns shared accessible datastores for specified topologyRequirement and
-// volumeAccessibleTopology containing zone and region where volume needs be provisioned
-func (nodes *Nodes) GetSharedDatastoresInTopology(ctx context.Context, topologyRequirement *csi.TopologyRequirement, zoneCategoryName string, regionCategoryName string) ([]*cnsvsphere.DatastoreInfo, map[string]string, error) {
+// GetSharedDatastoresInTopology returns shared accessible datastores for specified topologyRequirement along with the map of
+// datastore URL and array of accessibleTopology map for each datastore returned from this function.
+// Here in this function, argument topologyRequirement can be passed in following form
+// topologyRequirement [requisite:<segments:<key:"failure-domain.beta.kubernetes.io/region" value:"k8s-region-us" >
+//                                 segments:<key:"failure-domain.beta.kubernetes.io/zone" value:"k8s-zone-us-east" > >
+//                      requisite:<segments:<key:"failure-domain.beta.kubernetes.io/region" value:"k8s-region-us" >
+//                                 segments:<key:"failure-domain.beta.kubernetes.io/zone" value:"k8s-zone-us-west" > >
+//                      preferred:<segments:<key:"failure-domain.beta.kubernetes.io/region" value:"k8s-region-us" >
+//                                 segments:<key:"failure-domain.beta.kubernetes.io/zone" value:"k8s-zone-us-west" > >
+//                      preferred:<segments:<key:"failure-domain.beta.kubernetes.io/region" value:"k8s-region-us" >
+//                                 segments:<key:"failure-domain.beta.kubernetes.io/zone" value:"k8s-zone-us-east" > > ]
+//
+// Return map datastoreTopologyMap looks like as below
+// map[ ds:///vmfs/volumes/5d119112-7b28fe05-f51d-02000b3a3f4b/:
+//         [map[failure-domain.beta.kubernetes.io/region:k8s-region-us failure-domain.beta.kubernetes.io/zone:k8s-zone-us-east]]
+//      ds:///vmfs/volumes/e54abc3f-f6a5bb1f-0000-000000000000/:
+//         [map[failure-domain.beta.kubernetes.io/region:k8s-region-us failure-domain.beta.kubernetes.io/zone:k8s-zone-us-east]]
+//      ds:///vmfs/volumes/vsan:524fae1aaca129a5-1ee55a87f26ae626/:
+//         [map[failure-domain.beta.kubernetes.io/region:k8s-region-us failure-domain.beta.kubernetes.io/zone:k8s-zone-us-west]
+//         map[failure-domain.beta.kubernetes.io/region:k8s-region-us failure-domain.beta.kubernetes.io/zone:k8s-zone-us-east]]]]
+func (nodes *Nodes) GetSharedDatastoresInTopology(ctx context.Context, topologyRequirement *csi.TopologyRequirement, zoneCategoryName string, regionCategoryName string) ([]*cnsvsphere.DatastoreInfo, map[string][]map[string]string, error) {
 	klog.V(4).Infof("GetSharedDatastoresInTopology: called with topologyRequirement: %+v, zoneCategoryName: %s, regionCategoryName: %s", topologyRequirement, zoneCategoryName, regionCategoryName)
-	nodeVMs, err := nodes.cnsNodeManager.GetAllNodes()
+	allNodes, err := nodes.cnsNodeManager.GetAllNodes()
 	if err != nil {
 		klog.Errorf("Failed to get Nodes from nodeManager with err %+v", err)
 		return nil, nil, err
 	}
-	if len(nodeVMs) == 0 {
+	if len(allNodes) == 0 {
 		errMsg := fmt.Sprintf("Empty List of Node VMs returned from nodeManager")
 		klog.Errorf(errMsg)
 		return nil, nil, fmt.Errorf(errMsg)
 	}
-
 	// getNodesInZoneRegion takes zone and region as parameter and returns list of node VMs which belongs to specified
 	// zone and region.
 	getNodesInZoneRegion := func(zoneValue string, regionValue string) ([]*cnsvsphere.VirtualMachine, error) {
 		klog.V(4).Infof("getNodesInZoneRegion: called with zoneValue: %s, regionValue: %s", zoneValue, regionValue)
 		var nodeVMsInZoneAndRegion []*cnsvsphere.VirtualMachine
-		for _, nodeVM := range nodeVMs {
+		for _, nodeVM := range allNodes {
 			isNodeInZoneRegion, err := nodeVM.IsInZoneRegion(ctx, zoneCategoryName, regionCategoryName, zoneValue, regionValue)
 			if err != nil {
 				klog.Errorf("Error checking if node VM: %v belongs to zone [%s] and region [%s]. err: %+v", nodeVM, zoneValue, regionValue, err)
@@ -130,56 +147,59 @@ func (nodes *Nodes) GetSharedDatastoresInTopology(ctx context.Context, topologyR
 		return nodeVMsInZoneAndRegion, nil
 	}
 
-	// getSharedDatastoresInZoneRegion returns list of shared datastores for requested zone and region.
-	getSharedDatastoresInZoneRegion := func(topologyArr []*csi.Topology) ([]*cnsvsphere.DatastoreInfo, map[string]string, error) {
-		klog.V(4).Infof("getSharedDatastoresInZoneRegion: called with topologyArr: %+v", topologyArr)
-		var nodeVMsInZoneAndRegion []*cnsvsphere.VirtualMachine
+	// getSharedDatastoresInTopology returns list of shared accessible datastores for requested topology along with the map of datastore URL and array of accessibleTopology
+	// map for each datastore returned from this function.
+	getSharedDatastoresInTopology := func(topologyArr []*csi.Topology) ([]*cnsvsphere.DatastoreInfo, map[string][]map[string]string, error) {
+		klog.V(4).Infof("getSharedDatastoresInTopology: called with topologyArr: %+v", topologyArr)
 		var sharedDatastores []*cnsvsphere.DatastoreInfo
-		var volumeAccessibleTopology = make(map[string]string)
+		datastoreTopologyMap := make(map[string][]map[string]string)
 		for _, topology := range topologyArr {
 			segments := topology.GetSegments()
 			zone := segments[csitypes.LabelZoneFailureDomain]
 			region := segments[csitypes.LabelRegionFailureDomain]
-			klog.V(4).Info(fmt.Sprintf("getting shared datastores for zone [%s] and region [%s]", zone, region))
-			nodeVMsInZoneAndRegion, err = getNodesInZoneRegion(zone, region)
+			klog.V(4).Infof("Getting list of nodeVMs for zone [%s] and region [%s]", zone, region)
+			nodeVMsInZoneRegion, err := getNodesInZoneRegion(zone, region)
 			if err != nil {
 				klog.Errorf("Failed to find Nodes in the zone: [%s] and region: [%s]. Error: %+v", zone, region, err)
 				return nil, nil, err
 			}
-			sharedDatastores, err = nodes.GetSharedDatastoresForVMs(ctx, nodeVMsInZoneAndRegion)
+			klog.V(4).Infof("Obtained list of nodeVMs [%+v] for zone [%s] and region [%s]", nodeVMsInZoneRegion, zone, region)
+			sharedDatastoresInZoneRegion, err := nodes.GetSharedDatastoresForVMs(ctx, nodeVMsInZoneRegion)
 			if err != nil {
-				klog.Errorf("failed to get shared datastores for nodes: %+v. Error: %+v", nodeVMsInZoneAndRegion, err)
+				klog.Errorf("Failed to get shared datastores for nodes: %+v in zone [%s] and region [%s]. Error: %+v", nodeVMsInZoneRegion, zone, region, err)
 				return nil, nil, err
 			}
-			if len(sharedDatastores) > 0 {
-				if zone != "" {
-					volumeAccessibleTopology[csitypes.LabelZoneFailureDomain] = zone
-				}
-				if region != "" {
-					volumeAccessibleTopology[csitypes.LabelRegionFailureDomain] = region
-				}
-				break
+			klog.V(4).Infof("Obtained shared datastores : %+v for topology: %+v", sharedDatastores, topology)
+			for _, datastore := range sharedDatastoresInZoneRegion {
+				accessibleTopology := make(map[string]string)
+				accessibleTopology[csitypes.LabelZoneFailureDomain] = zone
+				accessibleTopology[csitypes.LabelRegionFailureDomain] = region
+				datastoreTopologyMap[datastore.Info.Url] = append(datastoreTopologyMap[datastore.Info.Url], accessibleTopology)
 			}
+			sharedDatastores = append(sharedDatastores, sharedDatastoresInZoneRegion...)
 		}
-		klog.V(4).Infof("Obtained sharedDatastores : %+v for volumeAccessibleTopology: %+v", sharedDatastores, volumeAccessibleTopology)
-		return sharedDatastores, volumeAccessibleTopology, nil
+		return sharedDatastores, datastoreTopologyMap, nil
 	}
 
 	var sharedDatastores []*cnsvsphere.DatastoreInfo
-	var volumeAccessibleTopology = make(map[string]string)
+	var datastoreTopologyMap = make(map[string][]map[string]string)
 	if topologyRequirement != nil && topologyRequirement.GetPreferred() != nil {
 		klog.V(3).Infoln("Using preferred topology")
-		sharedDatastores, volumeAccessibleTopology, err = getSharedDatastoresInZoneRegion(topologyRequirement.GetPreferred())
+		sharedDatastores, datastoreTopologyMap, err = getSharedDatastoresInTopology(topologyRequirement.GetPreferred())
 		if err != nil {
-			klog.Errorf("Failed to ")
+			klog.Errorf("Error occurred  while finding shared datastores from preferred topology: %+v", topologyRequirement.GetPreferred())
 			return nil, nil, err
 		}
 	}
 	if len(sharedDatastores) == 0 && topologyRequirement != nil && topologyRequirement.GetRequisite() != nil {
 		klog.V(3).Infoln("Using requisite topology")
-		sharedDatastores, volumeAccessibleTopology, err = getSharedDatastoresInZoneRegion(topologyRequirement.GetRequisite())
+		sharedDatastores, datastoreTopologyMap, err = getSharedDatastoresInTopology(topologyRequirement.GetRequisite())
+		if err != nil {
+			klog.Errorf("Error occurred  while finding shared datastores from requisite topology: %+v", topologyRequirement.GetRequisite())
+			return nil, nil, err
+		}
 	}
-	return sharedDatastores, volumeAccessibleTopology, nil
+	return sharedDatastores, datastoreTopologyMap, nil
 }
 
 // GetSharedDatastoresInK8SCluster returns list of DatastoreInfo objects for datastores accessible to all
