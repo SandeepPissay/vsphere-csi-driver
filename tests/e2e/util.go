@@ -10,7 +10,6 @@ import (
 	"github.com/vmware/govmomi/property"
 	"github.com/vmware/govmomi/vim25/mo"
 	vim25types "github.com/vmware/govmomi/vim25/types"
-	corev1 "k8s.io/api/core/v1"
 
 	storagev1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -25,7 +24,7 @@ import (
 )
 
 // getVSphereStorageClassSpec returns Storage Class Spec with supplied storage class parameters
-func getVSphereStorageClassSpec(scName string, scParameters map[string]string) *storagev1.StorageClass {
+func getVSphereStorageClassSpec(scName string, scParameters map[string]string, allowedTopologies []v1.TopologySelectorLabelRequirement) *storagev1.StorageClass {
 	var sc *storagev1.StorageClass
 	sc = &storagev1.StorageClass{
 		TypeMeta: metav1.TypeMeta{
@@ -43,11 +42,19 @@ func getVSphereStorageClassSpec(scName string, scParameters map[string]string) *
 	if scParameters != nil {
 		sc.Parameters = scParameters
 	}
+	if allowedTopologies != nil {
+		sc.AllowedTopologies = []v1.TopologySelectorTerm{
+			{
+				MatchLabelExpressions: allowedTopologies,
+			},
+		}
+	}
+
 	return sc
 }
 
 // getPvFromClaim returns PersistentVolume for requested claim
-func getPvFromClaim(client clientset.Interface, namespace string, claimName string) *corev1.PersistentVolume {
+func getPvFromClaim(client clientset.Interface, namespace string, claimName string) *v1.PersistentVolume {
 	pvclaim, err := client.CoreV1().PersistentVolumeClaims(namespace).Get(claimName, metav1.GetOptions{})
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	pv, err := client.CoreV1().PersistentVolumes().Get(pvclaim.Spec.VolumeName, metav1.GetOptions{})
@@ -109,19 +116,23 @@ func getVirtualDeviceByDiskID(ctx context.Context, vm *object.VirtualMachine, di
 }
 
 // getPersistentVolumeClaimSpecWithStorageClass return the PersistentVolumeClaim spec with specified storage class
-func getPersistentVolumeClaimSpecWithStorageClass(namespace string, diskSize string, storageclass *storagev1.StorageClass, pvclaimlabels map[string]string) *corev1.PersistentVolumeClaim {
-	claim := &corev1.PersistentVolumeClaim{
+func getPersistentVolumeClaimSpecWithStorageClass(namespace string, ds string, storageclass *storagev1.StorageClass, pvclaimlabels map[string]string) *v1.PersistentVolumeClaim {
+	disksize := diskSize
+	if ds != "" {
+		disksize = ds
+	}
+	claim := &v1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: "pvc-",
 			Namespace:    namespace,
 		},
-		Spec: corev1.PersistentVolumeClaimSpec{
-			AccessModes: []corev1.PersistentVolumeAccessMode{
-				corev1.ReadWriteOnce,
+		Spec: v1.PersistentVolumeClaimSpec{
+			AccessModes: []v1.PersistentVolumeAccessMode{
+				v1.ReadWriteOnce,
 			},
-			Resources: corev1.ResourceRequirements{
-				Requests: corev1.ResourceList{
-					corev1.ResourceName(corev1.ResourceStorage): resource.MustParse(diskSize),
+			Resources: v1.ResourceRequirements{
+				Requests: v1.ResourceList{
+					v1.ResourceName(v1.ResourceStorage): resource.MustParse(disksize),
 				},
 			},
 			StorageClassName: &(storageclass.Name),
@@ -131,21 +142,18 @@ func getPersistentVolumeClaimSpecWithStorageClass(namespace string, diskSize str
 	if pvclaimlabels != nil {
 		claim.Labels = pvclaimlabels
 	}
+
 	return claim
 }
 
 // createPVCAndStorageClass helps creates a storage class with specified name, storageclass parameters and PVC using storage class
-func createPVCAndStorageClass(client clientset.Interface, pvcnamespace string, pvclaimlabels map[string]string, scParameters map[string]string, ds string) (*storagev1.StorageClass, *corev1.PersistentVolumeClaim, error) {
-	ginkgo.By(fmt.Sprintf("Creating StorageClass With scParameters: %+v", scParameters))
-	storageclass, err := client.StorageV1().StorageClasses().Create(getVSphereStorageClassSpec("", scParameters))
+func createPVCAndStorageClass(client clientset.Interface, pvcnamespace string, pvclaimlabels map[string]string, scParameters map[string]string, ds string, allowedTopologies []v1.TopologySelectorLabelRequirement) (*storagev1.StorageClass, *v1.PersistentVolumeClaim, error) {
+	ginkgo.By(fmt.Sprintf("Creating StorageClass With scParameters: %+v and allowedTopologies: %+v", scParameters, allowedTopologies))
+	storageclass, err := client.StorageV1().StorageClasses().Create(getVSphereStorageClassSpec("", scParameters, allowedTopologies))
 	gomega.Expect(err).NotTo(gomega.HaveOccurred(), fmt.Sprintf("Failed to create storage class with err: %v", err))
 
-	ginkgo.By("Creating PVC using the StorageClass")
-	disksize := diskSize
-	if ds != "" {
-		disksize = ds
-	}
-	pvcspec := getPersistentVolumeClaimSpecWithStorageClass(pvcnamespace, disksize, storageclass, pvclaimlabels)
+	pvcspec := getPersistentVolumeClaimSpecWithStorageClass(pvcnamespace, ds, storageclass, pvclaimlabels)
+	ginkgo.By(fmt.Sprintf("Creating PVC using the Storage Class %+v with disk size %+v and labels: %+v", storageclass.Name, ds, pvclaimlabels))
 	pvclaim, err := framework.CreatePVC(client, pvcnamespace, pvcspec)
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	return storageclass, pvclaim, err
@@ -285,4 +293,78 @@ func invokeVCenterServiceControl(command, service, host string) error {
 		return fmt.Errorf("couldn't execute command: %s on vCenter host: %v", sshCmd, err)
 	}
 	return nil
+}
+
+// verifyVolumeTopology verifies that the Node Affinity rules in the volume
+// match the topology constraints specified in the storage class
+func verifyVolumeTopology(pv *v1.PersistentVolume, zoneValues []string, regionValues []string) (string, string, error) {
+	if pv.Spec.NodeAffinity == nil || len(pv.Spec.NodeAffinity.Required.NodeSelectorTerms) == 0 {
+		return "", "", fmt.Errorf("Node Affinity rules for PV should exist in topology aware provisioning")
+	}
+	var pvZone string
+	var pvRegion string
+	for _, labels := range pv.Spec.NodeAffinity.Required.NodeSelectorTerms[0].MatchExpressions {
+		if labels.Key == zoneKey {
+			for _, value := range labels.Values {
+				gomega.Expect(zoneValues).To(gomega.ContainElement(value), fmt.Sprintf("Node Affinity rules for PV %s: %v does not contain does not contain zone specified in storage class %v", pv.Name, value, zoneValues))
+				pvZone = value
+			}
+		}
+		if labels.Key == regionKey {
+			for _, value := range labels.Values {
+				gomega.Expect(regionValues).To(gomega.ContainElement(value), fmt.Sprintf("Node Affinity rules for PV %s: %v does not contain does not contain region specified in storage class %v", pv.Name, value, regionValues))
+				pvRegion = value
+			}
+		}
+	}
+	framework.Logf("PV %s is located in zone: %s and region: %s", pv.Name, pvZone, pvRegion)
+	return pvRegion, pvZone, nil
+}
+
+// verifyPodLocation verifies that a pod is scheduled on
+// a node that belongs to the topology on which PV is provisioned
+func verifyPodLocation(pod *v1.Pod, nodeList *v1.NodeList, zoneValue string, regionValue string) error {
+	for _, node := range nodeList.Items {
+		if pod.Spec.NodeName == node.Name {
+			for labelKey, labelValue := range node.Labels {
+				if labelKey == zoneKey {
+					gomega.Expect(zoneValue).To(gomega.Equal(labelValue), fmt.Sprintf("Pod %s is not running on Node located in zone %v", pod.Name, zoneValue))
+				}
+				if labelKey == regionKey {
+					gomega.Expect(regionValue).To(gomega.Equal(labelValue), fmt.Sprintf("Pod %s is not running on Node located in region %v", pod.Name, regionValue))
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// createTopologyMap strips the topology string provided in the environment variable
+// into a map from region to zones
+// example envTopology = "r1:z1,r1:z2,r2:z3"
+func createTopologyMap(topologyString string) map[string][]string {
+	topologyMap := make(map[string][]string)
+	for _, t := range strings.Split(topologyString, ",") {
+		t = strings.TrimSpace(t)
+		topology := strings.Split(t, ":")
+		if len(topology) != 2 {
+			continue
+		}
+		topologyMap[topology[0]] = append(topologyMap[topology[0]], topology[1])
+	}
+	return topologyMap
+}
+
+// getValidTopology returns the regions and zones from the input topology map
+// so that they can be provided to a storage class
+func getValidTopology(topologyMap map[string][]string) ([]string, []string) {
+	var regionValues []string
+	var zoneValues []string
+	for region, zones := range topologyMap {
+		regionValues = append(regionValues, region)
+		for _, zone := range zones {
+			zoneValues = append(zoneValues, zone)
+		}
+	}
+	return regionValues, zoneValues
 }

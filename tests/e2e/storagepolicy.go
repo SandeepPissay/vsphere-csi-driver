@@ -100,7 +100,7 @@ var _ = ginkgo.Describe("[csi-block-e2e] Storage Policy Based Volume Provisionin
 
 // verifyStoragePolicyBasedVolumeProvisioning helps invokes storage policy related positive e2e tests
 func verifyStoragePolicyBasedVolumeProvisioning(f *framework.Framework, client clientset.Interface, namespace string, scParameters map[string]string) {
-	storageclass, pvclaim, err := createPVCAndStorageClass(client, namespace, nil, scParameters, "")
+	storageclass, pvclaim, err := createPVCAndStorageClass(client, namespace, nil, scParameters, "", nil)
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	defer client.StorageV1().StorageClasses().Delete(storageclass.Name, nil)
 	defer framework.DeletePersistentVolumeClaim(client, pvclaim.Name, namespace)
@@ -134,7 +134,7 @@ func verifyStoragePolicyBasedVolumeProvisioning(f *framework.Framework, client c
 
 // invokeInvalidPolicyTestNeg helps invokes storage policy related negative e2e tests
 func invokeInvalidPolicyTestNeg(client clientset.Interface, namespace string, scParameters map[string]string) error {
-	storageclass, pvclaim, err := createPVCAndStorageClass(client, namespace, nil, scParameters, "")
+	storageclass, pvclaim, err := createPVCAndStorageClass(client, namespace, nil, scParameters, "", nil)
 	gomega.Expect(err).NotTo(gomega.HaveOccurred(), fmt.Sprintf("Failed to create a StorageClasse. Error: %v", err))
 	defer client.StorageV1().StorageClasses().Delete(storageclass.Name, nil)
 	defer framework.DeletePersistentVolumeClaim(client, pvclaim.Name, namespace)

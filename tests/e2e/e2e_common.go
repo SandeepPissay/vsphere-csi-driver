@@ -43,6 +43,9 @@ const (
 	defaultFullSyncWaitTime                    = 1800
 	sleepTimeOut                               = 30
 	vsanhealthServiceName                      = "vsan-health"
+	zoneKey                                    = "failure-domain.beta.kubernetes.io/zone"
+	regionKey                                  = "failure-domain.beta.kubernetes.io/region"
+	envTopology                                = "TOPOLOGY_VALUES"
 )
 
 // GetAndExpectStringEnvVar parses a string from env variable
