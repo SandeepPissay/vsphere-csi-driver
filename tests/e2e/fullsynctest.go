@@ -250,6 +250,10 @@ var _ bool = ginkgo.Describe("[csi-block-e2e] full-sync-test", func() {
 		err = client.CoreV1().PersistentVolumeClaims(namespace).Delete(pvc.Name, nil)
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
+		ginkgo.By(fmt.Sprintf("Deleting the PV %s", pv.Name))
+		err = client.CoreV1().PersistentVolumes().Delete(pv.Name, nil)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
 		ginkgo.By(fmt.Sprintln("Starting vsan-health on the vCenter host"))
 		err = invokeVCenterServiceControl(startVsanHealthOperation, vsanhealthServiceName, vcAddress)
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
