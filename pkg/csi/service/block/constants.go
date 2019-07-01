@@ -53,8 +53,8 @@ const (
 	// Example: vsphere://4201794a-f26b-8914-d95a-edeb7ecc4a8f
 	ProviderPrefix = "vsphere://"
 
-	// AttributeFirstClassDiskPage83Data is the SCSI Disk Identifier
-	AttributeFirstClassDiskPage83Data = "page83data"
+	// AttributeFirstClassDiskUUID is the SCSI Disk Identifier
+	AttributeFirstClassDiskUUID = "diskUUID"
 
 	// BlockVolumeType is the VolumeType for CNS Volume
 	BlockVolumeType = "BLOCK"

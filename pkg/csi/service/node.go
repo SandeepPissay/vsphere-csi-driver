@@ -809,12 +809,12 @@ func getDiskID(volID string, pubCtx map[string]string) (string, error) {
 	var diskID string
 
 	if controllerType == VanillaK8SControllerType {
-		if _, ok := pubCtx["page83data"]; !ok {
+		if _, ok := pubCtx[block.AttributeFirstClassDiskUUID]; !ok {
 			return "", status.Errorf(codes.InvalidArgument,
 				"Attribute: %s required in publish context",
-				"page83data")
+				block.AttributeFirstClassDiskUUID)
 		}
-		diskID = pubCtx["page83data"]
+		diskID = pubCtx[block.AttributeFirstClassDiskUUID]
 	} else {
 		diskID = volID
 	}

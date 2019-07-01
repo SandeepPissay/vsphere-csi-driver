@@ -279,7 +279,7 @@ func (c *controller) ControllerPublishVolume(ctx context.Context, req *csi.Contr
 	}
 	publishInfo := make(map[string]string, 0)
 	publishInfo[block.AttributeDiskType] = block.DiskTypeString
-	publishInfo[block.AttributeFirstClassDiskPage83Data] = block.FormatDiskUUID(diskUUID)
+	publishInfo[block.AttributeFirstClassDiskUUID] = block.FormatDiskUUID(diskUUID)
 	resp := &csi.ControllerPublishVolumeResponse{
 		PublishContext: publishInfo,
 	}
