@@ -17,6 +17,7 @@ limitations under the License.
 package vanilla
 
 import (
+	"errors"
 	"fmt"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"golang.org/x/net/context"
@@ -65,6 +66,11 @@ func (nodes *Nodes) Initialize() error {
 
 func (nodes *Nodes) registerNode(node *v1.Node) error {
 	nodeUUID := block.GetUUIDFromProviderID(node.Spec.ProviderID)
+	if nodeUUID == "" {
+		err := errors.New(fmt.Sprintf("Node %s contains empty NodeUUID", node.Name))
+		klog.Error(err)
+		return err
+	}
 	err := nodes.cnsNodeManager.RegisterNode(nodeUUID, node.Name, node.GetObjectMeta())
 	return err
 }

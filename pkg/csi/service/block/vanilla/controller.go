@@ -100,6 +100,7 @@ func (c *controller) Init(config *config.Config) error {
 	err = c.nodeMgr.Initialize()
 	if err != nil {
 		klog.Errorf("Failed to initialize nodeMgr. err=%v", err)
+		return err
 	}
 	return nil
 }
