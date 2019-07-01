@@ -25,6 +25,8 @@ $ export NONSHARED_VSPHERE_DATASTORE_URL="ds:///vmfs/volumes/5cf05d98-b2c43515-d
 $ export STORAGE_POLICY_FOR_SHARED_DATASTORES="vSAN Default Storage Policy"
 $ export STORAGE_POLICY_FOR_NONSHARED_DATASTORES="LocalDatastoresPolicy"
 $ export TOPOLOGY_VALUES="<region-tag>:<zone-category>"
+$ export STORAGE_POLICY_FROM_INACCESSIBLE_ZONE="PolicyNameInaccessibleToSelectedTopologyValues"
+$ export INACCESSIBLE_ZONE_VSPHERE_DATASTORE_URL="DataStoreUrlInaccessibleToSelectedTopologyValues"
 ```
 Please update the values as per your testbed configuration.
 

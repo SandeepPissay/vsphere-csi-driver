@@ -26,6 +26,7 @@ import (
 const (
 	envSharedDatastoreURL                      = "SHARED_VSPHERE_DATASTORE_URL"
 	envNonSharedStorageClassDatastoreURL       = "NONSHARED_VSPHERE_DATASTORE_URL"
+	envInaccessibleZoneDatastoreURL            = "INACCESSIBLE_ZONE_VSPHERE_DATASTORE_URL"
 	scParamDatastoreURL                        = "DatastoreURL"
 	diskSize                                   = "2Gi"
 	diskSizeInMb                               = int64(2048)
@@ -33,6 +34,7 @@ const (
 	envVolumeOperationsScale                   = "VOLUME_OPS_SCALE"
 	envStoragePolicyNameForSharedDatastores    = "STORAGE_POLICY_FOR_SHARED_DATASTORES"
 	envStoragePolicyNameForNonSharedDatastores = "STORAGE_POLICY_FOR_NONSHARED_DATASTORES"
+	envStoragePolicyNameFromInaccessibleZone   = "STORAGE_POLICY_FROM_INACCESSIBLE_ZONE"
 	scParamStoragePolicyName                   = "StoragePolicyName"
 	poll                                       = 2 * time.Second
 	pollTimeout                                = 5 * time.Minute

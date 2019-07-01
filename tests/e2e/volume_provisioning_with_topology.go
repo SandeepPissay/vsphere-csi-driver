@@ -22,28 +22,29 @@ import (
 	"github.com/onsi/gomega"
 	"k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/kubernetes/test/e2e/framework"
+	"strings"
 	"time"
 )
 
-var _ = ginkgo.Describe("[csi-block-e2e-zone] Basic Topology Aware Provisioning", func() {
-	f := framework.NewDefaultFramework("e2e-vsphere-basic-zone-provisioning")
+var _ = ginkgo.Describe("[csi-block-e2e-zone] Topology Aware Provisioning", func() {
+	f := framework.NewDefaultFramework("e2e-vsphere-topology-aware-provisioning")
 	var (
-		client             clientset.Interface
-		namespace          string
-		zoneValues         []string
-		regionValues       []string
-		pvZone             string
-		pvRegion           string
-		allowedTopologies  []v1.TopologySelectorLabelRequirement
-		nodeList           *v1.NodeList
-		pod                *v1.Pod
-		pvclaim            *v1.PersistentVolumeClaim
-		storageclass       *storagev1.StorageClass
-		err                error
-		topologyMap        map[string][]string
-		sharedDatastoreURL string
+		client            clientset.Interface
+		namespace         string
+		zoneValues        []string
+		regionValues      []string
+		pvZone            string
+		pvRegion          string
+		allowedTopologies []v1.TopologySelectorLabelRequirement
+		nodeList          *v1.NodeList
+		pod               *v1.Pod
+		pvclaim           *v1.PersistentVolumeClaim
+		storageclass      *storagev1.StorageClass
+		err               error
+		topologyMap       map[string][]string
 	)
 	ginkgo.BeforeEach(func() {
 		client = f.ClientSet
@@ -68,7 +69,7 @@ var _ = ginkgo.Describe("[csi-block-e2e-zone] Basic Topology Aware Provisioning"
 		}
 	})
 
-	ginkgo.AfterEach(func() {
+	testCleanUpUtil := func() {
 		ginkgo.By("Performing cleanup")
 		ginkgo.By("Deleting the pod and wait for disk to detach")
 		err := framework.DeletePodWithWait(f, client, pod)
@@ -81,7 +82,7 @@ var _ = ginkgo.Describe("[csi-block-e2e-zone] Basic Topology Aware Provisioning"
 		ginkgo.By("Deleting the Storage Class")
 		err = client.StorageV1().StorageClasses().Delete(storageclass.Name, nil)
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
-	})
+	}
 
 	verifyBasicTopologyBasedVolumeProvisioning := func(f *framework.Framework, client clientset.Interface, namespace string, scParameters map[string]string, allowedTopologies []v1.TopologySelectorLabelRequirement) {
 
@@ -110,6 +111,22 @@ var _ = ginkgo.Describe("[csi-block-e2e-zone] Basic Topology Aware Provisioning"
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	}
 
+	invokeTopologyBasedVolumeProvisioningWithInaccessibleParameters := func(f *framework.Framework, client clientset.Interface, namespace string, scParameters map[string]string, allowedTopologies []v1.TopologySelectorLabelRequirement, expectedErrMsg string) {
+
+		storageclass, pvclaim, err = createPVCAndStorageClass(client, namespace, nil, scParameters, "", allowedTopologies)
+		defer client.StorageV1().StorageClasses().Delete(storageclass.Name, nil)
+
+		ginkgo.By("Expect claim to fail provisioning volume on inaccessible non shared datastore")
+		err = framework.WaitForPersistentVolumeClaimPhase(v1.ClaimBound, client, pvclaim.Namespace, pvclaim.Name, framework.Poll, time.Minute/2)
+		gomega.Expect(err).To(gomega.HaveOccurred())
+		// Get the event list and verify if it contains expected error message
+		eventList, _ := client.CoreV1().Events(pvclaim.Namespace).List(metav1.ListOptions{})
+		actualErrMsg := eventList.Items[len(eventList.Items)-1].Message
+		framework.Logf(fmt.Sprintf("Actual failure message: %+q", actualErrMsg))
+		framework.Logf(fmt.Sprintf("Expected failure message: %+q", expectedErrMsg))
+		gomega.Expect(strings.Contains(actualErrMsg, expectedErrMsg)).To(gomega.BeTrue(), fmt.Sprintf("actualErrMsg: %q does not contain expectedErrMsg: %q", actualErrMsg, expectedErrMsg))
+	}
+
 	/*
 		Test to verify provisioning volume with valid zone and region specified in Storage Class succeeds.
 		Volume should be provisioned with Node Affinity rules for that zone/region.
@@ -128,6 +145,7 @@ var _ = ginkgo.Describe("[csi-block-e2e-zone] Basic Topology Aware Provisioning"
 	*/
 	ginkgo.It("Verify provisioning with valid topology specified in Storage Class passes", func() {
 		verifyBasicTopologyBasedVolumeProvisioning(f, client, namespace, nil, allowedTopologies)
+		testCleanUpUtil()
 	})
 
 	/*
@@ -147,10 +165,11 @@ var _ = ginkgo.Describe("[csi-block-e2e-zone] Basic Topology Aware Provisioning"
 		9. Delete Storage Class
 	*/
 	ginkgo.It("Verify provisioning with valid topology and accessible shared datastore specified in Storage Class passes", func() {
-		sharedDatastoreURL = GetAndExpectStringEnvVar(envSharedDatastoreURL)
+		sharedDatastoreURL := GetAndExpectStringEnvVar(envSharedDatastoreURL)
 		scParameters := make(map[string]string)
 		scParameters[scParamDatastoreURL] = sharedDatastoreURL
 		verifyBasicTopologyBasedVolumeProvisioning(f, client, namespace, scParameters, allowedTopologies)
+		testCleanUpUtil()
 	})
 
 	/*
@@ -174,6 +193,42 @@ var _ = ginkgo.Describe("[csi-block-e2e-zone] Basic Topology Aware Provisioning"
 		scParameters := make(map[string]string)
 		scParameters[scParamStoragePolicyName] = storagePolicyNameForSharedDatastores
 		verifyBasicTopologyBasedVolumeProvisioning(f, client, namespace, scParameters, allowedTopologies)
+		testCleanUpUtil()
+	})
+
+	/*
+		Test to verify provisioning volume with valid zone and region fails, when an inaccessible non-shared datastore url is specified in Storage Class.
+
+		Steps
+		1. Create a Storage Class with spec containing valid region and zone in “AllowedTopologies” and datastoreURL inaccessible to this zone.
+		2. Create a PVC using above SC
+		3. Verify PVC creation fails with “Not Accessible” error
+		4. Delete PVC
+	*/
+	ginkgo.It("Verify provisioning volume with valid zone and region fails when an inaccessible non-shared datastore url is specified in Storage Class", func() {
+
+		nonSharedDatastoreURLInZone := GetAndExpectStringEnvVar(envInaccessibleZoneDatastoreURL)
+		scParameters := make(map[string]string)
+		scParameters[scParamDatastoreURL] = nonSharedDatastoreURLInZone
+		errStringToVerify := "DatastoreURL: " + scParameters[scParamDatastoreURL] + " specified in the storage class is not accessible in the topology"
+		invokeTopologyBasedVolumeProvisioningWithInaccessibleParameters(f, client, namespace, scParameters, allowedTopologies, errStringToVerify)
+	})
+
+	/*
+		Test to verify provisioning volume with valid zone and region fails, when storage policy from different zone is specified in Storage Class.
+
+		Steps
+		1. Create a Storage Class with spec containing valid region and zone in “AllowedTopologies” and storage policy from different zone.
+		2. Create a PVC using above SC
+		3. Verify PVC creation fails with “Not Accessible” error
+		4. Delete PVC
+	*/
+	ginkgo.It("Verify provisioning volume with valid zone and region fails when storage policy from different zone is specified in Storage Class", func() {
+		storagePolicyNameFromOtherZone := GetAndExpectStringEnvVar(envStoragePolicyNameFromInaccessibleZone)
+		scParameters := make(map[string]string)
+		scParameters[scParamStoragePolicyName] = storagePolicyNameFromOtherZone
+		errStringToVerify := "No compatible datastore found for storagePolicy"
+		invokeTopologyBasedVolumeProvisioningWithInaccessibleParameters(f, client, namespace, scParameters, allowedTopologies, errStringToVerify)
 	})
 
 })
