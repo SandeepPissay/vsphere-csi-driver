@@ -53,11 +53,7 @@ func triggerFullSync(k8sclient clientset.Interface, metadataSyncer *metadataSync
 
 	// pvToPVCMap maps pv name to corresponding PVC
 	// pvcToPodMap maps pvc to the mounted Pod
-	pvToPVCMap, pvcToPodMap, err := buildPVCMapPodMap(k8sclient, k8sPVs)
-	if err != nil {
-		// Failed to build map, cannot do fullsync
-		return
-	}
+	pvToPVCMap, pvcToPodMap := buildPVCMapPodMap(k8sclient, k8sPVs)
 
 	//Call CNS QueryAll to get container volumes by cluster ID
 	queryFilter := cnstypes.CnsQueryFilter{
@@ -290,22 +286,22 @@ func constructCnsUpdateSpec(pvList []*v1.PersistentVolume, pvToPVCMap pvcMap, pv
 //  2. find POD mounted to given PVC
 // pvToPVCMap maps PV name to corresponding PVC, key is pv name
 // pvcToPodMap maps PVC to the POD attached to the PVC, key is "pvc.Namespace/pvc.Name"
-func buildPVCMapPodMap(k8sclient clientset.Interface, pvList []*v1.PersistentVolume) (pvcMap, podMap, error) {
+func buildPVCMapPodMap(k8sclient clientset.Interface, pvList []*v1.PersistentVolume) (pvcMap, podMap) {
 	pvToPVCMap := make(pvcMap)
 	pvcToPodMap := make(podMap)
 	for _, pv := range pvList {
 		if pv.Spec.ClaimRef != nil {
 			pvc, err := k8sclient.CoreV1().PersistentVolumeClaims(pv.Spec.ClaimRef.Namespace).Get(pv.Spec.ClaimRef.Name, metav1.GetOptions{})
 			if err != nil {
-				klog.Warningf("CSPFullSync: Failed to get pvc for namespace %v and name %v", pv.Spec.ClaimRef.Namespace, pv.Spec.ClaimRef.Name)
-				return pvToPVCMap, pvcToPodMap, err
+				klog.Warningf("CSPFullSync: Failed to get pvc for namespace %v and name %v. err=%v", pv.Spec.ClaimRef.Namespace, pv.Spec.ClaimRef.Name, err)
+				continue
 			}
 			pvToPVCMap[pv.Name] = pvc
 			klog.V(4).Infof("CSPFullSync: pvc %v is backed by pv %v", pvc.Name, pv.Name)
 			pods, err := k8sclient.CoreV1().Pods(pvc.Namespace).List(metav1.ListOptions{})
 			if err != nil {
-				klog.Warningf("CSPFullSync: Failed to get pods for namespace %v", pvc.Namespace)
-				return pvToPVCMap, pvcToPodMap, err
+				klog.Warningf("CSPFullSync: Failed to get pods for namespace %v. err=%v", pvc.Namespace, err)
+				continue
 			}
 			for _, pod := range pods.Items {
 				if pod.Spec.Volumes != nil {
@@ -323,5 +319,5 @@ func buildPVCMapPodMap(k8sclient clientset.Interface, pvList []*v1.PersistentVol
 
 		}
 	}
-	return pvToPVCMap, pvcToPodMap, nil
+	return pvToPVCMap, pvcToPodMap
 }
