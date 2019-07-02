@@ -60,6 +60,8 @@ var _ bool = ginkgo.Describe("[csi-block-e2e] full-sync-test", func() {
 		datastore           *object.Datastore
 		err                 error
 		datastoreURL        string
+		fcdID               string
+		datacenters         []string
 	)
 
 	const (
@@ -88,6 +90,17 @@ var _ bool = ginkgo.Describe("[csi-block-e2e] full-sync-test", func() {
 			fullSyncWaitTime = defaultFullSyncWaitTime
 		}
 
+		cfg, err := getConfig()
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+		dcList := strings.Split(cfg.Global.Datacenters,
+			",")
+		for _, dc := range dcList {
+			dcName := strings.TrimSpace(dc)
+			if dcName != "" {
+				datacenters = append(datacenters, dcName)
+			}
+		}
+
 		labelKey = "app"
 		labelValue = "e2e-fullsync"
 
@@ -106,20 +119,8 @@ var _ bool = ginkgo.Describe("[csi-block-e2e] full-sync-test", func() {
 			pandoraSyncWaitTime = defaultPandoraSyncWaitTime
 		}
 
-		var datacenters []string
 		datastoreURL = GetAndExpectStringEnvVar(envSharedDatastoreURL)
-
 		finder := find.NewFinder(e2eVSphere.Client.Client, false)
-		cfg, err := getConfig()
-		gomega.Expect(err).NotTo(gomega.HaveOccurred())
-		dcList := strings.Split(cfg.Global.Datacenters,
-			",")
-		for _, dc := range dcList {
-			dcName := strings.TrimSpace(dc)
-			if dcName != "" {
-				datacenters = append(datacenters, dcName)
-			}
-		}
 
 		for _, dc := range datacenters {
 			datacenter, err = finder.Datacenter(ctx, dc)
@@ -129,7 +130,7 @@ var _ bool = ginkgo.Describe("[csi-block-e2e] full-sync-test", func() {
 		}
 
 		ginkgo.By("Creating FCD Disk")
-		fcdID, err := e2eVSphere.createFCD(ctx, fcdName, diskSizeInMb, datastore.Reference())
+		fcdID, err = e2eVSphere.createFCD(ctx, fcdName, diskSizeInMb, datastore.Reference())
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 		ginkgo.By(fmt.Sprintf("Sleeping for %v seconds to allow newly created FCD:%s to sync with pandora", pandoraSyncWaitTime, fcdID))
@@ -164,8 +165,6 @@ var _ bool = ginkgo.Describe("[csi-block-e2e] full-sync-test", func() {
 		err = client.CoreV1().PersistentVolumes().Delete(pv.Name, nil)
 
 		ginkgo.By(fmt.Sprintf("Deleting FCD: %s", fcdID))
-		ctx, cancel = context.WithCancel(context.Background())
-		defer cancel()
 		err = e2eVSphere.deleteFCD(ctx, fcdID, datastore.Reference())
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
@@ -230,6 +229,8 @@ var _ bool = ginkgo.Describe("[csi-block-e2e] full-sync-test", func() {
 
 	ginkgo.It("Verify CNS volume is deleted after full sync when pv entry is delete", func() {
 		ginkgo.By(fmt.Sprintf("Invoking test to verify CNS volume creation"))
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
 		sc, pvc, err := createPVCAndStorageClass(client, namespace, nil, nil, "", nil)
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		defer client.StorageV1().StorageClasses().Delete(sc.Name, nil)
@@ -239,8 +240,28 @@ var _ bool = ginkgo.Describe("[csi-block-e2e] full-sync-test", func() {
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		gomega.Expect(pvs).NotTo(gomega.BeEmpty())
 		pv := pvs[0]
-		fcdID := pv.Spec.CSI.VolumeHandle
+		fcdID = pv.Spec.CSI.VolumeHandle
 
+		queryResult, err := e2eVSphere.queryCNSVolumeWithResult(fcdID)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+		gomega.Expect(len(queryResult.Volumes) > 0)
+
+		if len(queryResult.Volumes) > 0 {
+			// Find datastore from the retrieved datastoreURL
+			finder := find.NewFinder(e2eVSphere.Client.Client, false)
+
+			for _, dc := range datacenters {
+				datacenter, err = finder.Datacenter(ctx, dc)
+				gomega.Expect(err).NotTo(gomega.HaveOccurred())
+				finder.SetDatacenter(datacenter)
+				datastore, err = getDatastoreByURL(ctx, queryResult.Volumes[0].DatastoreUrl, datacenter)
+				gomega.Expect(err).NotTo(gomega.HaveOccurred())
+				if datastore != nil {
+					break
+				}
+			}
+		}
+		gomega.Expect(datastore).NotTo(gomega.BeNil())
 		ginkgo.By(fmt.Sprintln("Stopping vsan-health on the vCenter host"))
 		vcAddress := e2eVSphere.Config.Global.VCenterHostname + ":" + vcenterPort
 		err = invokeVCenterServiceControl(stopVsanHealthOperation, vsanhealthServiceName, vcAddress)
@@ -264,5 +285,10 @@ var _ bool = ginkgo.Describe("[csi-block-e2e] full-sync-test", func() {
 		ginkgo.By(fmt.Sprintf("Waiting for volume %s to be deleted", fcdID))
 		err = e2eVSphere.waitForCNSVolumeToBeDeleted(fcdID)
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+		ginkgo.By(fmt.Sprintf("Deleting FCD: %s", fcdID))
+		err = e2eVSphere.deleteFCD(ctx, fcdID, datastore.Reference())
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
 	})
 })
