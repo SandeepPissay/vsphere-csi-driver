@@ -27,39 +27,23 @@ import (
 	"time"
 )
 
-/*
-	Test to verify provisioning volume with valid zone and region specified in Storage Class succeeds.
-	Volume should be provisioned with Node Affinity rules for that zone/region.
-	Pod should be scheduled on Node located within that zone/region.
-
-	Steps
-	1. Create a Storage Class with valid region and zone specified in “AllowedTopologies”
-	2. Create a PVC using above SC
-	3. Wait for PVC to be in bound phase
-	4. Verify PV is created in specified zone and region
-	5. Create a Pod attached to the above PV
-	6. Verify Pod is scheduled on node located within the specified zone and region
-	7. Delete Pod and wait for disk to be detached
-	8. Delete PVC
-	9. Delete Storage Class
-*/
-
 var _ = ginkgo.Describe("[csi-block-e2e-zone] Basic Topology Aware Provisioning", func() {
 	f := framework.NewDefaultFramework("e2e-vsphere-basic-zone-provisioning")
 	var (
-		client            clientset.Interface
-		namespace         string
-		zoneValues        []string
-		regionValues      []string
-		pvZone            string
-		pvRegion          string
-		allowedTopologies []v1.TopologySelectorLabelRequirement
-		nodeList          *v1.NodeList
-		pod               *v1.Pod
-		pvclaim           *v1.PersistentVolumeClaim
-		storageclass      *storagev1.StorageClass
-		err               error
-		topologyMap       map[string][]string
+		client             clientset.Interface
+		namespace          string
+		zoneValues         []string
+		regionValues       []string
+		pvZone             string
+		pvRegion           string
+		allowedTopologies  []v1.TopologySelectorLabelRequirement
+		nodeList           *v1.NodeList
+		pod                *v1.Pod
+		pvclaim            *v1.PersistentVolumeClaim
+		storageclass       *storagev1.StorageClass
+		err                error
+		topologyMap        map[string][]string
+		sharedDatastoreURL string
 	)
 	ginkgo.BeforeEach(func() {
 		client = f.ClientSet
@@ -99,11 +83,9 @@ var _ = ginkgo.Describe("[csi-block-e2e-zone] Basic Topology Aware Provisioning"
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	})
 
-	// Provisioning with valid topology should be successful
-	// Pod should be scheduled on Node located within that topology
-	ginkgo.It("Verify provisioning with valid topology specified in Storage Class passes", func() {
-		ginkgo.By("Creating Storage Class with allowedTopologies set and dynamically provisioning volume")
-		storageclass, pvclaim, err = createPVCAndStorageClass(client, namespace, nil, nil, "", allowedTopologies)
+	verifyBasicTopologyBasedVolumeProvisioning := func(f *framework.Framework, client clientset.Interface, namespace string, scParameters map[string]string, allowedTopologies []v1.TopologySelectorLabelRequirement) {
+
+		storageclass, pvclaim, err = createPVCAndStorageClass(client, namespace, nil, scParameters, "", allowedTopologies)
 
 		ginkgo.By("Expect claim to pass provisioning volume")
 		err = framework.WaitForPersistentVolumeClaimPhase(v1.ClaimBound, client, pvclaim.Namespace, pvclaim.Name, framework.Poll, time.Minute)
@@ -126,6 +108,72 @@ var _ = ginkgo.Describe("[csi-block-e2e-zone] Basic Topology Aware Provisioning"
 		ginkgo.By("Verify Pod is scheduled in on a node belonging to same topology as the PV it is attached to")
 		err = verifyPodLocation(pod, nodeList, pvZone, pvRegion)
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+	}
+
+	/*
+		Test to verify provisioning volume with valid zone and region specified in Storage Class succeeds.
+		Volume should be provisioned with Node Affinity rules for that zone/region.
+		Pod should be scheduled on Node located within that zone/region.
+
+		Steps
+		1. Create a Storage Class with valid region and zone specified in “AllowedTopologies”
+		2. Create a PVC using above SC
+		3. Wait for PVC to be in bound phase
+		4. Verify PV is created in specified zone and region
+		5. Create a Pod attached to the above PV
+		6. Verify Pod is scheduled on node located within the specified zone and region
+		7. Delete Pod and wait for disk to be detached
+		8. Delete PVC
+		9. Delete Storage Class
+	*/
+	ginkgo.It("Verify provisioning with valid topology specified in Storage Class passes", func() {
+		verifyBasicTopologyBasedVolumeProvisioning(f, client, namespace, nil, allowedTopologies)
+	})
+
+	/*
+		Test to verify if provisioning with valid topology and a shared data store url specified in the Storage Class succeeds.
+		Volume should be provisioned with Node Affinity rules for that zone/region and on datastore matching datastoreURL.
+		Pod should be scheduled on Node located within that zone/region.
+
+		Steps
+		1. Create a Storage Class with spec containing valid region and zone in “AllowedTopologies” and datastoreURL accessible to this zone.
+		2. Create a PVC using above SC
+		3. Wait for PVC to be in bound phase
+		4. Verify volume is created in specified region and zone on datastore matching datastoreURL.
+		5. Create a Pod attached to the above PV
+		6. Verify Pod is scheduled on node located within the specified zone and region
+		7. Delete Pod and wait for disk to be detached
+		8. Delete PVC
+		9. Delete Storage Class
+	*/
+	ginkgo.It("Verify provisioning with valid topology and accessible shared datastore specified in Storage Class passes", func() {
+		sharedDatastoreURL = GetAndExpectStringEnvVar(envSharedDatastoreURL)
+		scParameters := make(map[string]string)
+		scParameters[scParamDatastoreURL] = sharedDatastoreURL
+		verifyBasicTopologyBasedVolumeProvisioning(f, client, namespace, scParameters, allowedTopologies)
+	})
+
+	/*
+		Test to verify if provisioning with valid topology and storage policy specified in the Storage Class succeeds.
+		Volume should be provisioned with Node Affinity rules for that zone/region and on datastore compatible with Storage Policy specified.
+		Pod should be scheduled on Node located within that zone/region.
+
+		Steps
+		1. Create a Storage Class with with valid region and zone specified in “AllowedTopologies” and Storage Policy accessible to this zone.
+		2. Create a PVC using above SC
+		3. Wait for PVC to be in bound phase
+		4. Verify volume is created in specified region and zone on datastore compatible with Storage Policy specified.
+		5. Create a Pod attached to the above PV
+		6. Verify Pod is scheduled on node located within the specified zone and region
+		7. Delete Pod and wait for disk to be detached
+		8. Delete PVC
+		9. Delete Storage Class
+	*/
+	ginkgo.It("Verify dynamic volume provisioning works when allowed topology and storage policy is specified in the storageclass", func() {
+		storagePolicyNameForSharedDatastores := GetAndExpectStringEnvVar(envStoragePolicyNameForSharedDatastores)
+		scParameters := make(map[string]string)
+		scParameters[scParamStoragePolicyName] = storagePolicyNameForSharedDatastores
+		verifyBasicTopologyBasedVolumeProvisioning(f, client, namespace, scParameters, allowedTopologies)
 	})
 
 })
