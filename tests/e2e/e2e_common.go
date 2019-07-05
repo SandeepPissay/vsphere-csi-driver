@@ -46,6 +46,10 @@ const (
 	zoneKey                                    = "failure-domain.beta.kubernetes.io/zone"
 	regionKey                                  = "failure-domain.beta.kubernetes.io/region"
 	envTopology                                = "TOPOLOGY_VALUES"
+	ext4FSType                                 = "ext4"
+	ext3FSType                                 = "ext3"
+	invalidFSType                              = "ext10"
+	execCommand                                = "/bin/df -T /mnt/volume1 | /bin/awk 'FNR == 2 {print $2}' > /mnt/volume1/fstype && while true ; do sleep 2 ; done"
 )
 
 // GetAndExpectStringEnvVar parses a string from env variable
