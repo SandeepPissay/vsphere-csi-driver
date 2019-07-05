@@ -20,8 +20,10 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/klog"
+	api "k8s.io/kubernetes/pkg/apis/core"
 	cnstypes "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vmomi/types"
 	volumes "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/volume"
 	cnsvsphere "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vsphere"
@@ -95,10 +97,7 @@ func getPVsInBoundAvailableOrReleased(pvList *v1.PersistentVolumeList) []*v1.Per
 		if pv.Spec.CSI.Driver == vSphereCSIDriverName {
 			klog.V(4).Infof("CSPFullSync: pv %v is in state %v", pv.Spec.CSI.VolumeHandle, pv.Status.Phase)
 			if pv.Status.Phase == v1.VolumeBound || pv.Status.Phase == v1.VolumeAvailable || pv.Status.Phase == v1.VolumeReleased {
-				klog.V(2).Infof("CSPFullSync: before adding %v", pvsInDesiredState)
 				pvsInDesiredState = append(pvsInDesiredState, &pvList.Items[index])
-				klog.V(2).Infof("CSPFullSync: after adding %v", pvsInDesiredState)
-
 			}
 		}
 	}
@@ -296,7 +295,7 @@ func buildPVCMapPodMap(k8sclient clientset.Interface, pvList []*v1.PersistentVol
 	pvToPVCMap := make(pvcMap)
 	pvcToPodMap := make(podMap)
 	for _, pv := range pvList {
-		if pv.Spec.ClaimRef != nil {
+		if pv.Spec.ClaimRef != nil && pv.Status.Phase == v1.VolumeBound {
 			pvc, err := k8sclient.CoreV1().PersistentVolumeClaims(pv.Spec.ClaimRef.Namespace).Get(pv.Spec.ClaimRef.Name, metav1.GetOptions{})
 			if err != nil {
 				klog.Warningf("CSPFullSync: Failed to get pvc for namespace %v and name %v. err=%v", pv.Spec.ClaimRef.Namespace, pv.Spec.ClaimRef.Name, err)
@@ -304,7 +303,9 @@ func buildPVCMapPodMap(k8sclient clientset.Interface, pvList []*v1.PersistentVol
 			}
 			pvToPVCMap[pv.Name] = pvc
 			klog.V(4).Infof("CSPFullSync: pvc %v is backed by pv %v", pvc.Name, pv.Name)
-			pods, err := k8sclient.CoreV1().Pods(pvc.Namespace).List(metav1.ListOptions{})
+			pods, err := k8sclient.CoreV1().Pods(pvc.Namespace).List(metav1.ListOptions{
+				FieldSelector: fields.AndSelectors(fields.SelectorFromSet(fields.Set{"status.phase": string(api.PodRunning)})).String(),
+			})
 			if err != nil {
 				klog.Warningf("CSPFullSync: Failed to get pods for namespace %v. err=%v", pvc.Namespace, err)
 				continue

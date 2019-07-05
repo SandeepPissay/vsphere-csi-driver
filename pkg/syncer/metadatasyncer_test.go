@@ -664,7 +664,7 @@ func runTestFullSyncWorkflows(t *testing.T) {
 	}
 
 	// allocate pvc claimRef for PV spec
-	pv = getPersistentVolumeSpec(volumeID.Id, v1.PersistentVolumeReclaimRetain, pvLabel, v1.VolumeAvailable, pvc.Name)
+	pv = getPersistentVolumeSpec(volumeID.Id, v1.PersistentVolumeReclaimRetain, pvLabel, v1.VolumeBound, pvc.Name)
 	if pv, err = k8sclient.CoreV1().PersistentVolumes().Update(pv); err != nil {
 		t.Fatal(err)
 	}
