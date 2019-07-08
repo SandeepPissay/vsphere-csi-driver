@@ -27,18 +27,39 @@ import (
 	cnstypes "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vmomi/types"
 	volumes "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/volume"
 	cnsvsphere "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vsphere"
+	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/block"
 	"sync"
 )
 
 const (
-	createOperation      = "Create"
-	updateOperation      = "Update"
-	vSphereCSIDriverName = "block.vsphere.csi.vmware.com"
+	// Constants for specifying operation that needs to be performed on CNS volume
+
+	// Create the volume on CNS
+	createVolumeOperation = "createVolume"
+	// Update the volume entries on CNS
+	updateVolumeOperation = "updateVolume"
+	// Delete the PVC entry and Pod entry (if it exists) on CNS
+	updateVolumeWithDeleteClaimOperation = "updateVolumeWithDeleteClaim"
+	// Delete the Pod entry on CNS
+	updateVolumeWithDeletePodOperation = "updateVolumeWithDeletePod"
 )
 
 type pvcMap = map[string]*v1.PersistentVolumeClaim
 type podMap = map[string]*v1.Pod
+
+// Create a mapping of CNS volume to Pod name
+// as this mapping does not exist in K8s
+// in case a Pod entry needs to be deleted from CNS cache
+var cnsVolumeToPodMap map[string]string
+
+// Create a mapping of CNS volume to Pvc name
+var cnsVolumeToPvcMap map[string]string
+
+// Create a mapping of CNS volume to entity Namespace name
+// Here entity can be either PVC or Pod - both will
+// belong to the same namespace
+var cnsVolumeToEntityNamespaceMap map[string]string
 
 // triggerFullSync triggers full sync
 func triggerFullSync(k8sclient clientset.Interface, metadataSyncer *metadataSyncInformer) {
@@ -72,13 +93,18 @@ func triggerFullSync(k8sclient clientset.Interface, metadataSyncer *metadataSync
 	}
 	cnsVolumeArray := queryAllResult.Volumes
 
+	cnsVolumeToPodMap = make(map[string]string)
+	cnsVolumeToPvcMap = make(map[string]string)
+	cnsVolumeToEntityNamespaceMap = make(map[string]string)
+
 	k8sPVsMap := buildVolumeMap(k8sPVs, cnsVolumeArray, pvToPVCMap, pvcToPodMap, metadataSyncer)
 	klog.V(4).Infof("CSPFullSync: k8sPVMap %v", k8sPVsMap)
 
-	volToBeCreated, volToBeUpdated := identifyVolumesToBeCreatedUpdated(k8sPVs, k8sPVsMap)
+	volToBeCreated, volToBeUpdated, volWithPvcEntryToBeDeleted, volWithPodEntryToBeDeleted := identifyVolumesToBeCreatedUpdated(k8sPVs, k8sPVsMap)
 	createSpecArray := constructCnsCreateSpec(volToBeCreated, pvToPVCMap, pvcToPodMap, metadataSyncer)
 	updateSpecArray := constructCnsUpdateSpec(volToBeUpdated, pvToPVCMap, pvcToPodMap, metadataSyncer)
-
+	updateSpecArray = append(updateSpecArray, constructCnsUpdateSpecWithPVCToBeDeleted(volWithPvcEntryToBeDeleted, metadataSyncer)...)
+	updateSpecArray = append(updateSpecArray, constructCnsUpdateSpecWithPodToBeDeleted(volWithPodEntryToBeDeleted, metadataSyncer)...)
 	volToBeDeleted := identifyVolumesToBeDeleted(cnsVolumeArray, k8sPVsMap)
 
 	wg := sync.WaitGroup{}
@@ -94,7 +120,7 @@ func triggerFullSync(k8sclient clientset.Interface, metadataSyncer *metadataSync
 func getPVsInBoundAvailableOrReleased(pvList *v1.PersistentVolumeList) []*v1.PersistentVolume {
 	var pvsInDesiredState []*v1.PersistentVolume
 	for index, pv := range pvList.Items {
-		if pv.Spec.CSI.Driver == vSphereCSIDriverName {
+		if pv.Spec.CSI.Driver == service.Name {
 			klog.V(4).Infof("CSPFullSync: pv %v is in state %v", pv.Spec.CSI.VolumeHandle, pv.Status.Phase)
 			if pv.Status.Phase == v1.VolumeBound || pv.Status.Phase == v1.VolumeAvailable || pv.Status.Phase == v1.VolumeReleased {
 				pvsInDesiredState = append(pvsInDesiredState, &pvList.Items[index])
@@ -141,9 +167,9 @@ func fullSyncUpdateVolumes(updateSpecArray []cnstypes.CnsVolumeMetadataUpdateSpe
 	wg.Done()
 }
 
-// buildMetadataList build metadata list for given PV
+// buildCnsUpdateMetadataList build metadata list for given PV
 // metadata list may include PV metadata, PVC metadata and POD metadata
-func buildMetadataList(pv *v1.PersistentVolume, pvToPVCMap pvcMap, pvcToPodMap podMap) []cnstypes.BaseCnsEntityMetadata {
+func buildCnsUpdateMetadataList(pv *v1.PersistentVolume, pvToPVCMap pvcMap, pvcToPodMap podMap) []cnstypes.BaseCnsEntityMetadata {
 	var metadataList []cnstypes.BaseCnsEntityMetadata
 
 	// get pv metadata
@@ -190,19 +216,17 @@ func buildVolumeMap(pvList []*v1.PersistentVolume, cnsVolumeList []cnstypes.CnsV
 			if err == nil && queryResult != nil && len(queryResult.Volumes) > 0 {
 				if &queryResult.Volumes[0].Metadata != nil {
 					cnsMetadata := queryResult.Volumes[0].Metadata.EntityMetadata
-					metadataList := buildMetadataList(pv, pvToPVCMap, pvcToPodMap)
-					if !cnsvsphere.CompareK8sandCNSVolumeMetadata(metadataList, cnsMetadata) {
-						k8sPVMap[pv.Spec.CSI.VolumeHandle] = updateOperation
-					}
+					metadataList := buildCnsUpdateMetadataList(pv, pvToPVCMap, pvcToPodMap)
+					k8sPVMap[pv.Spec.CSI.VolumeHandle] = getCnsUpdateOperationType(metadataList, cnsMetadata, pv.Name)
 				} else {
 					// metadata does not exist in CNS cache even the volume has an entry in CNS cache
-					klog.Warningf("CSPFullSync:No metadata found for volume %v", pv.Spec.CSI.VolumeHandle)
-					k8sPVMap[pv.Spec.CSI.VolumeHandle] = updateOperation
+					klog.Warningf("CSPFullSync: No metadata found for volume %v", pv.Spec.CSI.VolumeHandle)
+					k8sPVMap[pv.Spec.CSI.VolumeHandle] = updateVolumeOperation
 				}
 			}
 		} else {
 			// PV exist in K8S but not in CNS cache, need to create
-			k8sPVMap[pv.Spec.CSI.VolumeHandle] = createOperation
+			k8sPVMap[pv.Spec.CSI.VolumeHandle] = createVolumeOperation
 		}
 	}
 
@@ -210,23 +234,35 @@ func buildVolumeMap(pvList []*v1.PersistentVolume, cnsVolumeList []cnstypes.CnsV
 }
 
 // identifyVolumesToBeCreatedUpdated return list of PV need to be created and updated
-func identifyVolumesToBeCreatedUpdated(pvList []*v1.PersistentVolume, k8sPVMap map[string]string) ([]*v1.PersistentVolume, []*v1.PersistentVolume) {
+// volumes to be updated can be of three types -
+// 	1. volumes whose existing metadata needs to be updated/created
+//  2. volumes whose existing PVC and Pod metadata needs to be deleted
+// 	3. volumes whose existing Pod metadata needs to be deleted
+func identifyVolumesToBeCreatedUpdated(pvList []*v1.PersistentVolume, k8sPVMap map[string]string) ([]*v1.PersistentVolume, []*v1.PersistentVolume, []*v1.PersistentVolume, []*v1.PersistentVolume) {
 	pvToBeCreated := []*v1.PersistentVolume{}
 	pvToBeUpdated := []*v1.PersistentVolume{}
+	pvcToBeDeleted := []*v1.PersistentVolume{}
+	podToBeDeleted := []*v1.PersistentVolume{}
 	for _, pv := range pvList {
-		if k8sPVMap[pv.Spec.CSI.VolumeHandle] == createOperation {
-			klog.V(4).Infof("CSPFullSync: Volume with id %s added to create list", pv.Spec.CSI.VolumeHandle)
+		switch k8sPVMap[pv.Spec.CSI.VolumeHandle] {
+		case createVolumeOperation:
+			klog.V(4).Infof("CSPFullSync: Volume with id %s added to volume create list", pv.Spec.CSI.VolumeHandle)
 			pvToBeCreated = append(pvToBeCreated, pv)
-		} else if k8sPVMap[pv.Spec.CSI.VolumeHandle] == updateOperation {
-			klog.V(4).Infof("CSPFullSync: Volume with id %s added to update list", pv.Spec.CSI.VolumeHandle)
+		case updateVolumeOperation:
+			klog.V(4).Infof("CSPFullSync: Volume with id %s added to volume update list", pv.Spec.CSI.VolumeHandle)
 			pvToBeUpdated = append(pvToBeUpdated, pv)
+		case updateVolumeWithDeleteClaimOperation:
+			klog.V(4).Infof("CSPFullSync: Volume with id %s and claim %s added to volume claim delete list", pv.Spec.CSI.VolumeHandle, cnsVolumeToPvcMap[pv.Name])
+			pvcToBeDeleted = append(pvcToBeDeleted, pv)
+		case updateVolumeWithDeletePodOperation:
+			klog.V(4).Infof("CSPFullSync: Volume with id %s and pod name %s added to volume pod delete list", pv.Spec.CSI.VolumeHandle, cnsVolumeToPodMap[pv.Name])
+			podToBeDeleted = append(podToBeDeleted, pv)
 		}
 	}
-
-	return pvToBeCreated, pvToBeUpdated
+	return pvToBeCreated, pvToBeUpdated, pvcToBeDeleted, podToBeDeleted
 }
 
-// identifyVolumesToBeDeleted return list of volumeId need to be deleted
+// identifyVolumesToBeDeleted return list of volumeId's that need to be deleted
 func identifyVolumesToBeDeleted(cnsVolumeList []cnstypes.CnsVolume, k8sPVMap map[string]string) []cnstypes.CnsVolumeId {
 	var volToBeDeleted []cnstypes.CnsVolumeId
 	for _, vol := range cnsVolumeList {
@@ -243,7 +279,7 @@ func constructCnsCreateSpec(pvList []*v1.PersistentVolume, pvToPVCMap pvcMap, pv
 	var createSpecArray []cnstypes.CnsVolumeCreateSpec
 	for _, pv := range pvList {
 		// Create new metadata spec
-		metadataList := buildMetadataList(pv, pvToPVCMap, pvcToPodMap)
+		metadataList := buildCnsUpdateMetadataList(pv, pvToPVCMap, pvcToPodMap)
 		// volume exist in K8S, but not in CNS cache, need to create this volume
 		createSpec := cnstypes.CnsVolumeCreateSpec{
 			Name:       pv.Name,
@@ -264,11 +300,11 @@ func constructCnsCreateSpec(pvList []*v1.PersistentVolume, pvToPVCMap pvcMap, pv
 }
 
 // constructCnsUpdateSpec construct CnsVolumeMetadataUpdateSpec for given list of PVs
-func constructCnsUpdateSpec(pvList []*v1.PersistentVolume, pvToPVCMap pvcMap, pvcToPodMap podMap, metadataSyncer *metadataSyncInformer) []cnstypes.CnsVolumeMetadataUpdateSpec {
+func constructCnsUpdateSpec(pvUpdateList []*v1.PersistentVolume, pvToPVCMap pvcMap, pvcToPodMap podMap, metadataSyncer *metadataSyncInformer) []cnstypes.CnsVolumeMetadataUpdateSpec {
 	var updateSpecArray []cnstypes.CnsVolumeMetadataUpdateSpec
-	for _, pv := range pvList {
-		// Create new metadata spec
-		metadataList := buildMetadataList(pv, pvToPVCMap, pvcToPodMap)
+	for _, pv := range pvUpdateList {
+		// Create new metadata spec with delete flag false
+		metadataList := buildCnsUpdateMetadataList(pv, pvToPVCMap, pvcToPodMap)
 		// volume exist in K8S and CNS cache, but metadata is different, need to update this volume
 		updateSpec := cnstypes.CnsVolumeMetadataUpdateSpec{
 			VolumeId: cnstypes.CnsVolumeId{
@@ -281,8 +317,42 @@ func constructCnsUpdateSpec(pvList []*v1.PersistentVolume, pvToPVCMap pvcMap, pv
 		}
 
 		updateSpecArray = append(updateSpecArray, updateSpec)
-		klog.V(4).Infof("CSPFullSync: update metadata for volume %v", pv.Spec.CSI.VolumeHandle)
+		klog.V(4).Infof("CSPFullSync: constructCnsUpdateSpec to update metadata for volume %s with delete flag false", pv.Spec.CSI.VolumeHandle)
 	}
+
+	return updateSpecArray
+}
+
+// constructCnsUpdateSpecWithPVCToBeDeleted constructs CnsVolumeMetadataUpdateSpec for given list of PVs
+// List of PVs have PVC and/or Pod entries in CNS that need to be deleted
+func constructCnsUpdateSpecWithPVCToBeDeleted(pvUpdateList []*v1.PersistentVolume, metadataSyncer *metadataSyncInformer) []cnstypes.CnsVolumeMetadataUpdateSpec {
+	var updateSpecArray []cnstypes.CnsVolumeMetadataUpdateSpec
+
+	for _, pv := range pvUpdateList {
+		updateSpec := buildCnsMetadataSpecMarkedForDelete(pv, updateVolumeWithDeleteClaimOperation)
+		// volume exist in K8S and CNS cache, but PVC metadata does not exist in K8S
+		// need to delete PVC entries for this volume
+		updateSpec.Metadata.ContainerCluster = cnsvsphere.GetContainerCluster(metadataSyncer.cfg.Global.ClusterID, metadataSyncer.cfg.VirtualCenter[metadataSyncer.vcenter.Config.Host].User)
+		updateSpecArray = append(updateSpecArray, updateSpec)
+		klog.V(4).Infof("CSPFullSync: constructCnsUpdateSpecWithPVCToBeDeleted to update metadata for volume %s with delete flag true", pv.Spec.CSI.VolumeHandle)
+	}
+	return updateSpecArray
+}
+
+// constructCnsUpdateSpecWithPodToBeDeleted constructs CnsVolumeMetadataUpdateSpec for given list of PVs
+// List of PVs have Pod entries in CNS that need to be deleted
+func constructCnsUpdateSpecWithPodToBeDeleted(pvUpdateList []*v1.PersistentVolume, metadataSyncer *metadataSyncInformer) []cnstypes.CnsVolumeMetadataUpdateSpec {
+	var updateSpecArray []cnstypes.CnsVolumeMetadataUpdateSpec
+
+	for _, pv := range pvUpdateList {
+		updateSpec := buildCnsMetadataSpecMarkedForDelete(pv, updateVolumeWithDeletePodOperation)
+		// volume exist in K8S and CNS cache, but Pod metadata does not exist in K8S
+		// need to delete Pod entries for this volume
+		updateSpec.Metadata.ContainerCluster = cnsvsphere.GetContainerCluster(metadataSyncer.cfg.Global.ClusterID, metadataSyncer.cfg.VirtualCenter[metadataSyncer.vcenter.Config.Host].User)
+		updateSpecArray = append(updateSpecArray, updateSpec)
+		klog.V(4).Infof("CSPFullSync: constructCnsUpdateSpecWithPodToBeDeleted to update metadata for volume %s with delete flag true", pv.Spec.CSI.VolumeHandle)
+	}
+
 	return updateSpecArray
 }
 
@@ -327,4 +397,84 @@ func buildPVCMapPodMap(k8sclient clientset.Interface, pvList []*v1.PersistentVol
 		}
 	}
 	return pvToPVCMap, pvcToPodMap
+}
+
+// getCnsUpdateOperationType compares the input metadata list from K8S and metadata list from CNS
+// Returns the update operation type that needs to be performed on CNS
+// Empty string returned implies either no operation needs to be performed or
+// volume needs to be deleted from CNS
+func getCnsUpdateOperationType(pvMetadataList []cnstypes.BaseCnsEntityMetadata, cnsMetadataList []cnstypes.BaseCnsEntityMetadata, pvName string) string {
+	// K8s resource metadata contains more entries than CNS - need to update
+	if len(pvMetadataList) > len(cnsMetadataList) {
+		return updateVolumeOperation
+	}
+
+	// K8s resource metadata contains lesser entries than CNS - need to delete
+	// some entries from CNS
+	if len(pvMetadataList) < len(cnsMetadataList) {
+		// Construct CNS volume mappings
+		for _, cnsMetadata := range cnsMetadataList {
+			// Construct CNS volume to Pod name mapping
+			if cnsMetadata.(*cnstypes.CnsKubernetesEntityMetadata).EntityType == string(cnstypes.CnsKubernetesEntityTypePOD) {
+				cnsVolumeToPodMap[pvName] = cnsMetadata.GetCnsEntityMetadata().EntityName
+				cnsVolumeToEntityNamespaceMap[pvName] = cnsMetadata.(*cnstypes.CnsKubernetesEntityMetadata).Namespace
+			}
+			// Construct CNS volume to Pvc name mapping
+			if cnsMetadata.(*cnstypes.CnsKubernetesEntityMetadata).EntityType == string(cnstypes.CnsKubernetesEntityTypePVC) {
+				cnsVolumeToPvcMap[pvName] = cnsMetadata.GetCnsEntityMetadata().EntityName
+				cnsVolumeToEntityNamespaceMap[pvName] = cnsMetadata.(*cnstypes.CnsKubernetesEntityMetadata).Namespace
+			}
+		}
+		// PVC and Pod entries need to be deleted from CNS
+		// as K8s metadata only contains PV entry
+		if len(pvMetadataList) == 1 {
+			return updateVolumeWithDeleteClaimOperation
+		}
+		// Pod entry needs to be deleted from CNS
+		// as K8s metadata only PV and PVC entry
+		if len(pvMetadataList) == 2 {
+			return updateVolumeWithDeletePodOperation
+		}
+	}
+
+	// Same number of entries for volume in K8s and CNS
+	// Need to check if entries match
+	cnsMetadataMap := make(map[string]*cnstypes.CnsKubernetesEntityMetadata)
+	for _, cnsMetadata := range cnsMetadataList {
+		cnsKubernetesMetadata := cnsMetadata.(*cnstypes.CnsKubernetesEntityMetadata)
+		cnsMetadataMap[cnsKubernetesMetadata.EntityType] = cnsKubernetesMetadata
+	}
+	for _, k8sMetadata := range pvMetadataList {
+		k8sKubernetesMetadata := k8sMetadata.(*cnstypes.CnsKubernetesEntityMetadata)
+		if _, ok := cnsMetadataMap[k8sKubernetesMetadata.EntityType]; ok && !cnsvsphere.CompareKubernetesMetadata(k8sKubernetesMetadata, cnsMetadataMap[k8sKubernetesMetadata.EntityType]) {
+			return updateVolumeOperation
+		}
+	}
+	return ""
+}
+
+// buildCnsMetadataSpecMarkedForDelete builds metadata list for a volume
+// where PVC and/or Pod entries need to be deleted from CNS
+// and returns the update spec to be passed to CNS
+func buildCnsMetadataSpecMarkedForDelete(pv *v1.PersistentVolume, operationType string) cnstypes.CnsVolumeMetadataUpdateSpec {
+	// Create new metadata spec with delete flag true
+	var metadataList []cnstypes.BaseCnsEntityMetadata
+	if _, ok := cnsVolumeToPvcMap[pv.Name]; ok && operationType == updateVolumeWithDeleteClaimOperation {
+		pvcMetadata := cnsvsphere.GetCnsKubernetesEntityMetaData(cnsVolumeToPvcMap[pv.Name], nil, true, string(cnstypes.CnsKubernetesEntityTypePVC), cnsVolumeToEntityNamespaceMap[pv.Name])
+		metadataList = append(metadataList, cnstypes.BaseCnsEntityMetadata(pvcMetadata))
+	}
+	if _, ok := cnsVolumeToPodMap[pv.Name]; ok {
+		podMetadata := cnsvsphere.GetCnsKubernetesEntityMetaData(cnsVolumeToPodMap[pv.Name], nil, true, string(cnstypes.CnsKubernetesEntityTypePOD), cnsVolumeToEntityNamespaceMap[pv.Name])
+		metadataList = append(metadataList, cnstypes.BaseCnsEntityMetadata(podMetadata))
+	}
+
+	updateSpec := cnstypes.CnsVolumeMetadataUpdateSpec{
+		VolumeId: cnstypes.CnsVolumeId{
+			Id: pv.Spec.CSI.VolumeHandle,
+		},
+		Metadata: cnstypes.CnsVolumeMetadata{
+			EntityMetadata: metadataList,
+		},
+	}
+	return updateSpec
 }

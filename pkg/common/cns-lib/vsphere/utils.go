@@ -92,25 +92,6 @@ func GetVcenterIPs(cfg *config.Config) ([]string, error) {
 	return vCenterIPs, err
 }
 
-// CompareK8sandCNSVolumeMetadata compare the metadata list from K8S and metadata list from CNS are same or not
-func CompareK8sandCNSVolumeMetadata(pvMetadata []cnstypes.BaseCnsEntityMetadata, cnsMetadata []cnstypes.BaseCnsEntityMetadata) bool {
-	if len(pvMetadata) != len(cnsMetadata) {
-		return false
-	}
-	metadataMap := make(map[string]*cnstypes.CnsKubernetesEntityMetadata)
-	for _, metadata := range cnsMetadata {
-		cnsKubernetesMetadata := metadata.(*cnstypes.CnsKubernetesEntityMetadata)
-		metadataMap[cnsKubernetesMetadata.EntityType] = cnsKubernetesMetadata
-	}
-	for _, k8sMetadata := range pvMetadata {
-		k8sKubernetesMetadata := k8sMetadata.(*cnstypes.CnsKubernetesEntityMetadata)
-		if !CompareKubernetesMetadata(k8sKubernetesMetadata, metadataMap[k8sKubernetesMetadata.EntityType]) {
-			return false
-		}
-	}
-	return true
-}
-
 // GetLabelsMapFromKeyValue creates a  map object from given parameter
 func GetLabelsMapFromKeyValue(labels []types.KeyValue) map[string]string {
 	labelsMap := make(map[string]string)
@@ -121,11 +102,11 @@ func GetLabelsMapFromKeyValue(labels []types.KeyValue) map[string]string {
 }
 
 // CompareKubernetesMetadata compares the whole cnskubernetesEntityMetadata from two given parameters
-func CompareKubernetesMetadata(pvMetaData *cnstypes.CnsKubernetesEntityMetadata, kubernetesMetaData *cnstypes.CnsKubernetesEntityMetadata) bool {
-	if (pvMetaData.EntityName != kubernetesMetaData.EntityName) || (pvMetaData.Delete != kubernetesMetaData.Delete) || (pvMetaData.Namespace != kubernetesMetaData.Namespace) {
+func CompareKubernetesMetadata(pvMetaData *cnstypes.CnsKubernetesEntityMetadata, cnsMetaData *cnstypes.CnsKubernetesEntityMetadata) bool {
+	if (pvMetaData.EntityName != cnsMetaData.EntityName) || (pvMetaData.Delete != cnsMetaData.Delete) || (pvMetaData.Namespace != cnsMetaData.Namespace) {
 		return false
 	}
-	labelsMatch := reflect.DeepEqual(GetLabelsMapFromKeyValue(pvMetaData.Labels), GetLabelsMapFromKeyValue(kubernetesMetaData.Labels))
+	labelsMatch := reflect.DeepEqual(GetLabelsMapFromKeyValue(pvMetaData.Labels), GetLabelsMapFromKeyValue(cnsMetaData.Labels))
 	if !labelsMatch {
 		return false
 	}
