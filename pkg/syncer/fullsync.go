@@ -70,7 +70,7 @@ func triggerFullSync(k8sclient clientset.Interface, metadataSyncer *metadataSync
 		klog.Warningf("CSPFullSync: Failed to get PVs from kubernetes. Err: %v", err)
 		return
 	}
-	// Get PVs in State "Bound", "Available" or "Relesased"
+	// Get PVs in State "Bound", "Available" or "Released"
 	k8sPVs := getPVsInBoundAvailableOrReleased(allPVs)
 
 	// pvToPVCMap maps pv name to corresponding PVC
@@ -93,26 +93,33 @@ func triggerFullSync(k8sclient clientset.Interface, metadataSyncer *metadataSync
 	}
 	cnsVolumeArray := queryAllResult.Volumes
 
+	// Initialize CNS volume maps
 	cnsVolumeToPodMap = make(map[string]string)
 	cnsVolumeToPvcMap = make(map[string]string)
 	cnsVolumeToEntityNamespaceMap = make(map[string]string)
 
+	// Map K8s PV's to the operation that needs to be performed on them
 	k8sPVsMap := buildVolumeMap(k8sPVs, cnsVolumeArray, pvToPVCMap, pvcToPodMap, metadataSyncer)
 	klog.V(4).Infof("CSPFullSync: k8sPVMap %v", k8sPVsMap)
 
+	// Identify volumes to be created, updated and deleted
 	volToBeCreated, volToBeUpdated, volWithPvcEntryToBeDeleted, volWithPodEntryToBeDeleted := identifyVolumesToBeCreatedUpdated(k8sPVs, k8sPVsMap)
+	volToBeDeleted := identifyVolumesToBeDeleted(cnsVolumeArray, k8sPVsMap)
+
+	// Construct the cns spec for create and update operations
 	createSpecArray := constructCnsCreateSpec(volToBeCreated, pvToPVCMap, pvcToPodMap, metadataSyncer)
 	updateSpecArray := constructCnsUpdateSpec(volToBeUpdated, pvToPVCMap, pvcToPodMap, metadataSyncer)
 	updateSpecArray = append(updateSpecArray, constructCnsUpdateSpecWithPVCToBeDeleted(volWithPvcEntryToBeDeleted, metadataSyncer)...)
 	updateSpecArray = append(updateSpecArray, constructCnsUpdateSpecWithPodToBeDeleted(volWithPodEntryToBeDeleted, metadataSyncer)...)
-	volToBeDeleted := identifyVolumesToBeDeleted(cnsVolumeArray, k8sPVsMap)
 
 	wg := sync.WaitGroup{}
 	wg.Add(3)
+	// Perform operations
 	go fullSyncCreateVolumes(createSpecArray, metadataSyncer, &wg)
 	go fullSyncDeleteVolumes(volToBeDeleted, metadataSyncer, &wg)
 	go fullSyncUpdateVolumes(updateSpecArray, metadataSyncer, &wg)
 	wg.Wait()
+	klog.V(4).Infof("CSPFullSync: cnsDeletionMap at end of cycle: %v", cnsDeletionMap)
 	klog.V(2).Infof("CSPFullSync: end")
 }
 
@@ -144,6 +151,7 @@ func fullSyncCreateVolumes(createSpecArray []cnstypes.CnsVolumeCreateSpec, metad
 }
 
 // fullSyncDeleteVolumes delete volumes with given array of volumeId
+// If the volume is successfully deleted, it is removed from cnsDeletionMap
 func fullSyncDeleteVolumes(volumeIDDeleteArray []cnstypes.CnsVolumeId, metadataSyncer *metadataSyncInformer, wg *sync.WaitGroup) {
 	deleteDisk := false
 	for _, volID := range volumeIDDeleteArray {
@@ -151,7 +159,9 @@ func fullSyncDeleteVolumes(volumeIDDeleteArray []cnstypes.CnsVolumeId, metadataS
 		err := volumes.GetManager(metadataSyncer.vcenter).DeleteVolume(volID.Id, deleteDisk)
 		if err != nil {
 			klog.Warningf("CSPFullSync: Failed to delete volume %s with error %+v", volID, err)
+			continue
 		}
+		delete(cnsDeletionMap, volID.Id)
 	}
 	wg.Done()
 }
@@ -193,6 +203,8 @@ func buildCnsUpdateMetadataList(pv *v1.PersistentVolume, pvToPVCMap pvcMap, pvcT
 
 // buildVolumeMap build k8sPVMap which maps volume id to a string "Create"/"Update" to indicate the PV need to be
 // created/updated in CNS cache
+// A volume mapped to an empty string implies either no operation has to be performed or that the volume will be
+// deleted
 func buildVolumeMap(pvList []*v1.PersistentVolume, cnsVolumeList []cnstypes.CnsVolume, pvToPVCMap pvcMap, pvcToPodMap podMap, metadataSyncer *metadataSyncInformer) map[string]string {
 	k8sPVMap := make(map[string]string)
 	cnsVolumeMap := make(map[string]bool)
@@ -263,12 +275,29 @@ func identifyVolumesToBeCreatedUpdated(pvList []*v1.PersistentVolume, k8sPVMap m
 }
 
 // identifyVolumesToBeDeleted return list of volumeId's that need to be deleted
+// A volumeId is added to this list only if it was present in cnsDeletionMap across two
+// cycles of full sync
 func identifyVolumesToBeDeleted(cnsVolumeList []cnstypes.CnsVolume, k8sPVMap map[string]string) []cnstypes.CnsVolumeId {
 	var volToBeDeleted []cnstypes.CnsVolumeId
 	for _, vol := range cnsVolumeList {
-		if _, ok := k8sPVMap[vol.VolumeId.Id]; !ok {
-			klog.V(4).Infof("CSPFullSync: Volume with id %s added to delete list", vol.VolumeId.Id)
-			volToBeDeleted = append(volToBeDeleted, vol.VolumeId)
+		_, existsInK8s := k8sPVMap[vol.VolumeId.Id]
+		_, existsInCnsDeletionMap := cnsDeletionMap[vol.VolumeId.Id]
+		if !existsInK8s {
+			if existsInCnsDeletionMap {
+				// Volume does not exist in K8s across two fullsync cycles - add to delete list
+				klog.V(4).Infof("CSPFullSync: Volume with id %s added to delete list as it was present in cnsDeletionMap across two fullsync cycles", vol.VolumeId.Id)
+				volToBeDeleted = append(volToBeDeleted, vol.VolumeId)
+			} else {
+				// Add to cnsDeletionMap
+				klog.V(4).Infof("Volume with id %s added to cnsDeletionMap", vol.VolumeId.Id)
+				cnsDeletionMap[vol.VolumeId.Id] = true
+			}
+		} else {
+			if existsInCnsDeletionMap {
+				// Exists in K8s and CNS, can remove from cnsDeletionMap
+				klog.V(4).Infof("Volume with id %s removed from cnsDeletionMap", vol.VolumeId.Id)
+				delete(cnsDeletionMap, vol.VolumeId.Id)
+			}
 		}
 	}
 	return volToBeDeleted

@@ -628,9 +628,11 @@ func runTestFullSyncWorkflows(t *testing.T) {
 	if len(queryResult.Volumes) != 1 && queryResult.Volumes[0].VolumeId.Id != volumeID.Id {
 		t.Fatalf("Failed to find the newly created volume with ID: %s", volumeID)
 	}
+	cnsDeletionMap = make(map[string]bool)
 
 	// PV does not exist in K8S, but volume exist in CNS cache
-	// FullSync should delete this volume from CNS cache
+	// FullSync should delete this volume from CNS cache after two cycles
+	triggerFullSync(k8sclient, metadataSyncer)
 	triggerFullSync(k8sclient, metadataSyncer)
 
 	// Verify if volume has been deleted from cache

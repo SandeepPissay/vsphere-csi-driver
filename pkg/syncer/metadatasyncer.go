@@ -50,6 +50,11 @@ type metadataSyncInformer struct {
 
 const defaultFullSyncIntervalInMin = 30
 
+// cnsDeletionMap tracks volumes that exist in CNS but not in K8s
+// If a volume exists in this map across two fullsync cycles,
+// the volume is deleted from CNS
+var cnsDeletionMap map[string]bool
+
 // new Returns uninitialized metadataSyncInformer
 func NewInformer() *metadataSyncInformer {
 	return &metadataSyncInformer{}
@@ -122,6 +127,9 @@ func (metadataSyncer *metadataSyncInformer) Init() error {
 		klog.Errorf("Creating Kubernetes client failed. Err: %v", err)
 		return err
 	}
+
+	// Initialize cnsDeletionMap used by Full Sync
+	cnsDeletionMap = make(map[string]bool)
 
 	ticker := time.NewTicker(time.Duration(getFullSyncIntervalInMin()) * time.Minute)
 	// Trigger full sync
