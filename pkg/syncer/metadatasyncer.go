@@ -23,7 +23,6 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	csictx "github.com/rexray/gocsi/context"
 	"k8s.io/api/core/v1"
-	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/klog"
 	"os"
 	"reflect"
@@ -35,36 +34,8 @@ import (
 	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/block"
 	k8s "sigs.k8s.io/vsphere-csi-driver/pkg/kubernetes"
 	"strconv"
-	"sync"
 	"time"
 )
-
-type metadataSyncInformer struct {
-	cfg                  *cnsconfig.Config
-	vcconfig             *cnsvsphere.VirtualCenterConfig
-	k8sInformerManager   *k8s.InformerManager
-	virtualcentermanager cnsvsphere.VirtualCenterManager
-	vcenter              *cnsvsphere.VirtualCenter
-	pvLister             corelisters.PersistentVolumeLister
-	pvcLister            corelisters.PersistentVolumeClaimLister
-}
-
-const defaultFullSyncIntervalInMin = 30
-
-// cnsDeletionMap tracks volumes that exist in CNS but not in K8s
-// If a volume exists in this map across two fullsync cycles,
-// the volume is deleted from CNS
-var cnsDeletionMap map[string]bool
-
-// cnsCreationMap tracks volumes that exist in K8s but not in CNS
-// If a volume exists in this map across two fullsync cycles,
-// the volume is created in CNS
-var cnsCreationMap map[string]bool
-
-// Metadata syncer and full sync share a global lock
-// to mitigate race conditions related to
-// static provisioning of volumes
-var volumeOperationsLock sync.Mutex
 
 // new Returns uninitialized metadataSyncInformer
 func NewInformer() *metadataSyncInformer {

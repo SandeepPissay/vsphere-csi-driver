@@ -32,35 +32,6 @@ import (
 	"sync"
 )
 
-const (
-	// Constants for specifying operation that needs to be performed on CNS volume
-
-	// Create the volume on CNS
-	createVolumeOperation = "createVolume"
-	// Update the volume entries on CNS
-	updateVolumeOperation = "updateVolume"
-	// Delete the PVC entry and Pod entry (if it exists) on CNS
-	updateVolumeWithDeleteClaimOperation = "updateVolumeWithDeleteClaim"
-	// Delete the Pod entry on CNS
-	updateVolumeWithDeletePodOperation = "updateVolumeWithDeletePod"
-)
-
-type pvcMap = map[string]*v1.PersistentVolumeClaim
-type podMap = map[string]*v1.Pod
-
-// Create a mapping of CNS volume to Pod name
-// as this mapping does not exist in K8s
-// in case a Pod entry needs to be deleted from CNS cache
-var cnsVolumeToPodMap map[string]string
-
-// Create a mapping of CNS volume to Pvc name
-var cnsVolumeToPvcMap map[string]string
-
-// Create a mapping of CNS volume to entity Namespace name
-// Here entity can be either PVC or Pod - both will
-// belong to the same namespace
-var cnsVolumeToEntityNamespaceMap map[string]string
-
 // triggerFullSync triggers full sync
 func triggerFullSync(k8sclient clientset.Interface, metadataSyncer *metadataSyncInformer) {
 	klog.V(2).Infof("CSPFullSync: start")
