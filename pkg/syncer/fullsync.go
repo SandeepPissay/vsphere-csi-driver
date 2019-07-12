@@ -64,14 +64,13 @@ var cnsVolumeToEntityNamespaceMap map[string]string
 // triggerFullSync triggers full sync
 func triggerFullSync(k8sclient clientset.Interface, metadataSyncer *metadataSyncInformer) {
 	klog.V(2).Infof("CSPFullSync: start")
-	// Get all PVs from kubernetes
-	allPVs, err := k8sclient.CoreV1().PersistentVolumes().List(metav1.ListOptions{})
+
+	// Get K8s PVs in State "Bound", "Available" or "Released"
+	k8sPVs, err := getPVsInBoundAvailableOrReleased(k8sclient)
 	if err != nil {
 		klog.Warningf("CSPFullSync: Failed to get PVs from kubernetes. Err: %v", err)
 		return
 	}
-	// Get PVs in State "Bound", "Available" or "Released"
-	k8sPVs := getPVsInBoundAvailableOrReleased(allPVs)
 
 	// pvToPVCMap maps pv name to corresponding PVC
 	// pvcToPodMap maps pvc to the mounted Pod
@@ -115,8 +114,8 @@ func triggerFullSync(k8sclient clientset.Interface, metadataSyncer *metadataSync
 	wg := sync.WaitGroup{}
 	wg.Add(3)
 	// Perform operations
-	go fullSyncCreateVolumes(createSpecArray, metadataSyncer, &wg)
-	go fullSyncDeleteVolumes(volToBeDeleted, metadataSyncer, &wg)
+	go fullSyncCreateVolumes(createSpecArray, metadataSyncer, k8sclient, &wg)
+	go fullSyncDeleteVolumes(volToBeDeleted, metadataSyncer, k8sclient, &wg)
 	go fullSyncUpdateVolumes(updateSpecArray, metadataSyncer, &wg)
 	wg.Wait()
 
@@ -127,28 +126,51 @@ func triggerFullSync(k8sclient clientset.Interface, metadataSyncer *metadataSync
 }
 
 // getPVsInBoundAvailableOrReleased return PVs in Bound, Available or Released state
-func getPVsInBoundAvailableOrReleased(pvList *v1.PersistentVolumeList) []*v1.PersistentVolume {
+func getPVsInBoundAvailableOrReleased(k8sclient clientset.Interface) ([]*v1.PersistentVolume, error) {
 	var pvsInDesiredState []*v1.PersistentVolume
-	for index, pv := range pvList.Items {
+	// Get all PVs from kubernetes
+	allPVs, err := k8sclient.CoreV1().PersistentVolumes().List(metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	for index, pv := range allPVs.Items {
 		if pv.Spec.CSI.Driver == service.Name {
 			klog.V(4).Infof("CSPFullSync: pv %v is in state %v", pv.Spec.CSI.VolumeHandle, pv.Status.Phase)
 			if pv.Status.Phase == v1.VolumeBound || pv.Status.Phase == v1.VolumeAvailable || pv.Status.Phase == v1.VolumeReleased {
-				pvsInDesiredState = append(pvsInDesiredState, &pvList.Items[index])
+				pvsInDesiredState = append(pvsInDesiredState, &allPVs.Items[index])
 			}
 		}
 	}
-	return pvsInDesiredState
+	return pvsInDesiredState, nil
 }
 
 // fullSyncCreateVolumes create volumes with given array of createSpec
-func fullSyncCreateVolumes(createSpecArray []cnstypes.CnsVolumeCreateSpec, metadataSyncer *metadataSyncInformer, wg *sync.WaitGroup) {
+// Before creating a volume, all current K8s volumes are retrieved
+// If the volume is successfully created, it is removed from cnsCreationMap
+func fullSyncCreateVolumes(createSpecArray []cnstypes.CnsVolumeCreateSpec, metadataSyncer *metadataSyncInformer, k8sclient clientset.Interface, wg *sync.WaitGroup) {
+	currentK8sPVMap := make(map[string]bool)
+	volumeOperationsLock.Lock()
+	defer volumeOperationsLock.Unlock()
+	// Get all K8s PVs
+	currentK8sPV, err := getPVsInBoundAvailableOrReleased(k8sclient)
+	if err != nil {
+		klog.Errorf("CSPFullSync: fullSyncCreateVolumes failed to get PVs from kubernetes. Err: %v", err)
+		return
+	}
+	// Create map for easy lookup
+	for _, pv := range currentK8sPV {
+		currentK8sPVMap[pv.Spec.CSI.VolumeHandle] = true
+	}
 	for _, createSpec := range createSpecArray {
-		klog.V(4).Infof("CSPFullSync: Calling CreateVolume for volume  %s with create spec %+v", createSpec.Name, spew.Sdump(createSpec))
-		_, err := volumes.GetManager(metadataSyncer.vcenter).CreateVolume(&createSpec)
-
-		if err != nil {
-			klog.Warningf("CSPFullSync: Failed to create disk %s with error %+v", createSpec.Name, err)
-			continue
+		// Create volume if present in currentK8sPVMap
+		if _, existsInK8s := currentK8sPVMap[createSpec.BackingObjectDetails.(*cnstypes.CnsBlockBackingDetails).BackingDiskId]; existsInK8s {
+			klog.V(4).Infof("CSPFullSync: Calling CreateVolume for volume %s with id %s and create spec %+v", createSpec.Name, createSpec.BackingObjectDetails.(*cnstypes.CnsBlockBackingDetails).BackingDiskId,spew.Sdump(createSpec))
+			_, err := volumes.GetManager(metadataSyncer.vcenter).CreateVolume(&createSpec)
+			if err != nil {
+				klog.Warningf("CSPFullSync: Failed to create disk %s with id %s. Err: %+v", createSpec.Name, createSpec.BackingObjectDetails.(*cnstypes.CnsBlockBackingDetails).BackingDiskId, err)
+				continue
+			}
 		}
 		delete(cnsCreationMap, (createSpec.BackingObjectDetails).(*cnstypes.CnsBlockBackingDetails).BackingDiskId)
 	}
@@ -157,15 +179,32 @@ func fullSyncCreateVolumes(createSpecArray []cnstypes.CnsVolumeCreateSpec, metad
 }
 
 // fullSyncDeleteVolumes delete volumes with given array of volumeId
+// Before deleting a volume, all current K8s volumes are retrieved
 // If the volume is successfully deleted, it is removed from cnsDeletionMap
-func fullSyncDeleteVolumes(volumeIDDeleteArray []cnstypes.CnsVolumeId, metadataSyncer *metadataSyncInformer, wg *sync.WaitGroup) {
+func fullSyncDeleteVolumes(volumeIDDeleteArray []cnstypes.CnsVolumeId, metadataSyncer *metadataSyncInformer, k8sclient clientset.Interface, wg *sync.WaitGroup) {
 	deleteDisk := false
+	currentK8sPVMap := make(map[string]bool)
+	volumeOperationsLock.Lock()
+	defer volumeOperationsLock.Unlock()
+	// Get all K8s PVs
+	currentK8sPV, err := getPVsInBoundAvailableOrReleased(k8sclient)
+	if err != nil {
+		klog.Errorf("CSPFullSync: fullSyncDeleteVolumes failed to get PVs from kubernetes. Err: %v", err)
+		return
+	}
+	// Create map for easy lookup
+	for _, pv := range currentK8sPV {
+		currentK8sPVMap[pv.Spec.CSI.VolumeHandle] = true
+	}
 	for _, volID := range volumeIDDeleteArray {
-		klog.V(4).Infof("CSPFullSync: Calling DeleteVolume for volume %v with delete disk %v", volID, deleteDisk)
-		err := volumes.GetManager(metadataSyncer.vcenter).DeleteVolume(volID.Id, deleteDisk)
-		if err != nil {
-			klog.Warningf("CSPFullSync: Failed to delete volume %s with error %+v", volID, err)
-			continue
+		// Delete volume if not present in currentK8sPVMap
+		if _, existsInK8s := currentK8sPVMap[volID.Id]; !existsInK8s {
+			klog.V(4).Infof("CSPFullSync: Calling DeleteVolume for volume %v with delete disk %v", volID, deleteDisk)
+			err := volumes.GetManager(metadataSyncer.vcenter).DeleteVolume(volID.Id, deleteDisk)
+			if err != nil {
+				klog.Warningf("CSPFullSync: Failed to delete volume %s with error %+v", volID, err)
+				continue
+			}
 		}
 		delete(cnsDeletionMap, volID.Id)
 	}

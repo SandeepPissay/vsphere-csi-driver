@@ -35,6 +35,7 @@ import (
 	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/block"
 	k8s "sigs.k8s.io/vsphere-csi-driver/pkg/kubernetes"
 	"strconv"
+	"sync"
 	"time"
 )
 
@@ -59,6 +60,11 @@ var cnsDeletionMap map[string]bool
 // If a volume exists in this map across two fullsync cycles,
 // the volume is created in CNS
 var cnsCreationMap map[string]bool
+
+// Metadata syncer and full sync share a global lock
+// to mitigate race conditions related to
+// static provisioning of volumes
+var volumeOperationsLock sync.Mutex
 
 // new Returns uninitialized metadataSyncInformer
 func NewInformer() *metadataSyncInformer {
@@ -364,6 +370,8 @@ func pvUpdated(oldObj, newObj interface{}, metadataSyncer *metadataSyncInformer)
 				BackingDiskId:           oldPv.Spec.CSI.VolumeHandle,
 			},
 		}
+		volumeOperationsLock.Lock()
+		defer volumeOperationsLock.Unlock()
 		klog.V(4).Infof("PVUpdated: vSphere provisioner creating volume %s with create spec %+v", oldPv.Name, spew.Sdump(createSpec))
 		_, err := volumes.GetManager(metadataSyncer.vcenter).CreateVolume(createSpec)
 
@@ -402,7 +410,8 @@ func pvDeleted(obj interface{}, metadataSyncer *metadataSyncInformer) {
 		klog.V(4).Infof("PVDeleted: Setting DeleteDisk to true")
 		deleteDisk = true
 	}
-
+	volumeOperationsLock.Lock()
+	defer volumeOperationsLock.Unlock()
 	klog.V(4).Infof("PVDeleted: vSphere provisioner deleting volume %v with delete disk %v", pv, deleteDisk)
 	if err := volumes.GetManager(metadataSyncer.vcenter).DeleteVolume(pv.Spec.CSI.VolumeHandle, deleteDisk); err != nil {
 		klog.Errorf("PVDeleted: Failed to delete disk %s with error %+v", pv.Spec.CSI.VolumeHandle, err)
