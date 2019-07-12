@@ -119,7 +119,10 @@ func triggerFullSync(k8sclient clientset.Interface, metadataSyncer *metadataSync
 	go fullSyncDeleteVolumes(volToBeDeleted, metadataSyncer, &wg)
 	go fullSyncUpdateVolumes(updateSpecArray, metadataSyncer, &wg)
 	wg.Wait()
+
+	cleanupCnsMaps(k8sPVsMap)
 	klog.V(4).Infof("CSPFullSync: cnsDeletionMap at end of cycle: %v", cnsDeletionMap)
+	klog.V(4).Infof("CSPFullSync: cnsCreationMap at end of cycle: %v", cnsCreationMap)
 	klog.V(2).Infof("CSPFullSync: end")
 }
 
@@ -145,8 +148,11 @@ func fullSyncCreateVolumes(createSpecArray []cnstypes.CnsVolumeCreateSpec, metad
 
 		if err != nil {
 			klog.Warningf("CSPFullSync: Failed to create disk %s with error %+v", createSpec.Name, err)
+			continue
 		}
+		delete(cnsCreationMap, (createSpec.BackingObjectDetails).(*cnstypes.CnsBlockBackingDetails).BackingDiskId)
 	}
+
 	wg.Done()
 }
 
@@ -238,7 +244,11 @@ func buildVolumeMap(pvList []*v1.PersistentVolume, cnsVolumeList []cnstypes.CnsV
 			}
 		} else {
 			// PV exist in K8S but not in CNS cache, need to create
-			k8sPVMap[pv.Spec.CSI.VolumeHandle] = createVolumeOperation
+			if _, existsInCnsCreationMap := cnsCreationMap[pv.Spec.CSI.VolumeHandle]; existsInCnsCreationMap {
+				k8sPVMap[pv.Spec.CSI.VolumeHandle] = createVolumeOperation
+			} else {
+				cnsCreationMap[pv.Spec.CSI.VolumeHandle] = true
+			}
 		}
 	}
 
@@ -258,7 +268,7 @@ func identifyVolumesToBeCreatedUpdated(pvList []*v1.PersistentVolume, k8sPVMap m
 	for _, pv := range pvList {
 		switch k8sPVMap[pv.Spec.CSI.VolumeHandle] {
 		case createVolumeOperation:
-			klog.V(4).Infof("CSPFullSync: Volume with id %s added to volume create list", pv.Spec.CSI.VolumeHandle)
+			klog.V(4).Infof("CSPFullSync: Volume with id %s added to volume create list as it was present in cnsCreationMap across two fullsync cycles", pv.Spec.CSI.VolumeHandle)
 			pvToBeCreated = append(pvToBeCreated, pv)
 		case updateVolumeOperation:
 			klog.V(4).Infof("CSPFullSync: Volume with id %s added to volume update list", pv.Spec.CSI.VolumeHandle)
@@ -280,10 +290,8 @@ func identifyVolumesToBeCreatedUpdated(pvList []*v1.PersistentVolume, k8sPVMap m
 func identifyVolumesToBeDeleted(cnsVolumeList []cnstypes.CnsVolume, k8sPVMap map[string]string) []cnstypes.CnsVolumeId {
 	var volToBeDeleted []cnstypes.CnsVolumeId
 	for _, vol := range cnsVolumeList {
-		_, existsInK8s := k8sPVMap[vol.VolumeId.Id]
-		_, existsInCnsDeletionMap := cnsDeletionMap[vol.VolumeId.Id]
-		if !existsInK8s {
-			if existsInCnsDeletionMap {
+		if _, existsInK8s := k8sPVMap[vol.VolumeId.Id]; !existsInK8s {
+			if _, existsInCnsDeletionMap := cnsDeletionMap[vol.VolumeId.Id]; existsInCnsDeletionMap {
 				// Volume does not exist in K8s across two fullsync cycles - add to delete list
 				klog.V(4).Infof("CSPFullSync: Volume with id %s added to delete list as it was present in cnsDeletionMap across two fullsync cycles", vol.VolumeId.Id)
 				volToBeDeleted = append(volToBeDeleted, vol.VolumeId)
@@ -291,12 +299,6 @@ func identifyVolumesToBeDeleted(cnsVolumeList []cnstypes.CnsVolume, k8sPVMap map
 				// Add to cnsDeletionMap
 				klog.V(4).Infof("Volume with id %s added to cnsDeletionMap", vol.VolumeId.Id)
 				cnsDeletionMap[vol.VolumeId.Id] = true
-			}
-		} else {
-			if existsInCnsDeletionMap {
-				// Exists in K8s and CNS, can remove from cnsDeletionMap
-				klog.V(4).Infof("Volume with id %s removed from cnsDeletionMap", vol.VolumeId.Id)
-				delete(cnsDeletionMap, vol.VolumeId.Id)
 			}
 		}
 	}
@@ -506,4 +508,25 @@ func buildCnsMetadataSpecMarkedForDelete(pv *v1.PersistentVolume, operationType 
 		},
 	}
 	return updateSpec
+}
+
+// cleanupCnsMaps performs cleanup on cnsCreationMap and cnsDeletionMap
+// Removes volume entries from cnsCreationMap that do not exist in K8s
+// and volume entries from cnsDeletionMap that exist in K8s
+// An entry could have been added to cnsCreationMap (or cnsDeletionMap)
+// because full sync was triggered in between the delete (or create)
+// operation of a volume
+func cleanupCnsMaps(k8sPVs map[string]string) {
+	// Cleanup cnsCreationMap
+	for volID := range cnsCreationMap {
+		if _, existsInK8s := k8sPVs[volID]; !existsInK8s {
+			delete(cnsCreationMap, volID)
+		}
+	}
+	// Cleanup cnsDeletionMap
+	for volID := range cnsDeletionMap {
+		if _, existsInK8s := k8sPVs[volID]; existsInK8s {
+			delete(cnsDeletionMap, volID)
+		}
+	}
 }

@@ -55,6 +55,11 @@ const defaultFullSyncIntervalInMin = 30
 // the volume is deleted from CNS
 var cnsDeletionMap map[string]bool
 
+// cnsCreationMap tracks volumes that exist in K8s but not in CNS
+// If a volume exists in this map across two fullsync cycles,
+// the volume is created in CNS
+var cnsCreationMap map[string]bool
+
 // new Returns uninitialized metadataSyncInformer
 func NewInformer() *metadataSyncInformer {
 	return &metadataSyncInformer{}
@@ -130,6 +135,8 @@ func (metadataSyncer *metadataSyncInformer) Init() error {
 
 	// Initialize cnsDeletionMap used by Full Sync
 	cnsDeletionMap = make(map[string]bool)
+	// Initialize cnsCreationMap used by Full Sync
+	cnsCreationMap = make(map[string]bool)
 
 	ticker := time.NewTicker(time.Duration(getFullSyncIntervalInMin()) * time.Minute)
 	// Trigger full sync

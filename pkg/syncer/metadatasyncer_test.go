@@ -603,6 +603,8 @@ func runTestFullSyncWorkflows(t *testing.T) {
 			CapacityInMb: gbInMb,
 		},
 	}
+	cnsCreationMap = make(map[string]bool)
+
 	volumeID, err := volumeManager.CreateVolume(&createSpec)
 	if err != nil {
 		t.Errorf("Failed to create volume. Error: %+v", err)
@@ -671,6 +673,7 @@ func runTestFullSyncWorkflows(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	triggerFullSync(k8sclient, metadataSyncer)
 	triggerFullSync(k8sclient, metadataSyncer)
 
 	// Verify pv label of volume matches that of updated metadata
