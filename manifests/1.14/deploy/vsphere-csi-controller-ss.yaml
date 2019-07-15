@@ -6,6 +6,8 @@ metadata:
 spec:
   serviceName: vsphere-csi
   replicas: 1
+  updateStrategy:
+    type: "RollingUpdate"
   selector:
     matchLabels:
       app: vsphere-csi-controller
@@ -26,6 +28,10 @@ spec:
       containers:
       - name: vsphere-csi-controller
         image: your-docker-repository/vsphere-csi:latest
+        lifecycle:
+          preStop:
+            exec:
+              command: ["/bin/sh", "-c", "rm -rf /var/lib/csi/sockets/pluginproxy/block.vsphere.csi.vmware.com"]
         args:
           - --v=2
         imagePullPolicy: "Always"

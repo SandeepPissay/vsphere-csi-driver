@@ -6,6 +6,8 @@ metadata:
 spec:
   serviceName: vsphere-csi
   replicas: 1
+  updateStrategy:
+    type: "RollingUpdate"
   selector:
     matchLabels:
       app: vsphere-csi-metadata-syncer
