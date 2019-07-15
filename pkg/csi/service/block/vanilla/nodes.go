@@ -178,8 +178,12 @@ func (nodes *Nodes) GetSharedDatastoresInTopology(ctx context.Context, topologyR
 			klog.V(4).Infof("Obtained shared datastores : %+v for topology: %+v", sharedDatastores, topology)
 			for _, datastore := range sharedDatastoresInZoneRegion {
 				accessibleTopology := make(map[string]string)
-				accessibleTopology[csitypes.LabelZoneFailureDomain] = zone
-				accessibleTopology[csitypes.LabelRegionFailureDomain] = region
+				if zone != "" {
+					accessibleTopology[csitypes.LabelZoneFailureDomain] = zone
+				}
+				if region != "" {
+					accessibleTopology[csitypes.LabelRegionFailureDomain] = region
+				}
 				datastoreTopologyMap[datastore.Info.Url] = append(datastoreTopologyMap[datastore.Info.Url], accessibleTopology)
 			}
 			sharedDatastores = append(sharedDatastores, sharedDatastoresInZoneRegion...)
