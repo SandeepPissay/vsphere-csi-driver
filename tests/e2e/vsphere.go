@@ -222,6 +222,40 @@ func (vs *vSphere) waitForLabelsToBeUpdated(volumeID string, matchLabels map[str
 	return nil
 }
 
+// waitForMetadataToBeDeleted executes QueryVolume API on vCenter and verifies
+// volume metadata for given volume has been deleted
+func (vs *vSphere) waitForMetadataToBeDeleted(volumeID string, entityType string, entityName string, entityNamespace string) error {
+	err := wait.Poll(poll, pollTimeout, func() (bool, error) {
+		queryResult, err := vs.queryCNSVolumeWithResult(volumeID)
+		framework.Logf("queryResult: %s", spew.Sdump(queryResult))
+		if err != nil {
+			return true, err
+		}
+		if len(queryResult.Volumes) != 1 || queryResult.Volumes[0].VolumeId.Id != volumeID {
+			return true, fmt.Errorf("failed to query cns volume %s", volumeID)
+		}
+		gomega.Expect(queryResult.Volumes[0].Metadata).NotTo(gomega.BeNil())
+		for _, metadata := range queryResult.Volumes[0].Metadata.EntityMetadata {
+			if metadata == nil {
+				continue
+			}
+			kubernetesMetadata := metadata.(*cnstypes.CnsKubernetesEntityMetadata)
+			if kubernetesMetadata.EntityType == entityType && kubernetesMetadata.EntityName == entityName && kubernetesMetadata.Namespace == entityNamespace {
+				return false, nil
+			}
+		}
+		return true, nil
+	})
+	if err != nil {
+		if err == wait.ErrWaitTimeout {
+			return fmt.Errorf("entityName %s of entityType %s is not deleted for volume %s", entityName, entityType, volumeID)
+		}
+		return err
+	}
+
+	return nil
+}
+
 // waitForCNSVolumeToBeDeleted executes QueryVolume API on vCenter and verifies
 // volume entries are deleted from vCenter Database
 func (vs *vSphere) waitForCNSVolumeToBeDeleted(volumeID string) error {

@@ -70,7 +70,7 @@ var _ = ginkgo.Describe("[csi-block-e2e] statefulset", func() {
 
 	ginkgo.It("vSphere statefulset testing", func() {
 		ginkgo.By("Creating StorageClass for Statefulset")
-		scSpec := getVSphereStorageClassSpec(storageclassname, nil, nil)
+		scSpec := getVSphereStorageClassSpec(storageclassname, nil, nil, "")
 		sc, err := client.StorageV1().StorageClasses().Create(scSpec)
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		defer client.StorageV1().StorageClasses().Delete(sc.Name, nil)

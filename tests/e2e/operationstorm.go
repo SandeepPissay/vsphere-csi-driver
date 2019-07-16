@@ -92,7 +92,7 @@ var _ = utils.SIGDescribe("[csi-block-e2e] Volume Operations Storm", func() {
 	ginkgo.It("create/delete pod with many volumes and verify no attach/detach call should fail", func() {
 		ginkgo.By(fmt.Sprintf("Running test with VOLUME_OPS_SCALE: %v", volumeOpsScale))
 		ginkgo.By("Creating Storage Class")
-		storageclass, err = client.StorageV1().StorageClasses().Create(getVSphereStorageClassSpec("", nil, nil))
+		storageclass, err = client.StorageV1().StorageClasses().Create(getVSphereStorageClassSpec("", nil, nil, ""))
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		defer client.StorageV1().StorageClasses().Delete(storageclass.Name, nil)
 

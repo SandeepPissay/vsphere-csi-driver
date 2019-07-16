@@ -24,7 +24,7 @@ import (
 )
 
 // getVSphereStorageClassSpec returns Storage Class Spec with supplied storage class parameters
-func getVSphereStorageClassSpec(scName string, scParameters map[string]string, allowedTopologies []v1.TopologySelectorLabelRequirement) *storagev1.StorageClass {
+func getVSphereStorageClassSpec(scName string, scParameters map[string]string, allowedTopologies []v1.TopologySelectorLabelRequirement, scReclaimPolicy v1.PersistentVolumeReclaimPolicy) *storagev1.StorageClass {
 	var sc *storagev1.StorageClass
 	sc = &storagev1.StorageClass{
 		TypeMeta: metav1.TypeMeta{
@@ -48,6 +48,9 @@ func getVSphereStorageClassSpec(scName string, scParameters map[string]string, a
 				MatchLabelExpressions: allowedTopologies,
 			},
 		}
+	}
+	if scReclaimPolicy != "" {
+		sc.ReclaimPolicy = &scReclaimPolicy
 	}
 
 	return sc
@@ -149,14 +152,29 @@ func getPersistentVolumeClaimSpecWithStorageClass(namespace string, ds string, s
 // createPVCAndStorageClass helps creates a storage class with specified name, storageclass parameters and PVC using storage class
 func createPVCAndStorageClass(client clientset.Interface, pvcnamespace string, pvclaimlabels map[string]string, scParameters map[string]string, ds string, allowedTopologies []v1.TopologySelectorLabelRequirement) (*storagev1.StorageClass, *v1.PersistentVolumeClaim, error) {
 	ginkgo.By(fmt.Sprintf("Creating StorageClass With scParameters: %+v and allowedTopologies: %+v", scParameters, allowedTopologies))
-	storageclass, err := client.StorageV1().StorageClasses().Create(getVSphereStorageClassSpec("", scParameters, allowedTopologies))
-	gomega.Expect(err).NotTo(gomega.HaveOccurred(), fmt.Sprintf("Failed to create storage class with err: %v", err))
+	storageclass, err := createStorageClass(client, scParameters, allowedTopologies, "")
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
-	pvcspec := getPersistentVolumeClaimSpecWithStorageClass(pvcnamespace, ds, storageclass, pvclaimlabels)
-	ginkgo.By(fmt.Sprintf("Creating PVC using the Storage Class %+v with disk size %+v and labels: %+v", storageclass.Name, ds, pvclaimlabels))
-	pvclaim, err := framework.CreatePVC(client, pvcnamespace, pvcspec)
+	pvclaim, err := createPVC(client, pvcnamespace, pvclaimlabels, ds, storageclass)
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	return storageclass, pvclaim, err
+}
+
+// createStorageClass helps creates a storage class with specified name, storageclass parameters
+func createStorageClass(client clientset.Interface, scParameters map[string]string, allowedTopologies []v1.TopologySelectorLabelRequirement, scReclaimPolicy v1.PersistentVolumeReclaimPolicy) (*storagev1.StorageClass, error) {
+	ginkgo.By(fmt.Sprintf("Creating StorageClass With scParameters: %+v and allowedTopologies: %+v and ReclaimPolicy: %+v", scParameters, allowedTopologies, scReclaimPolicy))
+	storageclass, err := client.StorageV1().StorageClasses().Create(getVSphereStorageClassSpec("", scParameters, allowedTopologies, scReclaimPolicy))
+	gomega.Expect(err).NotTo(gomega.HaveOccurred(), fmt.Sprintf("Failed to create storage class with err: %v", err))
+	return storageclass, err
+}
+
+// createPVC helps creates pvc with given namespace and labels using given storage class
+func createPVC(client clientset.Interface, pvcnamespace string, pvclaimlabels map[string]string, ds string, storageclass *storagev1.StorageClass) ( *v1.PersistentVolumeClaim, error) {
+	pvcspec := getPersistentVolumeClaimSpecWithStorageClass(pvcnamespace, ds, storageclass, pvclaimlabels)
+	ginkgo.By(fmt.Sprintf("Creating PVC using the Storage Class %s with disk size %s and labels: %+v", storageclass.Name, ds, pvclaimlabels))
+	pvclaim, err := framework.CreatePVC(client, pvcnamespace, pvcspec)
+	gomega.Expect(err).NotTo(gomega.HaveOccurred(), fmt.Sprintf("Failed to create pvc with err: %v", err))
+	return pvclaim, err
 }
 
 // getLabelsMapFromKeyValue returns map[string]string for given array of vim25types.KeyValue
