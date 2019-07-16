@@ -391,4 +391,159 @@ var _ bool = ginkgo.Describe("[csi-block-e2e] full-sync-test", func() {
 		    err = client.CoreV1().PersistentVolumes().Delete(pv.Name, nil)
 		}
 	})
+
+	ginkgo.It("Verify PVC metadata is created in CNS after PVC is created in k8s", func() {
+		var err error
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		if os.Getenv(envPandoraSyncWaitTime) != "" {
+			pandoraSyncWaitTime, err = strconv.Atoi(os.Getenv(envPandoraSyncWaitTime))
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+		} else {
+			pandoraSyncWaitTime = defaultPandoraSyncWaitTime
+		}
+
+		datastoreURL = GetAndExpectStringEnvVar(envSharedDatastoreURL)
+		finder := find.NewFinder(e2eVSphere.Client.Client, false)
+
+		for _, dc := range datacenters {
+			datacenter, err = finder.Datacenter(ctx, dc)
+			finder.SetDatacenter(datacenter)
+			datastore, err = getDatastoreByURL(ctx, datastoreURL, datacenter)
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+		}
+
+		ginkgo.By("Creating FCD Disk")
+		fcdID, err = e2eVSphere.createFCD(ctx, fcdName, diskSizeInMb, datastore.Reference())
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+		ginkgo.By(fmt.Sprintf("Sleeping for %v seconds to allow newly created FCD:%s to sync with pandora", pandoraSyncWaitTime, fcdID))
+		time.Sleep(time.Duration(pandoraSyncWaitTime) * time.Second)
+
+		ginkgo.By(fmt.Sprintf("Creating the PV with the fcdID %s", fcdID))
+		staticPVLabels := make(map[string]string)
+		staticPVLabels["fcd-id"] = fcdID
+		pv := getPersistentVolumeSpec(fcdID, v1.PersistentVolumeReclaimDelete, staticPVLabels)
+		pv, err = client.CoreV1().PersistentVolumes().Create(pv)
+		if err != nil {
+			return
+		}
+
+		err = e2eVSphere.waitForCNSVolumeToBeCreated(pv.Spec.CSI.VolumeHandle)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+		ginkgo.By(fmt.Sprintln("Stopping vsan-health on the vCenter host"))
+		vcAddress := e2eVSphere.Config.Global.VCenterHostname + ":" + vcenterPort
+		err = invokeVCenterServiceControl(stopVsanHealthOperation, vsanhealthServiceName, vcAddress)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+		ginkgo.By("Creating the PVC")
+		pvc := getPersistentVolumeClaimSpec(namespace, staticPVLabels, pv.Name)
+		pvc, err = client.CoreV1().PersistentVolumeClaims(namespace).Create(pvc)
+
+		// Wait for PV and PVC to Bind
+		framework.ExpectNoError(framework.WaitOnPVandPVC(client, namespace, pv, pvc))
+
+		ginkgo.By(fmt.Sprintln("Starting vsan-health on the vCenter host"))
+		err = invokeVCenterServiceControl(startVsanHealthOperation, vsanhealthServiceName, vcAddress)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+		ginkgo.By(fmt.Sprintf("Sleeping for %v seconds to allow full sync finish", fullSyncWaitTime))
+		time.Sleep(time.Duration(fullSyncWaitTime) * time.Second)
+
+		ginkgo.By("Verify container volume metadata is matching the one in CNS cache")
+		err = verifyVolumeMetadataInCNS(&e2eVSphere, pv.Spec.CSI.VolumeHandle, pvc.Name, pv.ObjectMeta.Name, "")
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+		ginkgo.By(fmt.Sprintf("Deleting pvc %s in namespace %s", pvc.Name, pvc.Namespace))
+		err = client.CoreV1().PersistentVolumeClaims(namespace).Delete(pvc.Name, nil)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+		ginkgo.By(fmt.Sprintf("Deleting FCD: %s", fcdID))
+		err = e2eVSphere.deleteFCD(ctx, fcdID, datastore.Reference())
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+	})
+
+	ginkgo.It("Verify PVC metadata is deleted in CNS after PVC is deleted in k8s", func() {
+		var err error
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		if os.Getenv(envPandoraSyncWaitTime) != "" {
+			pandoraSyncWaitTime, err = strconv.Atoi(os.Getenv(envPandoraSyncWaitTime))
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+		} else {
+			pandoraSyncWaitTime = defaultPandoraSyncWaitTime
+		}
+
+		datastoreURL = GetAndExpectStringEnvVar(envSharedDatastoreURL)
+		finder := find.NewFinder(e2eVSphere.Client.Client, false)
+
+		for _, dc := range datacenters {
+			datacenter, err = finder.Datacenter(ctx, dc)
+			finder.SetDatacenter(datacenter)
+			datastore, err = getDatastoreByURL(ctx, datastoreURL, datacenter)
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+		}
+
+		ginkgo.By("Creating FCD Disk")
+		fcdID, err = e2eVSphere.createFCD(ctx, fcdName, diskSizeInMb, datastore.Reference())
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+		ginkgo.By(fmt.Sprintf("Sleeping for %v seconds to allow newly created FCD:%s to sync with pandora", pandoraSyncWaitTime, fcdID))
+		time.Sleep(time.Duration(pandoraSyncWaitTime) * time.Second)
+
+		ginkgo.By(fmt.Sprintf("Creating the PV with the fcdID %s", fcdID))
+		staticPVLabels := make(map[string]string)
+		staticPVLabels["fcd-id"] = fcdID
+		pv := getPersistentVolumeSpec(fcdID, v1.PersistentVolumeReclaimRetain, staticPVLabels)
+		pv, err = client.CoreV1().PersistentVolumes().Create(pv)
+		if err != nil {
+			return
+		}
+
+		err = e2eVSphere.waitForCNSVolumeToBeCreated(pv.Spec.CSI.VolumeHandle)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+		ginkgo.By("Creating the PVC")
+		pvc := getPersistentVolumeClaimSpec(namespace, staticPVLabels, pv.Name)
+		pvc, err = client.CoreV1().PersistentVolumeClaims(namespace).Create(pvc)
+
+		// Wait for PV and PVC to Bind
+		framework.ExpectNoError(framework.WaitOnPVandPVC(client, namespace, pv, pvc))
+
+		ginkgo.By(fmt.Sprintln("Stopping vsan-health on the vCenter host"))
+		vcAddress := e2eVSphere.Config.Global.VCenterHostname + ":" + vcenterPort
+		err = invokeVCenterServiceControl(stopVsanHealthOperation, vsanhealthServiceName, vcAddress)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+		ginkgo.By(fmt.Sprintf("Deleting pvc %s in namespace %s", pvc.Name, pvc.Namespace))
+		err = client.CoreV1().PersistentVolumeClaims(namespace).Delete(pvc.Name, nil)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+		ginkgo.By(fmt.Sprintln("Starting vsan-health on the vCenter host"))
+		err = invokeVCenterServiceControl(startVsanHealthOperation, vsanhealthServiceName, vcAddress)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+		ginkgo.By(fmt.Sprintf("Sleeping for %v seconds to allow full sync finish", fullSyncWaitTime))
+		time.Sleep(time.Duration(fullSyncWaitTime) * time.Second)
+
+		ginkgo.By(fmt.Sprintf("Waiting for pvc metadata to be deleted for pvc %s in namespace %s", pvc.Name, pvc.Namespace))
+		err = e2eVSphere.waitForMetadataToBeDeleted(pv.Spec.CSI.VolumeHandle, string(cnstypes.CnsKubernetesEntityTypePVC), pvc.Name, pvc.Namespace)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+		ginkgo.By(fmt.Sprintf("Deleting pv %s", pv.Name))
+		err = client.CoreV1().PersistentVolumes().Delete(pv.Name, nil)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+		ginkgo.By(fmt.Sprintf("Deleting FCD: %s", fcdID))
+		err = e2eVSphere.deleteFCD(ctx, fcdID, datastore.Reference())
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+	})
+
 })
