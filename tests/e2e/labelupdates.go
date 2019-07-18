@@ -17,15 +17,20 @@ limitations under the License.
 package e2e
 
 import (
+	"context"
 	"fmt"
-	"k8s.io/apimachinery/pkg/util/wait"
-	cnstypes "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vmomi/types"
-
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
-
+	"github.com/vmware/govmomi/find"
+	"github.com/vmware/govmomi/object"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"os"
+	cnstypes "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vmomi/types"
+	"strconv"
+	"strings"
+	"time"
 
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/kubernetes/test/e2e/framework"
@@ -47,10 +52,22 @@ import (
 var _ bool = ginkgo.Describe("[csi-block-e2e] label-updates", func() {
 	f := framework.NewDefaultFramework("e2e-volume-label-updates")
 	var (
-		client     clientset.Interface
-		namespace  string
-		labelKey   string
-		labelValue string
+		client              clientset.Interface
+		namespace           string
+		labelKey            string
+		labelValue          string
+		pvclabelKey         string
+		pvclabelValue       string
+		pvlabelKey          string
+		pvlabelValue        string
+		pandoraSyncWaitTime int
+		datacenter          *object.Datacenter
+		datastoreURL        string
+		datastore           *object.Datastore
+		fcdID               string
+	)
+	const (
+		fcdName = "BasicStaticFCD"
 	)
 	ginkgo.BeforeEach(func() {
 		client = f.ClientSet
@@ -62,6 +79,12 @@ var _ bool = ginkgo.Describe("[csi-block-e2e] label-updates", func() {
 		bootstrap()
 		labelKey = "app"
 		labelValue = "e2e-labels"
+
+		pvclabelKey = "app-pvc"
+		pvclabelValue = "e2e-labels-pvc"
+
+		pvlabelKey = "app-pv"
+		pvlabelValue = "e2e-labels-pv"
 	})
 
 	ginkgo.It("verify labels are created in CNS after updating pvc and/or pv with new labels", func() {
@@ -207,6 +230,351 @@ var _ bool = ginkgo.Describe("[csi-block-e2e] label-updates", func() {
 		ginkgo.By(fmt.Sprintf("Waiting for pod name to be deleted for volume %s by metadata-syncer", pv.Spec.CSI.VolumeHandle))
 		err = waitForPodNameLabelRemoval(pv.Spec.CSI.VolumeHandle, pod.Name, pod.Namespace)
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+	})
+
+	/*
+		Test to verify PVC name is removed from PV entry on CNS when PVC is deleted when Reclaim Policy is set to retain
+
+		Steps
+		1. Create a Storage Class with ReclaimPolicy=Retain
+		2. Create a PVC using above SC
+		3. Wait for PVC to be in Bound phase
+		4. Delete PVC
+		5. Verify PVC name is removed from PV entry on CNS
+		6. Delete PV
+		7. Verify PV entry is deleted from CNS
+		8. Delete SC
+	*/
+
+	ginkgo.It("Verify PVC name is removed from PV entry on CNS after PVC is deleted when Reclaim Policy is set to retain.", func() {
+
+		var err error
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		if os.Getenv(envPandoraSyncWaitTime) != "" {
+			pandoraSyncWaitTime, err = strconv.Atoi(os.Getenv(envPandoraSyncWaitTime))
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+		} else {
+			pandoraSyncWaitTime = defaultPandoraSyncWaitTime
+		}
+		var datacenters []string
+		datastoreURL = GetAndExpectStringEnvVar(envSharedDatastoreURL)
+		finder := find.NewFinder(e2eVSphere.Client.Client, false)
+
+		cfg, err := getConfig()
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+		dcList := strings.Split(cfg.Global.Datacenters,
+			",")
+		for _, dc := range dcList {
+			dcName := strings.TrimSpace(dc)
+			if dcName != "" {
+				datacenters = append(datacenters, dcName)
+			}
+		}
+
+		for _, dc := range datacenters {
+			datacenter, err = finder.Datacenter(ctx, dc)
+			finder.SetDatacenter(datacenter)
+			datastore, err = getDatastoreByURL(ctx, datastoreURL, datacenter)
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+		}
+
+		ginkgo.By(fmt.Sprintf("Creating storage class"))
+		sc, err := createStorageClass(client, nil, nil, v1.PersistentVolumeReclaimRetain)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+		ginkgo.By(fmt.Sprintf("Creating PVC"))
+		pvc, err := createPVC(client, namespace, nil, "", sc)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+		ginkgo.By(fmt.Sprintf("Waiting for claim %s to be in bound phase", pvc.Name))
+		pvs, err := framework.WaitForPVClaimBoundPhase(client, []*v1.PersistentVolumeClaim{pvc}, framework.ClaimProvisionTimeout)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+		gomega.Expect(pvs).NotTo(gomega.BeEmpty())
+
+		var pv *v1.PersistentVolume
+		pv = pvs[0]
+		fcdID = pv.Spec.CSI.VolumeHandle
+
+		queryResult, err := e2eVSphere.queryCNSVolumeWithResult(fcdID)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+		gomega.Expect(len(queryResult.Volumes) > 0)
+
+		if len(queryResult.Volumes) > 0 {
+			// Find datastore from datastoreURL
+			finder := find.NewFinder(e2eVSphere.Client.Client, false)
+
+			for _, dc := range datacenters {
+				datacenter, err = finder.Datacenter(ctx, dc)
+				gomega.Expect(err).NotTo(gomega.HaveOccurred())
+				finder.SetDatacenter(datacenter)
+				datastore, err = getDatastoreByURL(ctx, queryResult.Volumes[0].DatastoreUrl, datacenter)
+				gomega.Expect(err).NotTo(gomega.HaveOccurred())
+				if datastore != nil {
+					break
+				}
+			}
+		}
+		gomega.Expect(datastore).NotTo(gomega.BeNil())
+
+		ginkgo.By(fmt.Sprintf("Deleting pvc %s in namespace %s", pvc.Name, pvc.Namespace))
+		err = client.CoreV1().PersistentVolumeClaims(namespace).Delete(pvc.Name, nil)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+		pvcLabel, err := e2eVSphere.getLabelsForCNSVolume(pv.Spec.CSI.VolumeHandle, string(cnstypes.CnsKubernetesEntityTypePVC), pvc.Name, namespace)
+		if pvcLabel != nil {
+			framework.Logf("PVC name is successfully removed")
+		} else {
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+		}
+
+		ginkgo.By(fmt.Sprintf("Deleting pv %s", pv.Name))
+		err = client.CoreV1().PersistentVolumes().Delete(pv.Name, nil)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+		ginkgo.By(fmt.Sprintf("Waiting for volume %s to be deleted", pv.Spec.CSI.VolumeHandle))
+		err = e2eVSphere.waitForCNSVolumeToBeDeleted(pv.Spec.CSI.VolumeHandle)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+		ginkgo.By(fmt.Sprintf("Deleting FCD: %s", fcdID))
+		err = e2eVSphere.deleteFCD(ctx, fcdID, datastore.Reference())
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+		ginkgo.By("Deleting the Storage Class")
+		err = client.StorageV1().StorageClasses().Delete(sc.Name, nil)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+	})
+
+	/*
+		Test to Create/Delete statically provisioned volume and perform label updates.
+
+		Steps
+		1. Create an FCD disk
+		2. Wait for FCD to sync with Pandora
+		3. Create a PV with above FCD
+		4. Create a PVC
+		5. Wait for PVC to be in Bound phase
+		6. Verify PVC name is added to PV entry on CNS
+		7. Update PV and PVC labels
+		8. Verify updates labels are reflected on CNS
+		9. Delete PVC
+		10. Verify PVC name is removed from PV entry on CNS
+		11. Delete PV
+		12. Verify PV entry is deleted from CNS
+		13. Delete SC
+	*/
+
+	ginkgo.It("Verify label updates on statically provisioned volume.", func() {
+		var err error
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		if os.Getenv(envPandoraSyncWaitTime) != "" {
+			pandoraSyncWaitTime, err = strconv.Atoi(os.Getenv(envPandoraSyncWaitTime))
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+		} else {
+			pandoraSyncWaitTime = defaultPandoraSyncWaitTime
+		}
+		var datacenters []string
+		datastoreURL = GetAndExpectStringEnvVar(envSharedDatastoreURL)
+		finder := find.NewFinder(e2eVSphere.Client.Client, false)
+
+		cfg, err := getConfig()
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+		dcList := strings.Split(cfg.Global.Datacenters,
+			",")
+		for _, dc := range dcList {
+			dcName := strings.TrimSpace(dc)
+			if dcName != "" {
+				datacenters = append(datacenters, dcName)
+			}
+		}
+
+		for _, dc := range datacenters {
+			datacenter, err = finder.Datacenter(ctx, dc)
+			finder.SetDatacenter(datacenter)
+			datastore, err = getDatastoreByURL(ctx, datastoreURL, datacenter)
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+		}
+
+		ginkgo.By("Creating FCD Disk")
+		fcdID, err = e2eVSphere.createFCD(ctx, fcdName, diskSizeInMb, datastore.Reference())
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+		ginkgo.By(fmt.Sprintf("Sleeping for %v seconds to allow newly created FCD:%s to sync with pandora", pandoraSyncWaitTime, fcdID))
+		time.Sleep(time.Duration(pandoraSyncWaitTime) * time.Second)
+
+		ginkgo.By(fmt.Sprintf("Creating the PV with the fcdID %s", fcdID))
+		staticPVLabels := make(map[string]string)
+		staticPVLabels["fcd-id"] = fcdID
+		pv := getPersistentVolumeSpec(fcdID, v1.PersistentVolumeReclaimRetain, staticPVLabels)
+		pv, err = client.CoreV1().PersistentVolumes().Create(pv)
+		if err != nil {
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+		}
+
+		err = e2eVSphere.waitForCNSVolumeToBeCreated(pv.Spec.CSI.VolumeHandle)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+		ginkgo.By("Creating the PVC")
+		pvc := getPersistentVolumeClaimSpec(namespace, staticPVLabels, pv.Name)
+		pvc, err = client.CoreV1().PersistentVolumeClaims(namespace).Create(pvc)
+
+		// Wait for PV and PVC to Bind
+		framework.ExpectNoError(framework.WaitOnPVandPVC(client, namespace, pv, pvc))
+
+		labels := make(map[string]string)
+		labels[labelKey] = labelValue
+
+		ginkgo.By(fmt.Sprintf("Updating labels %+v for pvc %s in namespace %s", labels, pvc.Name, pvc.Namespace))
+		pvc, err = client.CoreV1().PersistentVolumeClaims(namespace).Get(pvc.Name, metav1.GetOptions{})
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+		pvc.Labels = labels
+		_, err = client.CoreV1().PersistentVolumeClaims(namespace).Update(pvc)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+		ginkgo.By(fmt.Sprintf("Waiting for labels %+v to be updated for pvc %s in namespace %s", labels, pvc.Name, pvc.Namespace))
+		err = e2eVSphere.waitForLabelsToBeUpdated(pv.Spec.CSI.VolumeHandle, labels, string(cnstypes.CnsKubernetesEntityTypePVC), pvc.Name, pvc.Namespace)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+		pv = getPvFromClaim(client, pvc.Namespace, pvc.Name)
+		ginkgo.By(fmt.Sprintf("Updating labels %+v for pv %s", labels, pv.Name))
+		pv.Labels = labels
+
+		_, err = client.CoreV1().PersistentVolumes().Update(pv)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+		ginkgo.By(fmt.Sprintf("Waiting for labels %+v to be updated for pv %s", labels, pv.Name))
+		err = e2eVSphere.waitForLabelsToBeUpdated(pv.Spec.CSI.VolumeHandle, labels, string(cnstypes.CnsKubernetesEntityTypePV), pv.Name, pv.Namespace)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+		ginkgo.By(fmt.Sprintf("Deleting PVC %s in namespace %s", pvc.Name, pvc.Namespace))
+		err = client.CoreV1().PersistentVolumeClaims(namespace).Delete(pvc.Name, nil)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+		pvcLabel, err := e2eVSphere.getLabelsForCNSVolume(pv.Spec.CSI.VolumeHandle, string(cnstypes.CnsKubernetesEntityTypePVC), pvc.Name, namespace)
+		if pvcLabel == nil {
+			framework.Logf("PVC name is successfully removed")
+		} else {
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+		}
+
+		ginkgo.By(fmt.Sprintf("Deleting the PV %s", pv.Name))
+		err = client.CoreV1().PersistentVolumes().Delete(pv.Name, nil)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+		ginkgo.By(fmt.Sprintf("Waiting for volume %s to be deleted", fcdID))
+		err = e2eVSphere.waitForCNSVolumeToBeDeleted(fcdID)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+		ginkgo.By(fmt.Sprintf("Deleting FCD: %s", fcdID))
+		err = e2eVSphere.deleteFCD(ctx, fcdID, datastore.Reference())
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+	})
+
+	/*
+		Test to create/delete stateful set with label updates
+
+		Steps
+		1. Create a Storage Class
+		2. Create a statefulset with 3 replicas
+		3. Wait for all PVCs to be in Bound phase and Pods are Ready state
+		4. Update PVC labels
+		5. Verify PVC labels are updated on CNS
+		6. Scale up number of replicas to 5
+		7. Update PV labels
+		8. Verify PV labels are updated on CNS
+		9. Scale down statefulsets to 0 replicas and delete all pods.
+		10. Delete PVCs
+		11. Delete SC
+	*/
+	ginkgo.It("Verify label updates on PVC and PV attached to a stateful set.", func() {
+		ginkgo.By("Creating StorageClass for Statefulset")
+		scSpec := getVSphereStorageClassSpec(storageclassname, nil, nil, "")
+		sc, err := client.StorageV1().StorageClasses().Create(scSpec)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+		defer client.StorageV1().StorageClasses().Delete(sc.Name, nil)
+
+		ginkgo.By("Creating statefulset")
+		statefulsetTester := framework.NewStatefulSetTester(client)
+		statefulset := statefulsetTester.CreateStatefulSet(manifestPath, namespace)
+		replicas := *(statefulset.Spec.Replicas)
+		// Waiting for pods status to be Ready
+		statefulsetTester.WaitForStatusReadyReplicas(statefulset, replicas)
+		gomega.Expect(statefulsetTester.CheckMount(statefulset, mountPath)).NotTo(gomega.HaveOccurred())
+		ssPodsBeforeScaleup := statefulsetTester.GetPodList(statefulset)
+		gomega.Expect(ssPodsBeforeScaleup.Items).NotTo(gomega.BeEmpty(), fmt.Sprintf("Unable to get list of Pods from the Statefulset: %v", statefulset.Name))
+		gomega.Expect(len(ssPodsBeforeScaleup.Items) == int(replicas)).To(gomega.BeTrue(), "Number of Pods in the statefulset should match with number of replicas")
+
+		pvclabels := make(map[string]string)
+		pvclabels[pvclabelKey] = pvclabelValue
+
+		for _, sspod := range ssPodsBeforeScaleup.Items {
+			_, err := client.CoreV1().Pods(namespace).Get(sspod.Name, metav1.GetOptions{})
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			for _, volumespec := range sspod.Spec.Volumes {
+				if volumespec.PersistentVolumeClaim != nil {
+					pv := getPvFromClaim(client, statefulset.Namespace, volumespec.PersistentVolumeClaim.ClaimName)
+
+					ginkgo.By(fmt.Sprintf("Updating labels %+v for pvc %s in namespace %s", pvclabels, volumespec.PersistentVolumeClaim.ClaimName, namespace))
+					pvc, err := client.CoreV1().PersistentVolumeClaims(namespace).Get(volumespec.PersistentVolumeClaim.ClaimName, metav1.GetOptions{})
+					gomega.Expect(err).NotTo(gomega.HaveOccurred())
+					pvc.Labels = pvclabels
+					_, err = client.CoreV1().PersistentVolumeClaims(namespace).Update(pvc)
+					gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+					ginkgo.By(fmt.Sprintf("Waiting for labels %+v to be updated for pvc %s in namespace %s", pvclabels, volumespec.PersistentVolumeClaim.ClaimName, namespace))
+					err = e2eVSphere.waitForLabelsToBeUpdated(pv.Spec.CSI.VolumeHandle, pvclabels, string(cnstypes.CnsKubernetesEntityTypePVC), volumespec.PersistentVolumeClaim.ClaimName, namespace)
+					gomega.Expect(err).NotTo(gomega.HaveOccurred())
+				}
+			}
+		}
+
+		ginkgo.By(fmt.Sprintf("Scaling up statefulsets to number of Replica: %v", replicas+2))
+		_, scaleupErr := statefulsetTester.Scale(statefulset, replicas+2)
+		gomega.Expect(scaleupErr).NotTo(gomega.HaveOccurred())
+		statefulsetTester.WaitForStatusReplicas(statefulset, replicas+2)
+		statefulsetTester.WaitForStatusReadyReplicas(statefulset, replicas+2)
+		pvlabels := make(map[string]string)
+		pvlabels[pvlabelKey] = pvlabelValue
+
+		ssPodsAfterScaleUp := statefulsetTester.GetPodList(statefulset)
+
+		for _, spod := range ssPodsAfterScaleUp.Items {
+			_, err := client.CoreV1().Pods(namespace).Get(spod.Name, metav1.GetOptions{})
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			for _, vspec := range spod.Spec.Volumes {
+				if vspec.PersistentVolumeClaim != nil {
+					pv := getPvFromClaim(client, statefulset.Namespace, vspec.PersistentVolumeClaim.ClaimName)
+
+					ginkgo.By(fmt.Sprintf("Updating labels %+v for pv %s", pvlabels, pv.Name))
+					pv.Labels = pvlabels
+
+					_, err = client.CoreV1().PersistentVolumes().Update(pv)
+					gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+					ginkgo.By(fmt.Sprintf("Waiting for labels %+v to be updated for pv %s", pvlabels, pv.Name))
+					err = e2eVSphere.waitForLabelsToBeUpdated(pv.Spec.CSI.VolumeHandle, pvlabels, string(cnstypes.CnsKubernetesEntityTypePV), pv.Name, pv.Namespace)
+					gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+				}
+			}
+		}
+
+		ginkgo.By(fmt.Sprintf("Scaling down statefulsets to number of Replica: %v", 0))
+		_, scaledownErr := statefulsetTester.Scale(statefulset, 0)
+		gomega.Expect(scaledownErr).NotTo(gomega.HaveOccurred())
+		statefulsetTester.WaitForStatusReadyReplicas(statefulset, 0)
+		ssPodsAfterScaleDown := statefulsetTester.GetPodList(statefulset)
+		gomega.Expect(len(ssPodsAfterScaleDown.Items) == int(0)).To(gomega.BeTrue(), "Number of Pods in the statefulset should match with number of replicas")
+
+		framework.Logf("Deleting all statefulset in namespace: %v", namespace)
+		framework.DeleteAllStatefulSets(client, namespace)
 	})
 
 })

@@ -169,7 +169,7 @@ func createStorageClass(client clientset.Interface, scParameters map[string]stri
 }
 
 // createPVC helps creates pvc with given namespace and labels using given storage class
-func createPVC(client clientset.Interface, pvcnamespace string, pvclaimlabels map[string]string, ds string, storageclass *storagev1.StorageClass) ( *v1.PersistentVolumeClaim, error) {
+func createPVC(client clientset.Interface, pvcnamespace string, pvclaimlabels map[string]string, ds string, storageclass *storagev1.StorageClass) (*v1.PersistentVolumeClaim, error) {
 	pvcspec := getPersistentVolumeClaimSpecWithStorageClass(pvcnamespace, ds, storageclass, pvclaimlabels)
 	ginkgo.By(fmt.Sprintf("Creating PVC using the Storage Class %s with disk size %s and labels: %+v", storageclass.Name, ds, pvclaimlabels))
 	pvclaim, err := framework.CreatePVC(client, pvcnamespace, pvcspec)

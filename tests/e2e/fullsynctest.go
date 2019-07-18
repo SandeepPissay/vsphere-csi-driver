@@ -107,7 +107,6 @@ var _ bool = ginkgo.Describe("[csi-block-e2e] full-sync-test", func() {
 
 	})
 
-
 	ginkgo.It("Verify CNS volume is created after full sync when pv entry is present", func() {
 		var err error
 
@@ -294,33 +293,33 @@ var _ bool = ginkgo.Describe("[csi-block-e2e] full-sync-test", func() {
 
 	})
 
-/*
-  Fullsync test with multiple PVCs
-  1. create a storage class with reclaim policy as "Retain"
-  2. create 5 pvcs with this storage class, and wait until all pvclaims are bound to corresponding pvs
-  3. stop vsan-health
-  4. delete pvclaim[0] and pvclaim[1]
-  5. update pvc labels for pvclaim[2]
-  6. update  pv labels for pvs[3] which is bounded to pvclaim[3]
-  7. start vsan-health and wait for full sync to finish
-  8. verify that pvc metadata for pvs[0] and pvs[1] has been deleted
-  9. verify that pvc labels for pvclaim[2] has been updated
-  10. verify that pv labels for pvs[3] has been updated
-  11. cleanup to remove pvs and pvcliams
-*/
+	/*
+	   Fullsync test with multiple PVCs
+	   1. create a storage class with reclaim policy as "Retain"
+	   2. create 5 pvcs with this storage class, and wait until all pvclaims are bound to corresponding pvs
+	   3. stop vsan-health
+	   4. delete pvclaim[0] and pvclaim[1]
+	   5. update pvc labels for pvclaim[2]
+	   6. update  pv labels for pvs[3] which is bounded to pvclaim[3]
+	   7. start vsan-health and wait for full sync to finish
+	   8. verify that pvc metadata for pvs[0] and pvs[1] has been deleted
+	   9. verify that pvc labels for pvclaim[2] has been updated
+	   10. verify that pv labels for pvs[3] has been updated
+	   11. cleanup to remove pvs and pvcliams
+	*/
 	ginkgo.It("Verify Multiple PVCs are deleted/updated after full sync", func() {
 		sc, err := createStorageClass(client, nil, nil, v1.PersistentVolumeReclaimRetain)
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		defer client.StorageV1().StorageClasses().Delete(sc.Name, nil)
 		var pvclaims []*v1.PersistentVolumeClaim
 		var pvs []*v1.PersistentVolume
-		for i:=0; i < numberOfPVC; i++ {
+		for i := 0; i < numberOfPVC; i++ {
 			pvc, err := createPVC(client, namespace, nil, "", sc)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 			ginkgo.By(fmt.Sprintf("Waiting for claim %s to be in bound phase", pvc.Name))
-		    pvList, err := framework.WaitForPVClaimBoundPhase(client, []*v1.PersistentVolumeClaim{pvc}, framework.ClaimProvisionTimeout)
-		    gomega.Expect(err).NotTo(gomega.HaveOccurred())
-		    gomega.Expect(pvList).NotTo(gomega.BeEmpty())
+			pvList, err := framework.WaitForPVClaimBoundPhase(client, []*v1.PersistentVolumeClaim{pvc}, framework.ClaimProvisionTimeout)
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(pvList).NotTo(gomega.BeEmpty())
 			pvclaims = append(pvclaims, pvc)
 			pvs = append(pvs, pvList[0])
 		}
@@ -356,7 +355,6 @@ var _ bool = ginkgo.Describe("[csi-block-e2e] full-sync-test", func() {
 		_, err = client.CoreV1().PersistentVolumes().Update(pvs[3])
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
-
 		ginkgo.By(fmt.Sprintln("Starting vsan-health on the vCenter host"))
 		err = invokeVCenterServiceControl(startVsanHealthOperation, vsanhealthServiceName, vcAddress)
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
@@ -381,14 +379,14 @@ var _ bool = ginkgo.Describe("[csi-block-e2e] full-sync-test", func() {
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 		// cleanup
-        for _, pvc := range pvclaims {
+		for _, pvc := range pvclaims {
 			ginkgo.By(fmt.Sprintf("Deleting pvc %s in namespace %s", pvc.Name, pvc.Namespace))
 			err = client.CoreV1().PersistentVolumeClaims(namespace).Delete(pvc.Name, nil)
 		}
 
 		for _, pv := range pvs {
 			ginkgo.By(fmt.Sprintf("Deleting the PV %s", pv.Name))
-		    err = client.CoreV1().PersistentVolumes().Delete(pv.Name, nil)
+			err = client.CoreV1().PersistentVolumes().Delete(pv.Name, nil)
 		}
 	})
 
