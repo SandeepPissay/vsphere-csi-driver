@@ -47,6 +47,9 @@ const (
 	WcpControllerType = "WCP"
 
 	defaultController = VanillaK8SControllerType
+
+	// UnixSocketPrefix is the prefix before the path on disk
+	UnixSocketPrefix = "unix://"
 )
 
 var (
@@ -65,6 +68,17 @@ type Service interface {
 type service struct {
 	mode  string
 	cnscs vTypes.CnsController
+}
+
+// This works around a bug that if k8s node dies, this will clean up the sock file
+// left behind. This can't be done in BeforeServe because gocsi will already try to
+// bind and fail because the sock file already exists.
+func init() {
+	sockPath := os.Getenv(gocsi.EnvVarEndpoint)
+	sockPath = strings.TrimPrefix(sockPath, UnixSocketPrefix)
+	if len(sockPath) > 1 { // minimal valid path length
+		os.Remove(sockPath)
+	}
 }
 
 // New returns a new Service.
