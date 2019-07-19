@@ -22,7 +22,6 @@ import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"golang.org/x/net/context"
 	"k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog"
 	cnsnode "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/node"
 	cnsvsphere "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vsphere"
@@ -43,20 +42,6 @@ func (nodes *Nodes) Initialize() error {
 	if err != nil {
 		klog.Errorf("Creating Kubernetes client failed. Err: %v", err)
 		return err
-	}
-	k8snodes, err := k8sclient.CoreV1().Nodes().List(metav1.ListOptions{})
-	if err != nil {
-		msg := fmt.Sprintf("Failed to get kubernetes nodes. Err: %v", err)
-		klog.Error(msg)
-		return err
-	}
-	for idx := range k8snodes.Items {
-		node := &k8snodes.Items[idx]
-		err := nodes.registerNode(node)
-		if err != nil {
-			klog.Errorf("Failed to register node:%q. err=%v", node.Name, err)
-			return err
-		}
 	}
 	nodes.informMgr = k8s.NewInformer(k8sclient)
 	nodes.informMgr.AddNodeListener(nodes.nodeAdd, nil, nodes.nodeDelete)

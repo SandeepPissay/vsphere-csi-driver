@@ -17,6 +17,7 @@ limitations under the License.
 package service
 
 import (
+	"errors"
 	"fmt"
 	"github.com/akutz/gofsutil"
 	"github.com/container-storage-interface/spec/lib/go/csi"
@@ -387,6 +388,7 @@ func (s *service) NodeGetInfo(
 	cfg, err = cnsconfig.GetCnsconfig(cfgPath)
 	if err != nil {
 		klog.Errorf("Failed to read cnsconfig. Error: %v", err)
+		return nil, status.Errorf(codes.Internal, err.Error())
 	}
 	var accessibleTopology map[string]string
 	topology := &csi.Topology{}
@@ -408,6 +410,7 @@ func (s *service) NodeGetInfo(
 		err = vcenter.Connect(ctx)
 		if err != nil {
 			klog.Errorf("Failed to connect to vcenter host: %s. err=%v", vcenter.Config.Host, err)
+			return nil, status.Errorf(codes.Internal, err.Error())
 		}
 		// Get VM UUID
 		uuid, err := getSystemUUID()
@@ -419,8 +422,17 @@ func (s *service) NodeGetInfo(
 		nodeVM, err := cnsvsphere.GetVirtualMachineByUUID(uuid, false)
 		if err != nil || nodeVM == nil {
 			klog.Errorf("Failed to get nodeVM for uuid: %s. err: %+v", uuid, err)
+			uuid, err = convertUUID(uuid)
+			if err != nil {
+				klog.Errorf("convertUUID failed with error: %v", err)
+				return nil, status.Errorf(codes.Internal, err.Error())
+			}
+			nodeVM, err = cnsvsphere.GetVirtualMachineByUUID(uuid, false)
+			if err != nil || nodeVM == nil {
+				klog.Errorf("Failed to get nodeVM for uuid: %s. err: %+v", uuid, err)
+				return nil, status.Errorf(codes.Internal, err.Error())
+			}
 		}
-
 		zone, region, err := nodeVM.GetZoneRegion(ctx, cfg.Labels.Zone, cfg.Labels.Region)
 		if err != nil {
 			klog.Errorf("Failed to get accessibleTopology for vm: %v, err: %v", nodeVM.Reference(), err)
@@ -797,6 +809,22 @@ func getSystemUUID() (string, error) {
 	id := strings.TrimSpace(string(idb))
 	klog.V(4).Infof("uuid in string: %s", id)
 	return strings.ToLower(id), nil
+}
+
+// convertUUID helps convert UUID to vSphere format
+//input uuid:    6B8C2042-0DD1-D037-156F-435F999D94C1
+//returned uuid: 42208c6b-d10d-37d0-156f-435f999d94c1
+func convertUUID(uuid string) (string, error) {
+	if len(uuid) != 36 {
+		return "", errors.New("uuid length should be 36")
+	}
+	convertedUUID := fmt.Sprintf("%s%s%s%s-%s%s-%s%s-%s-%s",
+		uuid[6:8], uuid[4:6], uuid[2:4], uuid[0:2],
+		uuid[11:13], uuid[9:11],
+		uuid[16:18], uuid[14:16],
+		uuid[19:23],
+		uuid[24:36])
+	return strings.ToLower(convertedUUID), nil
 }
 
 func getDiskID(volID string, pubCtx map[string]string) (string, error) {
