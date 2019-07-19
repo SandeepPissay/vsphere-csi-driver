@@ -36,7 +36,7 @@ import (
 	"github.com/vmware/govmomi/vim25/types"
 	cnssim "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vmomi/simulator"
 	cnstypes "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vmomi/types"
-	cspvolume "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/volume"
+	cnsvolume "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/volume"
 	cnsvsphere "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vsphere"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/common/config"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/block"
@@ -141,7 +141,7 @@ func getControllerTest(t *testing.T) *controllerTest {
 		manager := &block.Manager{
 			VcenterConfig:  vcenterconfig,
 			CnsConfig:      config,
-			VolumeManager:  cspvolume.GetManager(vcenter),
+			VolumeManager:  cnsvolume.GetManager(vcenter),
 			VcenterManager: cnsvsphere.GetVirtualCenterManager(),
 		}
 

@@ -51,15 +51,15 @@ func getFullSyncIntervalInMin() int {
 	if v := os.Getenv("X_CSI_FULL_SYNC_INTERVAL_MINUTES"); v != "" {
 		if value, err := strconv.Atoi(v); err == nil {
 			if value <= 0 {
-				klog.Warningf("CSPFullSync: fullSync interval set in env variable X_CSI_FULL_SYNC_INTERVAL_MINUTES %s is equal or less than 0, will use the default interval", v)
+				klog.Warningf("FullSync: fullSync interval set in env variable X_CSI_FULL_SYNC_INTERVAL_MINUTES %s is equal or less than 0, will use the default interval", v)
 			} else if value > defaultFullSyncIntervalInMin {
-				klog.Warningf("CSPFullSync: fullSync interval set in env variable X_CSI_FULL_SYNC_INTERVAL_MINUTES %s is larger than max vlaue can be set, will use the default interval", v)
+				klog.Warningf("FullSync: fullSync interval set in env variable X_CSI_FULL_SYNC_INTERVAL_MINUTES %s is larger than max vlaue can be set, will use the default interval", v)
 			} else {
 				fullSyncIntervalInMin = value
-				klog.V(2).Infof("CSPFullSync: fullSync interval is set to %d minutes", fullSyncIntervalInMin)
+				klog.V(2).Infof("FullSync: fullSync interval is set to %d minutes", fullSyncIntervalInMin)
 			}
 		} else {
-			klog.Warningf("CSPFullSync: fullSync interval set in env variable X_CSI_FULL_SYNC_INTERVAL_MINUTES %s is invalid, will use the default interval", v)
+			klog.Warningf("FullSync: fullSync interval set in env variable X_CSI_FULL_SYNC_INTERVAL_MINUTES %s is invalid, will use the default interval", v)
 		}
 	}
 	return fullSyncIntervalInMin
