@@ -52,6 +52,8 @@ const (
 	ext3FSType                                 = "ext3"
 	invalidFSType                              = "ext10"
 	execCommand                                = "/bin/df -T /mnt/volume1 | /bin/awk 'FNR == 2 {print $2}' > /mnt/volume1/fstype && while true ; do sleep 2 ; done"
+	kubeSystemNamespace                        = "kube-system"
+	syncerStatefulsetName                      = "vsphere-csi-metadata-syncer"
 )
 
 // GetAndExpectStringEnvVar parses a string from env variable

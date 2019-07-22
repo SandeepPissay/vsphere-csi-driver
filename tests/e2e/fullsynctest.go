@@ -546,4 +546,71 @@ var _ bool = ginkgo.Describe("[csi-block-e2e] full-sync-test", func() {
 
 	})
 
+	ginkgo.It("Bring down syncer pod and verify PV metadata is created in CNS", func() {
+		var err error
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		if os.Getenv(envPandoraSyncWaitTime) != "" {
+			pandoraSyncWaitTime, err = strconv.Atoi(os.Getenv(envPandoraSyncWaitTime))
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+		} else {
+			pandoraSyncWaitTime = defaultPandoraSyncWaitTime
+		}
+
+		datastoreURL = GetAndExpectStringEnvVar(envSharedDatastoreURL)
+		finder := find.NewFinder(e2eVSphere.Client.Client, false)
+
+		for _, dc := range datacenters {
+			datacenter, err = finder.Datacenter(ctx, dc)
+			finder.SetDatacenter(datacenter)
+			datastore, err = getDatastoreByURL(ctx, datastoreURL, datacenter)
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+		}
+
+		ginkgo.By("Creating FCD Disk")
+		fcdID, err = e2eVSphere.createFCD(ctx, fcdName, diskSizeInMb, datastore.Reference())
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+		ginkgo.By(fmt.Sprintf("Sleeping for %v seconds to allow newly created FCD:%s to sync with pandora", pandoraSyncWaitTime, fcdID))
+		time.Sleep(time.Duration(pandoraSyncWaitTime) * time.Second)
+
+		statefulsetTester := framework.NewStatefulSetTester(client)
+		statefulset := statefulsetTester.GetStatefulSet(kubeSystemNamespace, syncerStatefulsetName)
+		replicas := *(statefulset.Spec.Replicas)
+		ginkgo.By(fmt.Sprintf("Kill syncer statefulset by scaling down statefulsets to number of Replica: %v", replicas-1))
+		_, scaleDownErr := statefulsetTester.Scale(statefulset, replicas-1)
+		gomega.Expect(scaleDownErr).NotTo(gomega.HaveOccurred())
+		statefulsetTester.WaitForStatusReadyReplicas(statefulset, replicas-1)
+
+		ginkgo.By(fmt.Sprintf("Creating the PV with the fcdID %s", fcdID))
+		staticPVLabels := make(map[string]string)
+		staticPVLabels["fcd-id"] = fcdID
+		pv := getPersistentVolumeSpec(fcdID, v1.PersistentVolumeReclaimRetain, staticPVLabels)
+		pv, err = client.CoreV1().PersistentVolumes().Create(pv)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+		ginkgo.By(fmt.Sprintf("Recreate syncer statefulset by scaling up statefulsets to number of Replica: %v", replicas))
+		_, scaleUpErr := statefulsetTester.Scale(statefulset, replicas)
+		gomega.Expect(scaleUpErr).NotTo(gomega.HaveOccurred())
+		statefulsetTester.WaitForStatusReplicas(statefulset, replicas)
+		statefulsetTester.WaitForStatusReadyReplicas(statefulset, replicas)
+
+		ginkgo.By(fmt.Sprintf("Sleeping for %v seconds to allow full sync finish", fullSyncWaitTime))
+		time.Sleep(time.Duration(fullSyncWaitTime) * time.Second)
+
+		ginkgo.By(fmt.Sprintf("Waiting for volume %s to be created", fcdID))
+		err = e2eVSphere.waitForCNSVolumeToBeCreated(fcdID)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+		ginkgo.By(fmt.Sprintf("Deleting the PV %s", pv.Name))
+		err = client.CoreV1().PersistentVolumes().Delete(pv.Name, nil)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+		ginkgo.By(fmt.Sprintf("Deleting FCD: %s", fcdID))
+		err = e2eVSphere.deleteFCD(ctx, fcdID, datastore.Reference())
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+	})
+
 })
