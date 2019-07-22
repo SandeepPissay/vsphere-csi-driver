@@ -53,19 +53,17 @@ var _ = ginkgo.Describe("[csi-block-e2e-zone] Topology-Aware-Provisioning-With-P
 
 	/*
 		1. Create a Storage Class with spec containing valid region and zone in “AllowedTopologies”. Ensure that there are multiple nodes in this zone and region.
-		2. Create a PVC with above SC
-		3. Wait for PVC to be in Bound phase
-		4. Verify PV is created in the specified zone and region
-		5. Create Stateful set with replica=1 attached to above PV
-		6. Verify Pod is scheduled on node within the specified zone and region
-		7. Power off node on which Pod is running
-		8. Wait for 7 minutes for k8s to detach the volume and schedule the pod on other node
-		9. Force delete the pod
-		10. Wait for 7 minutes for k8s to attach the volume on other node
-		11. Verify Pod is in running state on a node within this zone and region
-		12. Delete pod and wait for disk to be detached
-		13. Delete PVC
-		14. Delete SC
+		2. Create Stateful set with replica=1 attached to above PV
+		3. Verify PV is created in the specified zone and region
+		4. Verify Pod is scheduled on node within the specified zone and region
+		5. Power off node on which Pod is running
+		6. Wait for 7 minutes for k8s to detach the volume and schedule the pod on other node
+		7. Force delete the pod
+		8. Wait for 7 minutes for k8s to attach the volume on other node
+		9. Verify Stateful set is in running state on a node within this zone and region
+		10. Delete Stateful set and wait for disk to be detached
+		11. Delete PVC
+		12. Delete SC
 	*/
 	ginkgo.It("Verify if stateful set is scheduled on a node within the topology after node power off", func() {
 		// Preparing allowedTopologies using topologies with shared and non shared datastores
@@ -121,7 +119,7 @@ var _ = ginkgo.Describe("[csi-block-e2e-zone] Topology-Aware-Provisioning-With-P
 		ginkgo.By("Wait for 7 minutes for k8s to schedule the pod on other node")
 		time.Sleep(k8sPodTerminationTimeOut)
 
-		ginkgo.By("Deleting the pod")
+		ginkgo.By("Forcefully deleting the pod")
 		statefulsetTester.DeleteStatefulPodAtIndex(0, statefulset)
 
 		ginkgo.By("Wait for 7 minutes for k8s to detach the volume from powered off node and start the pod succesfully on other node")
@@ -135,9 +133,9 @@ var _ = ginkgo.Describe("[csi-block-e2e-zone] Topology-Aware-Provisioning-With-P
 
 		podList = statefulsetTester.GetPodList(statefulset)
 		pod = podList.Items[0]
-		node2 := pod.Spec.NodeName
+		failoverNode := pod.Spec.NodeName
 
-		isDiskAttached, err := e2eVSphere.isVolumeAttachedToNode(client, pv.Spec.CSI.VolumeHandle, node2)
+		isDiskAttached, err := e2eVSphere.isVolumeAttachedToNode(client, pv.Spec.CSI.VolumeHandle, failoverNode)
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		gomega.Expect(isDiskAttached).To(gomega.BeTrue(), fmt.Sprintf("Volume is not attached to the node"))
 
@@ -163,19 +161,16 @@ var _ = ginkgo.Describe("[csi-block-e2e-zone] Topology-Aware-Provisioning-With-P
 
 	/*
 		1. Create a Storage Class with spec containing valid region and zone in “AllowedTopologies”. Ensure that there is only one  node in this zone and region.
-		2. Create a PVC with above SC
-		3. Wait for PVC to be in Bound phase
-		4. Verify PV is created in the specified zone and region
-		5. Create Stateful set with replica=1 attached to above PV
-		6. Verify Pod is scheduled on node within the specified zone and region
-		7. Power off node on which Pod is running
-		8. Wait for 7 minutes for k8s to detach the volume and schedule the pod on same node
-		9. Force delete the pod
-		10. Wait for 7 minutes for k8s to attach the volume on same node
-		11. Verify Pod is in running state on a node within this zone and region
-		12. Delete pod and wait for disk to be detached
-		13. Delete PVC
-		14. Delete SC
+		2. Create Stateful set with replica=1 attached to above PV
+		3. Verify PV is created in the specified zone and region
+		4. Power off node on which Pod is running
+		5. Wait for 7 minutes for k8s to detach the volume and schedule the pod on same node
+		6. Force delete the pod
+		7. Wait for 7 minutes for k8s to attach the volume on same node
+		8. Verify Stateful set is in running state on the same node
+		9. Delete Stateful set and wait for disk to be detached
+		10. Delete PVC
+		11. Delete SC
 	*/
 	ginkgo.It("Verify if stateful set do not get scheduled on other zone after powering off the only node in current zone", func() {
 		topologyValue := GetAndExpectStringEnvVar(envTopologyWithOnlyOneNode)
@@ -230,7 +225,7 @@ var _ = ginkgo.Describe("[csi-block-e2e-zone] Topology-Aware-Provisioning-With-P
 		ginkgo.By("Wait for 7 minutes for k8s to detach volume and terminate the pod on current node")
 		time.Sleep(k8sPodTerminationTimeOut)
 
-		ginkgo.By("Deleting the pod")
+		ginkgo.By("Forcefully deleting the pod")
 		statefulsetTester.DeleteStatefulPodAtIndex(0, statefulset)
 
 		ginkgo.By("Wait for 7 minutes for k8s to attempt volume attachment and start the pod")

@@ -17,6 +17,18 @@ datacenters = "<Datacenter_Name>"
 Please update the `hostname` and `datacenters` as per your testbed configuration.
 datacenters should be comma separated if deployed on multi-datacenters
 
+```
+Note: For zone tests, it is recommended to setup VC with 3 clusters having the following topology values:
+Cluster-1                 : region-a
+ESXi hosts in Cluster-1   : zone-a
+
+Cluster-2                 : region-b
+ESXi hosts in Cluster-2   : zone-b
+
+Cluster-3                 : region-c
+ESXi hosts in Cluster-3   : zone-c
+```
+
 ## Setting env variables for All e2e tests
 ```shell
 $ export E2E_TEST_CONF_FILE="/path/to/e2eTest.conf"
@@ -25,8 +37,8 @@ $ export NONSHARED_VSPHERE_DATASTORE_URL="ds:///vmfs/volumes/5cf05d98-b2c43515-d
 $ export STORAGE_POLICY_FOR_SHARED_DATASTORES="vSAN Default Storage Policy"
 $ export STORAGE_POLICY_FOR_NONSHARED_DATASTORES="LocalDatastoresPolicy"
 $ export TOPOLOGY_WITH_SHARED_DATASTORE="<region-1-shared-datastore>:<zone-1-with-shared-datastore>"
-$ export TOPOLOGY_WITH_NO_SHARED_DATASTORE="<region-1-without-shared-datastore>:<zone-2-without-shared-datastore>"
-$ export TOPOLOGY_WITH_ONLY_ONE_NODE="<region-1>:<zone-3>"
+$ export TOPOLOGY_WITH_NO_SHARED_DATASTORE="<region-2-without-shared-datastore>:<zone-2-without-shared-datastore>"
+$ export TOPOLOGY_WITH_ONLY_ONE_NODE="<region-3-with-only-one-node>:<zone-3-with-only-one-node>"
 $ export STORAGE_POLICY_FROM_INACCESSIBLE_ZONE="PolicyNameInaccessibleToSelectedTopologyValues"
 $ export INACCESSIBLE_ZONE_VSPHERE_DATASTORE_URL="DataStoreUrlInaccessibleToSelectedTopologyValues"
 ```

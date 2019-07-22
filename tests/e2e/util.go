@@ -372,10 +372,10 @@ func verifyPodLocation(pod *v1.Pod, nodeList *v1.NodeList, zoneValue string, reg
 	for _, node := range nodeList.Items {
 		if pod.Spec.NodeName == node.Name {
 			for labelKey, labelValue := range node.Labels {
-				if labelKey == zoneKey {
+				if labelKey == zoneKey && zoneValue != "" {
 					gomega.Expect(zoneValue).To(gomega.Equal(labelValue), fmt.Sprintf("Pod %s is not running on Node located in zone %v", pod.Name, zoneValue))
 				}
-				if labelKey == regionKey {
+				if labelKey == regionKey && regionValue != "" {
 					gomega.Expect(regionValue).To(gomega.Equal(labelValue), fmt.Sprintf("Pod %s is not running on Node located in region %v", pod.Name, regionValue))
 				}
 			}

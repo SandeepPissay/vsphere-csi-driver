@@ -74,17 +74,12 @@ var _ = ginkgo.Describe("[csi-block-e2e-zone] Topology-Aware-Provisioning-With-S
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		defer client.StorageV1().StorageClasses().Delete(sc.Name, nil)
 
-		ginkgo.By("Creating statefulset")
+		ginkgo.By("Creating statefulset with single replica")
 		statefulsetTester := framework.NewStatefulSetTester(client)
-		statefulset := statefulsetTester.CreateStatefulSet(manifestPath, namespace)
-		replicas := *(statefulset.Spec.Replicas)
-
-		// Waiting for pods status to be Ready
-		statefulsetTester.WaitForStatusReadyReplicas(statefulset, replicas)
+		statefulset := createStatefulSetWithOneReplica(client, manifestPath, namespace)
+		statefulsetTester.WaitForStatusReadyReplicas(statefulset, 1)
 		gomega.Expect(statefulsetTester.CheckMount(statefulset, mountPath)).NotTo(gomega.HaveOccurred())
 
-		statefulsetTester.UpdateReplicas(statefulset, 1)
-		statefulsetTester.WaitForStatusReadyReplicas(statefulset, 1)
 		ssPodsBeforeDelete := statefulsetTester.GetPodList(statefulset)
 		gomega.Expect(ssPodsBeforeDelete.Items).NotTo(gomega.BeEmpty(), fmt.Sprintf("Unable to get list of Pods from the Statefulset: %v", statefulset.Name))
 		gomega.Expect(len(ssPodsBeforeDelete.Items) == 1).To(gomega.BeTrue(), "Number of Pods in the statefulset should be 1")
