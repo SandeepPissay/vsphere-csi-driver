@@ -29,7 +29,7 @@ import (
 	"time"
 )
 
-var _ = ginkgo.Describe("[csi-block-e2e-zone] Topology Aware Provisioning", func() {
+var _ = ginkgo.Describe("[csi-block-e2e-zone] Basic-Topology-Aware-Provisioning", func() {
 	f := framework.NewDefaultFramework("e2e-vsphere-topology-aware-provisioning")
 	var (
 		client            clientset.Interface
@@ -44,7 +44,6 @@ var _ = ginkgo.Describe("[csi-block-e2e-zone] Topology Aware Provisioning", func
 		pvclaim           *v1.PersistentVolumeClaim
 		storageclass      *storagev1.StorageClass
 		err               error
-		topologyMap       map[string][]string
 	)
 	ginkgo.BeforeEach(func() {
 		client = f.ClientSet
@@ -54,19 +53,8 @@ var _ = ginkgo.Describe("[csi-block-e2e-zone] Topology Aware Provisioning", func
 		if !(len(nodeList.Items) > 0) {
 			framework.Failf("Unable to find ready and schedulable Node")
 		}
-		topology := GetAndExpectStringEnvVar(envTopology)
-		topologyMap = createTopologyMap(topology)
-		regionValues, zoneValues = getValidTopology(topologyMap)
-		allowedTopologies = []v1.TopologySelectorLabelRequirement{
-			{
-				Key:    zoneKey,
-				Values: zoneValues,
-			},
-			{
-				Key:    regionKey,
-				Values: regionValues,
-			},
-		}
+		regionZoneValue := GetAndExpectStringEnvVar(envRegionZoneWithSharedDS)
+		regionValues, zoneValues, allowedTopologies = topologyParameterForStorageClass(regionZoneValue)
 	})
 
 	testCleanUpUtil := func() {
@@ -87,6 +75,7 @@ var _ = ginkgo.Describe("[csi-block-e2e-zone] Topology Aware Provisioning", func
 	verifyBasicTopologyBasedVolumeProvisioning := func(f *framework.Framework, client clientset.Interface, namespace string, scParameters map[string]string, allowedTopologies []v1.TopologySelectorLabelRequirement) {
 
 		storageclass, pvclaim, err = createPVCAndStorageClass(client, namespace, nil, scParameters, "", allowedTopologies)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 		ginkgo.By("Expect claim to pass provisioning volume")
 		err = framework.WaitForPersistentVolumeClaimPhase(v1.ClaimBound, client, pvclaim.Namespace, pvclaim.Name, framework.Poll, time.Minute)
@@ -106,7 +95,7 @@ var _ = ginkgo.Describe("[csi-block-e2e-zone] Topology Aware Provisioning", func
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		gomega.Expect(isDiskAttached).To(gomega.BeTrue(), fmt.Sprintf("Volume is not attached to the node"))
 
-		ginkgo.By("Verify Pod is scheduled in on a node belonging to same topology as the PV it is attached to")
+		ginkgo.By("Verify Pod is scheduled on a node belonging to same topology as the PV it is attached to")
 		err = verifyPodLocation(pod, nodeList, pvZone, pvRegion)
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	}
@@ -206,7 +195,6 @@ var _ = ginkgo.Describe("[csi-block-e2e-zone] Topology Aware Provisioning", func
 		4. Delete PVC
 	*/
 	ginkgo.It("Verify provisioning volume with valid zone and region fails when an inaccessible non-shared datastore url is specified in Storage Class", func() {
-
 		nonSharedDatastoreURLInZone := GetAndExpectStringEnvVar(envInaccessibleZoneDatastoreURL)
 		scParameters := make(map[string]string)
 		scParameters[scParamDatastoreURL] = nonSharedDatastoreURLInZone
@@ -231,4 +219,21 @@ var _ = ginkgo.Describe("[csi-block-e2e-zone] Topology Aware Provisioning", func
 		invokeTopologyBasedVolumeProvisioningWithInaccessibleParameters(f, client, namespace, scParameters, allowedTopologies, errStringToVerify)
 	})
 
+	/*
+		Test to verify provisioning volume with no zone and region specified in Storage Class succeeds.
+		Volume should be provisioned with no Node Affinity rules for that zone/region.
+
+		Steps
+		1. Create a Storage Class with no region or zone specified in “AllowedTopologies”
+		2. Create a PVC using above SC
+		3. Wait for PVC to be in bound phase
+		4. Verify volume creation is successful
+		5. Verify PV does not contain any node affinity rules
+		6. Delete PVC
+		7. Delete Storage Class
+	*/
+	ginkgo.It("Verify provisioning with no topology specified in Storage Class passes", func() {
+		verifyBasicTopologyBasedVolumeProvisioning(f, client, namespace, nil, nil)
+		testCleanUpUtil()
+	})
 })

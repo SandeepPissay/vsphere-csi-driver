@@ -24,7 +24,8 @@ $ export SHARED_VSPHERE_DATASTORE_URL="ds:///vmfs/volumes/5cf05d97-4aac6e02-2940
 $ export NONSHARED_VSPHERE_DATASTORE_URL="ds:///vmfs/volumes/5cf05d98-b2c43515-d903-02003e89d50e/"
 $ export STORAGE_POLICY_FOR_SHARED_DATASTORES="vSAN Default Storage Policy"
 $ export STORAGE_POLICY_FOR_NONSHARED_DATASTORES="LocalDatastoresPolicy"
-$ export TOPOLOGY_VALUES="<region-tag>:<zone-category>"
+$ export TOPOLOGY_WITH_SHARED_DATASTORE="<region-1-shared-datastore>:<zone-1-with-shared-datastore>"
+$ export TOPOLOGY_WITH_NO_SHARED_DATASTORE="<region-without-shared-datastore>:<zone-without-shared-datastore>"
 $ export STORAGE_POLICY_FROM_INACCESSIBLE_ZONE="PolicyNameInaccessibleToSelectedTopologyValues"
 $ export INACCESSIBLE_ZONE_VSPHERE_DATASTORE_URL="DataStoreUrlInaccessibleToSelectedTopologyValues"
 ```

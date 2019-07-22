@@ -357,6 +357,26 @@ func verifyPodLocation(pod *v1.Pod, nodeList *v1.NodeList, zoneValue string, reg
 	return nil
 }
 
+// topologyParameterForStorageClass creates a topology map using the topology values ENV variables
+// Returns the allowedTopologies paramters required for the Storage Class
+// Input : <region-1>:<zone-1>, <region-1>:<zone-2>
+// Output : [region-1], [zone-1, zone-2] {region-1: zone-1, region-1:zone-2}
+func topologyParameterForStorageClass(topology string) ([]string, []string, []v1.TopologySelectorLabelRequirement) {
+	topologyMap := createTopologyMap(topology)
+	regionValues, zoneValues := getValidTopology(topologyMap)
+	allowedTopologies := []v1.TopologySelectorLabelRequirement{
+		{
+			Key:    regionKey,
+			Values: regionValues,
+		},
+		{
+			Key:    zoneKey,
+			Values: zoneValues,
+		},
+	}
+	return regionValues, zoneValues, allowedTopologies
+}
+
 // createTopologyMap strips the topology string provided in the environment variable
 // into a map from region to zones
 // example envTopology = "r1:z1,r1:z2,r2:z3"
