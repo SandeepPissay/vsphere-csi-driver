@@ -89,7 +89,7 @@ var _ bool = ginkgo.Describe("[csi-block-e2e] label-updates", func() {
 
 	ginkgo.It("verify labels are created in CNS after updating pvc and/or pv with new labels", func() {
 		ginkgo.By(fmt.Sprintf("Invoking test to verify labels creation"))
-		sc, pvc, err := createPVCAndStorageClass(client, namespace, nil, nil, "", nil)
+		sc, pvc, err := createPVCAndStorageClass(client, namespace, nil, nil, "", nil, "")
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		defer client.StorageV1().StorageClasses().Delete(sc.Name, nil)
 		defer client.CoreV1().PersistentVolumeClaims(namespace).Delete(pvc.Name, nil)
@@ -138,7 +138,7 @@ var _ bool = ginkgo.Describe("[csi-block-e2e] label-updates", func() {
 		labels := make(map[string]string)
 		labels[labelKey] = labelValue
 
-		sc, pvc, err := createPVCAndStorageClass(client, namespace, nil, nil, "", nil)
+		sc, pvc, err := createPVCAndStorageClass(client, namespace, nil, nil, "", nil, "")
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		defer client.StorageV1().StorageClasses().Delete(sc.Name, nil)
 		defer client.CoreV1().PersistentVolumeClaims(namespace).Delete(pvc.Name, nil)
@@ -195,7 +195,7 @@ var _ bool = ginkgo.Describe("[csi-block-e2e] label-updates", func() {
 
 	ginkgo.It("verify podname label is created/deleted when pod with cns volume is created/deleted.", func() {
 		ginkgo.By(fmt.Sprintf("Invoking test to verify pod name label updates"))
-		sc, pvc, err := createPVCAndStorageClass(client, namespace, nil, nil, "", nil)
+		sc, pvc, err := createPVCAndStorageClass(client, namespace, nil, nil, "", nil, "")
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		defer client.StorageV1().StorageClasses().Delete(sc.Name, nil)
 		defer client.CoreV1().PersistentVolumeClaims(namespace).Delete(pvc.Name, nil)
@@ -282,7 +282,7 @@ var _ bool = ginkgo.Describe("[csi-block-e2e] label-updates", func() {
 		}
 
 		ginkgo.By(fmt.Sprintf("Creating storage class"))
-		sc, err := createStorageClass(client, nil, nil, v1.PersistentVolumeReclaimRetain)
+		sc, err := createStorageClass(client, nil, nil, v1.PersistentVolumeReclaimRetain, "")
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 		ginkgo.By(fmt.Sprintf("Creating PVC"))
@@ -495,7 +495,7 @@ var _ bool = ginkgo.Describe("[csi-block-e2e] label-updates", func() {
 	*/
 	ginkgo.It("Verify label updates on PVC and PV attached to a stateful set.", func() {
 		ginkgo.By("Creating StorageClass for Statefulset")
-		scSpec := getVSphereStorageClassSpec(storageclassname, nil, nil, "")
+		scSpec := getVSphereStorageClassSpec(storageclassname, nil, nil, "", "")
 		sc, err := client.StorageV1().StorageClasses().Create(scSpec)
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		defer client.StorageV1().StorageClasses().Delete(sc.Name, nil)

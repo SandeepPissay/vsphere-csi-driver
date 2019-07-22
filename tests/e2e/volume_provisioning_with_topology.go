@@ -74,7 +74,7 @@ var _ = ginkgo.Describe("[csi-block-e2e-zone] Basic-Topology-Aware-Provisioning"
 
 	verifyBasicTopologyBasedVolumeProvisioning := func(f *framework.Framework, client clientset.Interface, namespace string, scParameters map[string]string, allowedTopologies []v1.TopologySelectorLabelRequirement) {
 
-		storageclass, pvclaim, err = createPVCAndStorageClass(client, namespace, nil, scParameters, "", allowedTopologies)
+		storageclass, pvclaim, err = createPVCAndStorageClass(client, namespace, nil, scParameters, "", allowedTopologies, "")
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 		ginkgo.By("Expect claim to pass provisioning volume")
@@ -102,7 +102,7 @@ var _ = ginkgo.Describe("[csi-block-e2e-zone] Basic-Topology-Aware-Provisioning"
 
 	invokeTopologyBasedVolumeProvisioningWithInaccessibleParameters := func(f *framework.Framework, client clientset.Interface, namespace string, scParameters map[string]string, allowedTopologies []v1.TopologySelectorLabelRequirement, expectedErrMsg string) {
 
-		storageclass, pvclaim, err = createPVCAndStorageClass(client, namespace, nil, scParameters, "", allowedTopologies)
+		storageclass, pvclaim, err = createPVCAndStorageClass(client, namespace, nil, scParameters, "", allowedTopologies, "")
 		defer client.StorageV1().StorageClasses().Delete(storageclass.Name, nil)
 
 		ginkgo.By("Expect claim to fail provisioning volume on inaccessible non shared datastore")

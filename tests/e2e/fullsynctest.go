@@ -173,7 +173,7 @@ var _ bool = ginkgo.Describe("[csi-block-e2e] full-sync-test", func() {
 
 	ginkgo.It("Verify labels are created in CNS after updating pvc and/or pv with new labels", func() {
 		ginkgo.By(fmt.Sprintf("Invoking test to verify labels creation"))
-		sc, pvc, err := createPVCAndStorageClass(client, namespace, nil, nil, "", nil)
+		sc, pvc, err := createPVCAndStorageClass(client, namespace, nil, nil, "", nil, "")
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		defer client.StorageV1().StorageClasses().Delete(sc.Name, nil)
 
@@ -232,7 +232,7 @@ var _ bool = ginkgo.Describe("[csi-block-e2e] full-sync-test", func() {
 		ginkgo.By(fmt.Sprintf("Invoking test to verify CNS volume creation"))
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		sc, pvc, err := createPVCAndStorageClass(client, namespace, nil, nil, "", nil)
+		sc, pvc, err := createPVCAndStorageClass(client, namespace, nil, nil, "", nil, "")
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		defer client.StorageV1().StorageClasses().Delete(sc.Name, nil)
 
@@ -308,7 +308,7 @@ var _ bool = ginkgo.Describe("[csi-block-e2e] full-sync-test", func() {
 	   11. cleanup to remove pvs and pvcliams
 	*/
 	ginkgo.It("Verify Multiple PVCs are deleted/updated after full sync", func() {
-		sc, err := createStorageClass(client, nil, nil, v1.PersistentVolumeReclaimRetain)
+		sc, err := createStorageClass(client, nil, nil, v1.PersistentVolumeReclaimRetain, "")
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		defer client.StorageV1().StorageClasses().Delete(sc.Name, nil)
 		var pvclaims []*v1.PersistentVolumeClaim

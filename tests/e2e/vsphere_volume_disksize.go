@@ -61,7 +61,7 @@ var _ = ginkgo.Describe("[csi-block-e2e] Volume Disk Size ", func() {
 	ginkgo.It("Verify dynamic provisioning of pv using storageclass with a valid disk size passes", func() {
 		ginkgo.By("Invoking Test for valid disk size")
 		scParameters[scParamDatastoreURL] = datastoreURL
-		storageclass, pvclaim, err := createPVCAndStorageClass(client, namespace, nil, scParameters, diskSize, nil)
+		storageclass, pvclaim, err := createPVCAndStorageClass(client, namespace, nil, scParameters, diskSize, nil, "")
 
 		defer client.StorageV1().StorageClasses().Delete(storageclass.Name, nil)
 		defer framework.DeletePersistentVolumeClaim(client, pvclaim.Name, namespace)

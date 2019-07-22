@@ -92,7 +92,7 @@ func invokeTestForFstype(f *framework.Framework, client clientset.Interface, nam
 
 	// Create Storage class and PVC
 	ginkgo.By("Creating Storage Class With Fstype")
-	storageclass, pvclaim, err := createPVCAndStorageClass(client, namespace, nil, scParameters, "", nil)
+	storageclass, pvclaim, err := createPVCAndStorageClass(client, namespace, nil, scParameters, "", nil, "")
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	defer client.StorageV1().StorageClasses().Delete(storageclass.Name, nil)
 
@@ -136,7 +136,7 @@ func invokeTestForInvalidFstype(f *framework.Framework, client clientset.Interfa
 
 	// Create Storage class and PVC
 	ginkgo.By("Creating Storage Class With Invalid Fstype")
-	storageclass, pvclaim, err := createPVCAndStorageClass(client, namespace, nil, scParameters, "", nil)
+	storageclass, pvclaim, err := createPVCAndStorageClass(client, namespace, nil, scParameters, "", nil, "")
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	defer client.StorageV1().StorageClasses().Delete(storageclass.Name, nil)
 

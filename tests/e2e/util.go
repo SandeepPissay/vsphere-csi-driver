@@ -17,14 +17,19 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/kubernetes/test/e2e/framework"
 	cnstypes "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vmomi/types"
+	csitypes "sigs.k8s.io/vsphere-csi-driver/pkg/csi/types"
 	"strings"
 
 	"github.com/vmware/govmomi/vim25/types"
 	"k8s.io/api/core/v1"
+	"errors"
 )
 
 // getVSphereStorageClassSpec returns Storage Class Spec with supplied storage class parameters
-func getVSphereStorageClassSpec(scName string, scParameters map[string]string, allowedTopologies []v1.TopologySelectorLabelRequirement, scReclaimPolicy v1.PersistentVolumeReclaimPolicy) *storagev1.StorageClass {
+func getVSphereStorageClassSpec(scName string, scParameters map[string]string, allowedTopologies []v1.TopologySelectorLabelRequirement, scReclaimPolicy v1.PersistentVolumeReclaimPolicy, bindingMode storagev1.VolumeBindingMode) *storagev1.StorageClass {
+	if bindingMode == "" {
+		bindingMode = storagev1.VolumeBindingImmediate
+	}
 	var sc *storagev1.StorageClass
 	sc = &storagev1.StorageClass{
 		TypeMeta: metav1.TypeMeta{
@@ -33,7 +38,8 @@ func getVSphereStorageClassSpec(scName string, scParameters map[string]string, a
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: "sc-",
 		},
-		Provisioner: e2evSphereCSIBlockDriverName,
+		Provisioner:       e2evSphereCSIBlockDriverName,
+		VolumeBindingMode: &bindingMode,
 	}
 	// If scName is specified, use that name, else auto-generate storage class name
 	if scName != "" {
@@ -150,9 +156,10 @@ func getPersistentVolumeClaimSpecWithStorageClass(namespace string, ds string, s
 }
 
 // createPVCAndStorageClass helps creates a storage class with specified name, storageclass parameters and PVC using storage class
-func createPVCAndStorageClass(client clientset.Interface, pvcnamespace string, pvclaimlabels map[string]string, scParameters map[string]string, ds string, allowedTopologies []v1.TopologySelectorLabelRequirement) (*storagev1.StorageClass, *v1.PersistentVolumeClaim, error) {
+func createPVCAndStorageClass(client clientset.Interface, pvcnamespace string, pvclaimlabels map[string]string, scParameters map[string]string, ds string,
+	allowedTopologies []v1.TopologySelectorLabelRequirement, bindingMode storagev1.VolumeBindingMode) (*storagev1.StorageClass, *v1.PersistentVolumeClaim, error) {
 	ginkgo.By(fmt.Sprintf("Creating StorageClass With scParameters: %+v and allowedTopologies: %+v", scParameters, allowedTopologies))
-	storageclass, err := createStorageClass(client, scParameters, allowedTopologies, "")
+	storageclass, err := createStorageClass(client, scParameters, allowedTopologies, "", bindingMode)
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 	pvclaim, err := createPVC(client, pvcnamespace, pvclaimlabels, ds, storageclass)
@@ -161,9 +168,10 @@ func createPVCAndStorageClass(client clientset.Interface, pvcnamespace string, p
 }
 
 // createStorageClass helps creates a storage class with specified name, storageclass parameters
-func createStorageClass(client clientset.Interface, scParameters map[string]string, allowedTopologies []v1.TopologySelectorLabelRequirement, scReclaimPolicy v1.PersistentVolumeReclaimPolicy) (*storagev1.StorageClass, error) {
+func createStorageClass(client clientset.Interface, scParameters map[string]string, allowedTopologies []v1.TopologySelectorLabelRequirement,
+	scReclaimPolicy v1.PersistentVolumeReclaimPolicy, bindingMode storagev1.VolumeBindingMode) (*storagev1.StorageClass, error) {
 	ginkgo.By(fmt.Sprintf("Creating StorageClass With scParameters: %+v and allowedTopologies: %+v and ReclaimPolicy: %+v", scParameters, allowedTopologies, scReclaimPolicy))
-	storageclass, err := client.StorageV1().StorageClasses().Create(getVSphereStorageClassSpec("", scParameters, allowedTopologies, scReclaimPolicy))
+	storageclass, err := client.StorageV1().StorageClasses().Create(getVSphereStorageClassSpec("", scParameters, allowedTopologies, scReclaimPolicy, bindingMode))
 	gomega.Expect(err).NotTo(gomega.HaveOccurred(), fmt.Sprintf("Failed to create storage class with err: %v", err))
 	return storageclass, err
 }
@@ -355,6 +363,19 @@ func verifyPodLocation(pod *v1.Pod, nodeList *v1.NodeList, zoneValue string, reg
 		}
 	}
 	return nil
+}
+
+// getTopologyFromPod rturn topology value from node affinity information
+func getTopologyFromPod(pod *v1.Pod, nodeList *v1.NodeList) (string, string, error) {
+	for _, node := range nodeList.Items {
+		if pod.Spec.NodeName == node.Name {
+			podRegion :=  node.Labels[csitypes.LabelRegionFailureDomain]
+			podZone  := node.Labels[csitypes.LabelZoneFailureDomain]
+			return podRegion, podZone, nil
+		}
+	}
+	err := errors.New("Could not find the topology from pod")
+	return "", "", err
 }
 
 // topologyParameterForStorageClass creates a topology map using the topology values ENV variables
