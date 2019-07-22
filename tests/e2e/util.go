@@ -10,19 +10,21 @@ import (
 	"github.com/vmware/govmomi/property"
 	"github.com/vmware/govmomi/vim25/mo"
 	vim25types "github.com/vmware/govmomi/vim25/types"
-
+	appsv1 "k8s.io/api/apps/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/kubernetes/test/e2e/framework"
+	"k8s.io/kubernetes/test/e2e/manifest"
+	"path/filepath"
 	cnstypes "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vmomi/types"
 	csitypes "sigs.k8s.io/vsphere-csi-driver/pkg/csi/types"
 	"strings"
 
+	"errors"
 	"github.com/vmware/govmomi/vim25/types"
 	"k8s.io/api/core/v1"
-	"errors"
 )
 
 // getVSphereStorageClassSpec returns Storage Class Spec with supplied storage class parameters
@@ -183,6 +185,23 @@ func createPVC(client clientset.Interface, pvcnamespace string, pvclaimlabels ma
 	pvclaim, err := framework.CreatePVC(client, pvcnamespace, pvcspec)
 	gomega.Expect(err).NotTo(gomega.HaveOccurred(), fmt.Sprintf("Failed to create pvc with err: %v", err))
 	return pvclaim, err
+}
+
+// createStatefulSetWithOneReplica helps create a stateful set with one replica
+func createStatefulSetWithOneReplica(client clientset.Interface, manifestPath string, namespace string) *appsv1.StatefulSet {
+	mkpath := func(file string) string {
+		return filepath.Join(manifestPath, file)
+	}
+	statefulSet, err := manifest.StatefulSetFromManifest(mkpath("statefulset.yaml"), namespace)
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
+	service, err := manifest.SvcFromManifest(mkpath("service.yaml"))
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
+	_, err = client.CoreV1().Services(namespace).Create(service)
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
+	*statefulSet.Spec.Replicas = 1
+	_, err = client.AppsV1().StatefulSets(namespace).Create(statefulSet)
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
+	return statefulSet
 }
 
 // getLabelsMapFromKeyValue returns map[string]string for given array of vim25types.KeyValue
@@ -369,8 +388,8 @@ func verifyPodLocation(pod *v1.Pod, nodeList *v1.NodeList, zoneValue string, reg
 func getTopologyFromPod(pod *v1.Pod, nodeList *v1.NodeList) (string, string, error) {
 	for _, node := range nodeList.Items {
 		if pod.Spec.NodeName == node.Name {
-			podRegion :=  node.Labels[csitypes.LabelRegionFailureDomain]
-			podZone  := node.Labels[csitypes.LabelZoneFailureDomain]
+			podRegion := node.Labels[csitypes.LabelRegionFailureDomain]
+			podZone := node.Labels[csitypes.LabelZoneFailureDomain]
 			return podRegion, podZone, nil
 		}
 	}

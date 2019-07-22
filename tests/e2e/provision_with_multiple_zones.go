@@ -31,17 +31,17 @@ import (
 var _ = ginkgo.Describe("[csi-block-e2e-zone] Topology-Aware-Provisioning-With-Multiple-Zones", func() {
 	f := framework.NewDefaultFramework("e2e-vsphere-topology-aware-provisioning")
 	var (
-		client            clientset.Interface
-		namespace         string
-		zoneValues        []string
-		regionValues      []string
-		allowedTopologies []v1.TopologySelectorLabelRequirement
-		nodeList          *v1.NodeList
-		pvclaim           *v1.PersistentVolumeClaim
-		pv                  *v1.PersistentVolume
-		storageclass      *storagev1.StorageClass
-		topologyWithSharedDS	string
-		err               error
+		client               clientset.Interface
+		namespace            string
+		zoneValues           []string
+		regionValues         []string
+		allowedTopologies    []v1.TopologySelectorLabelRequirement
+		nodeList             *v1.NodeList
+		pvclaim              *v1.PersistentVolumeClaim
+		pv                   *v1.PersistentVolume
+		storageclass         *storagev1.StorageClass
+		topologyWithSharedDS string
+		err                  error
 	)
 	ginkgo.BeforeEach(func() {
 		client = f.ClientSet

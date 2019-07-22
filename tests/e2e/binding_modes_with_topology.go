@@ -70,7 +70,7 @@ var _ = ginkgo.Describe("[csi-block-e2e-zone] Topology-Aware-Provisioning-With-V
 	verifyTopologyAwareProvisioning := func(f *framework.Framework, client clientset.Interface, namespace string, scParameters map[string]string,
 																								allowedTopologies []v1.TopologySelectorLabelRequirement) {
 
-		storageclass, pvclaim, err = createPVCAndStorageClass(client, namespace, nil, nil, "", nil, bindingMode)
+		storageclass, pvclaim, err = createPVCAndStorageClass(client, namespace, nil, nil, "", allowedTopologies, bindingMode)
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		defer client.StorageV1().StorageClasses().Delete(storageclass.Name, nil)
 		defer client.CoreV1().PersistentVolumeClaims(namespace).Delete(pvclaim.Name, nil)

@@ -44,11 +44,13 @@ const (
 	defaultPandoraSyncWaitTime                 = 90
 	defaultFullSyncWaitTime                    = 1800
 	sleepTimeOut                               = 30
+	k8sPodTerminationTimeOut                   = 7 * time.Minute
 	vsanhealthServiceName                      = "vsan-health"
 	zoneKey                                    = "failure-domain.beta.kubernetes.io/zone"
 	regionKey                                  = "failure-domain.beta.kubernetes.io/region"
 	envRegionZoneWithNoSharedDS                = "TOPOLOGY_WITH_NO_SHARED_DATASTORE"
 	envRegionZoneWithSharedDS                  = "TOPOLOGY_WITH_SHARED_DATASTORE"
+	envTopologyWithOnlyOneNode                 = "TOPOLOGY_WITH_ONLY_ONE_NODE"
 	ext4FSType                                 = "ext4"
 	ext3FSType                                 = "ext3"
 	invalidFSType                              = "ext10"
