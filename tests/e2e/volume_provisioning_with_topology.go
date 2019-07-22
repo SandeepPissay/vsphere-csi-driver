@@ -36,6 +36,8 @@ var _ = ginkgo.Describe("[csi-block-e2e-zone] Basic-Topology-Aware-Provisioning"
 		namespace         string
 		zoneValues        []string
 		regionValues      []string
+		allZones          []string
+		allRegions        []string
 		pvZone            string
 		pvRegion          string
 		allowedTopologies []v1.TopologySelectorLabelRequirement
@@ -55,6 +57,13 @@ var _ = ginkgo.Describe("[csi-block-e2e-zone] Basic-Topology-Aware-Provisioning"
 		}
 		regionZoneValue := GetAndExpectStringEnvVar(envRegionZoneWithSharedDS)
 		regionValues, zoneValues, allowedTopologies = topologyParameterForStorageClass(regionZoneValue)
+
+		// Preparing all zones and regions with shared and non shared datastores
+		topologyWithSharedDS := GetAndExpectStringEnvVar(envRegionZoneWithSharedDS)
+		topologyWithNoSharedDS := GetAndExpectStringEnvVar(envRegionZoneWithNoSharedDS)
+		topologyWithOnlyOneNode := GetAndExpectStringEnvVar(envTopologyWithOnlyOneNode)
+		topologyValues := topologyWithSharedDS + "," + topologyWithNoSharedDS + "," + topologyWithOnlyOneNode
+		allRegions, allZones, _ = topologyParameterForStorageClass(topologyValues)
 	})
 
 	testCleanUpUtil := func() {
@@ -83,6 +92,10 @@ var _ = ginkgo.Describe("[csi-block-e2e-zone] Basic-Topology-Aware-Provisioning"
 
 		ginkgo.By("Verify if volume is provisioned in specified zone and region")
 		pv := getPvFromClaim(client, pvclaim.Namespace, pvclaim.Name)
+		if allowedTopologies == nil {
+			zoneValues = allZones
+			regionValues = allRegions
+		}
 		pvRegion, pvZone, err = verifyVolumeTopology(pv, zoneValues, regionValues)
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
@@ -110,6 +123,7 @@ var _ = ginkgo.Describe("[csi-block-e2e-zone] Basic-Topology-Aware-Provisioning"
 		gomega.Expect(err).To(gomega.HaveOccurred())
 		// Get the event list and verify if it contains expected error message
 		eventList, _ := client.CoreV1().Events(pvclaim.Namespace).List(metav1.ListOptions{})
+		gomega.Expect(eventList.Items).NotTo(gomega.BeEmpty())
 		actualErrMsg := eventList.Items[len(eventList.Items)-1].Message
 		framework.Logf(fmt.Sprintf("Actual failure message: %+q", actualErrMsg))
 		framework.Logf(fmt.Sprintf("Expected failure message: %+q", expectedErrMsg))

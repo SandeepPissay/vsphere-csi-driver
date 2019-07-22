@@ -68,7 +68,7 @@ var _ = ginkgo.Describe("[csi-block-e2e-zone] Topology-Aware-Provisioning-With-V
 		}
 	})
 	verifyTopologyAwareProvisioning := func(f *framework.Framework, client clientset.Interface, namespace string, scParameters map[string]string,
-																								allowedTopologies []v1.TopologySelectorLabelRequirement) {
+		allowedTopologies []v1.TopologySelectorLabelRequirement) {
 
 		storageclass, pvclaim, err = createPVCAndStorageClass(client, namespace, nil, nil, "", allowedTopologies, bindingMode)
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())

@@ -351,13 +351,13 @@ func verifyVolumeTopology(pv *v1.PersistentVolume, zoneValues []string, regionVa
 	for _, labels := range pv.Spec.NodeAffinity.Required.NodeSelectorTerms[0].MatchExpressions {
 		if labels.Key == zoneKey {
 			for _, value := range labels.Values {
-				gomega.Expect(zoneValues).To(gomega.ContainElement(value), fmt.Sprintf("Node Affinity rules for PV %s: %v does not contain does not contain zone specified in storage class %v", pv.Name, value, zoneValues))
+				gomega.Expect(zoneValues).To(gomega.ContainElement(value), fmt.Sprintf("Node Affinity rules for PV %s: %v does not contain zone specified in storage class %v", pv.Name, value, zoneValues))
 				pvZone = value
 			}
 		}
 		if labels.Key == regionKey {
 			for _, value := range labels.Values {
-				gomega.Expect(regionValues).To(gomega.ContainElement(value), fmt.Sprintf("Node Affinity rules for PV %s: %v does not contain does not contain region specified in storage class %v", pv.Name, value, regionValues))
+				gomega.Expect(regionValues).To(gomega.ContainElement(value), fmt.Sprintf("Node Affinity rules for PV %s: %v does not contain region specified in storage class %v", pv.Name, value, regionValues))
 				pvRegion = value
 			}
 		}
