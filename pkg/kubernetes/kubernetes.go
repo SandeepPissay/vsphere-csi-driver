@@ -17,8 +17,8 @@ limitations under the License.
 package kubernetes
 
 import (
-	"k8s.io/api/core/v1"
 	"k8s.io/klog"
+	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/block"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientset "k8s.io/client-go/kubernetes"
@@ -40,7 +40,15 @@ func NewClient() (clientset.Interface, error) {
 	return clientset.NewForConfig(config)
 }
 
-// GetAllNodes returns all kubernetes nodes registered with the API server
-func GetAllNodes(k8sclient clientset.Interface) (*v1.NodeList, error) {
-	return k8sclient.CoreV1().Nodes().List(metav1.ListOptions{})
+// GetNodeVMUUID returns vSphere VM UUID set by CCM on the Kubernetes Node
+func GetNodeVMUUID(k8sclient clientset.Interface, nodeName string) (string, error) {
+	klog.V(2).Infof("GetNodeVMUUID called for the node: %q", nodeName)
+	node, err := k8sclient.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
+	if err != nil {
+		klog.Errorf("Failed to get kubernetes node with the name: %q. Err: %v", nodeName, err)
+		return "", err
+	}
+	k8sNodeUUID := block.GetUUIDFromProviderID(node.Spec.ProviderID)
+	klog.V(2).Infof("Retrieved node UUID: %q for the node: %q", k8sNodeUUID, nodeName)
+	return k8sNodeUUID, nil
 }

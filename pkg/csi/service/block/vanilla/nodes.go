@@ -17,7 +17,6 @@ limitations under the License.
 package vanilla
 
 import (
-	"errors"
 	"fmt"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"golang.org/x/net/context"
@@ -30,11 +29,13 @@ import (
 	k8s "sigs.k8s.io/vsphere-csi-driver/pkg/kubernetes"
 )
 
+// Nodes is the type comprising cns node manager and kubernetes informer
 type Nodes struct {
 	cnsNodeManager cnsnode.Manager
 	informMgr      *k8s.InformerManager
 }
 
+// Initialize helps initialize node manager and node informer manager
 func (nodes *Nodes) Initialize() error {
 	nodes.cnsNodeManager = cnsnode.GetManager()
 	// Create the kubernetes client
@@ -43,21 +44,11 @@ func (nodes *Nodes) Initialize() error {
 		klog.Errorf("Creating Kubernetes client failed. Err: %v", err)
 		return err
 	}
+	nodes.cnsNodeManager.SetKubernetesClient(k8sclient)
 	nodes.informMgr = k8s.NewInformer(k8sclient)
 	nodes.informMgr.AddNodeListener(nodes.nodeAdd, nil, nodes.nodeDelete)
 	nodes.informMgr.Listen()
 	return nil
-}
-
-func (nodes *Nodes) registerNode(node *v1.Node) error {
-	nodeUUID := block.GetUUIDFromProviderID(node.Spec.ProviderID)
-	if nodeUUID == "" {
-		err := errors.New(fmt.Sprintf("Node %s contains empty NodeUUID", node.Name))
-		klog.Error(err)
-		return err
-	}
-	err := nodes.cnsNodeManager.RegisterNode(nodeUUID, node.Name, node.GetObjectMeta())
-	return err
 }
 
 func (nodes *Nodes) nodeAdd(obj interface{}) {
@@ -66,7 +57,7 @@ func (nodes *Nodes) nodeAdd(obj interface{}) {
 		klog.Warningf("nodeAdd: unrecognized object %+v", obj)
 		return
 	}
-	err := nodes.cnsNodeManager.RegisterNode(block.GetUUIDFromProviderID(node.Spec.ProviderID), node.Name, node.GetObjectMeta())
+	err := nodes.cnsNodeManager.RegisterNode(block.GetUUIDFromProviderID(node.Spec.ProviderID), node.Name)
 	if err != nil {
 		klog.Warningf("Failed to register node:%q. err=%v", node.Name, err)
 	}
@@ -84,6 +75,8 @@ func (nodes *Nodes) nodeDelete(obj interface{}) {
 	}
 }
 
+// GetNodeByName returns VirtualMachine object for given nodeName
+// This is called by ControllerPublishVolume and ControllerUnpublishVolume to perform attach and detach operations.
 func (nodes *Nodes) GetNodeByName(nodeName string) (*cnsvsphere.VirtualMachine, error) {
 	return nodes.cnsNodeManager.GetNodeByName(nodeName)
 }

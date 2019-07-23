@@ -16,33 +16,31 @@ package node
 
 import (
 	"errors"
-	"fmt"
 	"sync"
 
+	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/klog"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vsphere"
+	k8s "sigs.k8s.io/vsphere-csi-driver/pkg/kubernetes"
 )
 
 var (
 	// ErrNodeNotFound is returned when a node isn't found.
 	ErrNodeNotFound = errors.New("node wasn't found")
-	// ErrNodeAlreadyRegistered is returned when registration is attempted for
-	// a previously registered node.
-	ErrNodeAlreadyRegistered = errors.New("node was already registered")
+	// ErrEmptyProviderId is returned when it is observed that provider id is not set on the kubernetes cluster
+	ErrEmptyProviderId = errors.New("node with empty providerId present in the cluster")
 )
 
 // Manager provides functionality to manage nodes.
 type Manager interface {
-	// RegisterNode registers a node given its UUID, name and Metadata.
-	RegisterNode(nodeUUID string, nodeName string, metadata Metadata) error
+	// SetKubernetesClient sets kubernetes client for node manager
+	SetKubernetesClient(clientset.Interface)
+	// RegisterNode registers a node given its UUID, name.
+	RegisterNode(nodeUUID string, nodeName string) error
 	// DiscoverNode discovers a registered node given its UUID. This method
 	// scans all virtual centers registered on the VirtualCenterManager for a
 	// virtual machine with the given UUID.
 	DiscoverNode(nodeUUID string) error
-	// GetNodeMetadata returns Metadata for a registered node given its UUID.
-	GetNodeMetadata(nodeUUID string) (Metadata, error)
-	// GetAllNodeMetadata returns Metadata for all registered nodes.
-	GetAllNodeMetadata() []Metadata
 	// GetNode refreshes and returns the VirtualMachine for a registered node
 	// given its UUID.
 	GetNode(nodeUUID string) (*vsphere.VirtualMachine, error)
@@ -55,8 +53,6 @@ type Manager interface {
 	GetAllNodes() ([]*vsphere.VirtualMachine, error)
 	// UnregisterNode unregisters a registered node given its name.
 	UnregisterNode(nodeName string) error
-	// GetNodeName returns node name for requested node UUID.
-	GetNodeName(nodeUUID string) (string, error)
 }
 
 // Metadata represents node metadata.
@@ -74,8 +70,7 @@ func GetManager() Manager {
 	onceForManager.Do(func() {
 		klog.V(1).Info("Initializing node.defaultManager...")
 		managerInstance = &defaultManager{
-			nodeVMs:      sync.Map{},
-			nodeMetadata: sync.Map{},
+			nodeVMs: sync.Map{},
 		}
 		klog.V(1).Info("node.defaultManager initialized")
 	})
@@ -86,83 +81,67 @@ func GetManager() Manager {
 type defaultManager struct {
 	// nodeVMs maps node UUIDs to VirtualMachine objects.
 	nodeVMs sync.Map
-	// nodeMetadata maps node UUIDs to generic metadata.
-	nodeMetadata sync.Map
 	// node name to node UUI map.
 	nodeNameToUUID sync.Map
+	// k8s client
+	k8sClient clientset.Interface
 }
 
-func (m *defaultManager) GetNodeName(nodeUUID string) (string, error) {
-	var nodeName string
-	m.nodeNameToUUID.Range(func(k, v interface{}) bool {
-		if v.(string) == nodeUUID {
-			nodeName = k.(string)
-			return false
-		}
-		return true
-	})
-	if nodeName == "" {
-		err := fmt.Errorf("unable to find node name for node uuid:%s", nodeUUID)
-		return "", err
-	}
-	return nodeName, nil
+// SetKubernetesClient sets specified kubernetes client to defaultManager.k8sClient
+func (m *defaultManager) SetKubernetesClient(client clientset.Interface) {
+	m.k8sClient = client
 }
 
-func (m *defaultManager) RegisterNode(nodeUUID string, nodeName string, metadata Metadata) error {
-	if _, exists := m.nodeMetadata.Load(nodeUUID); exists {
-		klog.Errorf("Node already exists with nodeUUID %s and metadata %v,failed to register", nodeUUID, metadata)
-		return ErrNodeAlreadyRegistered
-	}
-
-	m.nodeMetadata.Store(nodeUUID, metadata)
+// RegisterNode registers a node with node manager using its UUID, name.
+func (m *defaultManager) RegisterNode(nodeUUID string, nodeName string) error {
 	m.nodeNameToUUID.Store(nodeName, nodeUUID)
-	klog.V(2).Infof("Successfully registered node with nodeUUID %s and metadata %v", nodeUUID, metadata)
-	return m.DiscoverNode(nodeUUID)
-}
-
-func (m *defaultManager) DiscoverNode(nodeUUID string) error {
-	if _, err := m.GetNodeMetadata(nodeUUID); err != nil {
-		klog.Errorf("Node wasn't found with nodeUUID %s, failed to discover with err: %v", nodeUUID, err)
+	klog.V(2).Infof("Successfully registered node: %q with nodeUUID %q", nodeName, nodeUUID)
+	err := m.DiscoverNode(nodeUUID)
+	if err != nil {
+		klog.Errorf("Failed to discover VM with uuid: %q for node: %q", nodeUUID, nodeName)
 		return err
 	}
+	klog.V(2).Infof("Successfully discovered node: %q with nodeUUID %q", nodeName, nodeUUID)
+	return nil
+}
 
+// DiscoverNode discovers a registered node given its UUID from vCenter.
+// If node is not found in the vCenter for the given UUID, for ErrVMNotFound is returned to the caller
+func (m *defaultManager) DiscoverNode(nodeUUID string) error {
 	vm, err := vsphere.GetVirtualMachineByUUID(nodeUUID, false)
 	if err != nil {
 		klog.Errorf("Couldn't find VM instance with nodeUUID %s, failed to discover with err: %v", nodeUUID, err)
 		return err
 	}
-
 	m.nodeVMs.Store(nodeUUID, vm)
 	klog.V(2).Infof("Successfully discovered node with nodeUUID %s in vm %v", nodeUUID, vm)
 	return nil
 }
 
-func (m *defaultManager) GetNodeMetadata(nodeUUID string) (Metadata, error) {
-	if metadata, ok := m.nodeMetadata.Load(nodeUUID); ok {
-		klog.V(2).Infof("Node metadata was found with nodeUUID %s and metadata %v", nodeUUID, metadata)
-		return metadata, nil
-	}
-	klog.Errorf("Node metadata wasn't found with nodeUUID %s", nodeUUID)
-	return nil, ErrNodeNotFound
-}
-
-func (m *defaultManager) GetAllNodeMetadata() []Metadata {
-	var nodeMetadata []Metadata
-	m.nodeMetadata.Range(func(_, metadataInf interface{}) bool {
-		nodeMetadata = append(nodeMetadata, metadataInf.(Metadata))
-		return true
-	})
-	return nodeMetadata
-}
-
+// GetNodeByName refreshes and returns the VirtualMachine for a registered node
+// given its name.
 func (m *defaultManager) GetNodeByName(nodeName string) (*vsphere.VirtualMachine, error) {
 	nodeUUID, found := m.nodeNameToUUID.Load(nodeName)
 	if !found {
 		klog.Errorf("Node not found with nodeName %s", nodeName)
 		return nil, ErrNodeNotFound
 	}
-	return m.GetNode(nodeUUID.(string))
+	if nodeUUID != nil && nodeUUID.(string) != "" {
+		return m.GetNode(nodeUUID.(string))
+	}
+	klog.V(2).Infof("Empty nodeUUID observed in cache for the node: %q", nodeName)
+	k8snodeUUID, err := k8s.GetNodeVMUUID(m.k8sClient, nodeName)
+	if err != nil {
+		klog.Errorf("Failed to get providerId from node: %q. Err: %v", nodeName, err)
+		return nil, err
+	}
+	m.nodeNameToUUID.Store(nodeName, k8snodeUUID)
+	return m.GetNode(k8snodeUUID)
+
 }
+
+// GetNode refreshes and returns the VirtualMachine for a registered node
+// given its UUID
 func (m *defaultManager) GetNode(nodeUUID string) (*vsphere.VirtualMachine, error) {
 	vmInf, discovered := m.nodeVMs.Load(nodeUUID)
 	if !discovered {
@@ -191,11 +170,34 @@ func (m *defaultManager) GetNode(nodeUUID string) (*vsphere.VirtualMachine, erro
 	return vm, nil
 }
 
+// GetAllNodes refreshes and returns VirtualMachine for all registered nodes.
 func (m *defaultManager) GetAllNodes() ([]*vsphere.VirtualMachine, error) {
 	var vms []*vsphere.VirtualMachine
 	var err error
 	reconnectedHosts := make(map[string]bool)
 
+	m.nodeNameToUUID.Range(func(nodeName, nodeUUID interface{}) bool {
+		if nodeName != nil && nodeUUID != nil && nodeUUID.(string) == "" {
+			klog.V(2).Infof("Empty node UUID observed for the node: %q", nodeName)
+			k8snodeUUID, err := k8s.GetNodeVMUUID(m.k8sClient, nodeName.(string))
+			if err != nil {
+				klog.Errorf("Failed to get providerId from node: %q. Err: %v", nodeName, err)
+				return true
+			}
+			if k8snodeUUID == "" {
+				klog.Errorf("Node: %q with empty providerId found in the cluster. aborting get all nodes", nodeName)
+				err = ErrEmptyProviderId
+				return true
+			}
+			m.nodeNameToUUID.Store(nodeName, k8snodeUUID)
+			return false
+		}
+		return true
+	})
+
+	if err != nil {
+		return nil, err
+	}
 	m.nodeVMs.Range(func(nodeUUIDInf, vmInf interface{}) bool {
 		// If an entry was concurrently deleted from vm, Range could
 		// possibly return a nil value for that key.
@@ -209,10 +211,10 @@ func (m *defaultManager) GetAllNodes() ([]*vsphere.VirtualMachine, error) {
 		vm := vmInf.(*vsphere.VirtualMachine)
 
 		if reconnectedHosts[vm.VirtualCenterHost] {
-			klog.V(2).Infof("Renewing VM %v, no new connection needed: nodeUUID %s", vm, nodeUUID)
+			klog.V(3).Infof("Renewing VM %v, no new connection needed: nodeUUID %s", vm, nodeUUID)
 			err = vm.Renew(false)
 		} else {
-			klog.V(2).Infof("Renewing VM %v with new connection: nodeUUID %s", vm, nodeUUID)
+			klog.V(3).Infof("Renewing VM %v with new connection: nodeUUID %s", vm, nodeUUID)
 			err = vm.Renew(true)
 			reconnectedHosts[vm.VirtualCenterHost] = true
 		}
@@ -222,7 +224,7 @@ func (m *defaultManager) GetAllNodes() ([]*vsphere.VirtualMachine, error) {
 			return false
 		}
 
-		klog.V(1).Infof("Updated VM %v for node with nodeUUID %s", vm, nodeUUID)
+		klog.V(3).Infof("Updated VM %v for node with nodeUUID %s", vm, nodeUUID)
 		vms = append(vms, vm)
 		return true
 	})
@@ -233,18 +235,14 @@ func (m *defaultManager) GetAllNodes() ([]*vsphere.VirtualMachine, error) {
 	return vms, nil
 }
 
+// UnregisterNode unregisters a registered node given its name.
 func (m *defaultManager) UnregisterNode(nodeName string) error {
 	nodeUUID, found := m.nodeNameToUUID.Load(nodeName)
 	if !found {
-		klog.Errorf("Node not found with nodeName %s", nodeName)
+		klog.Errorf("Node wasn't found, failed to unregister node: %q  err: %v", nodeName)
 		return ErrNodeNotFound
 	}
-	if _, err := m.GetNodeMetadata(nodeUUID.(string)); err != nil {
-		klog.Errorf("Node wasn't found, failed to unregister with nodeUUID %s with err: %v", nodeUUID, err)
-		return err
-	}
 	m.nodeNameToUUID.Delete(nodeName)
-	m.nodeMetadata.Delete(nodeUUID)
 	m.nodeVMs.Delete(nodeUUID)
 	klog.V(2).Infof("Successfully unregistered node with nodeName %s", nodeName)
 	return nil
