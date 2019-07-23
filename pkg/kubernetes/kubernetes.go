@@ -23,6 +23,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	restclient "k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 // NewClient creates a newk8s client based on a service account
@@ -38,6 +39,21 @@ func NewClient() (clientset.Interface, error) {
 	}
 
 	return clientset.NewForConfig(config)
+}
+
+// CreateKubernetesClientFromConfig creaates a newk8s client from given kubeConfig file
+func CreateKubernetesClientFromConfig(kubeConfigPath string) (clientset.Interface, error) {
+
+	cfg, err := clientcmd.BuildConfigFromFlags("", kubeConfigPath)
+	if err != nil {
+		return nil, err
+	}
+
+	client, err := clientset.NewForConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return client, nil
 }
 
 // GetNodeVMUUID returns vSphere VM UUID set by CCM on the Kubernetes Node

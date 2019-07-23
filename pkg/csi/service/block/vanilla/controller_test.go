@@ -35,12 +35,16 @@ import (
 	"github.com/vmware/govmomi/vim25"
 	"github.com/vmware/govmomi/vim25/mo"
 	"github.com/vmware/govmomi/vim25/types"
+	clientset "k8s.io/client-go/kubernetes"
+	testclient "k8s.io/client-go/kubernetes/fake"
+	"k8s.io/klog"
 	cnssim "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vmomi/simulator"
 	cnstypes "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vmomi/types"
 	cnsvolume "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/volume"
 	cnsvsphere "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vsphere"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/common/config"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/block"
+	k8s "sigs.k8s.io/vsphere-csi-driver/pkg/kubernetes"
 )
 
 const (
@@ -108,6 +112,7 @@ func configFromEnvOrSim() (*config.Config, func()) {
 type FakeNodeManager struct {
 	client             *vim25.Client
 	sharedDatastoreURL string
+	k8sClient          clientset.Interface
 }
 
 func (f *FakeNodeManager) Initialize() error {
@@ -164,7 +169,25 @@ func (f *FakeNodeManager) GetSharedDatastoresInK8SCluster(ctx context.Context) (
 }
 
 func (f *FakeNodeManager) GetNodeByName(nodeName string) (*cnsvsphere.VirtualMachine, error) {
-	return nil, nil
+	var vm *cnsvsphere.VirtualMachine
+	if v := os.Getenv("VSPHERE_DATACENTER"); v != "" {
+		nodeUUID, err := k8s.GetNodeVMUUID(f.k8sClient, nodeName)
+		if err != nil {
+			klog.Errorf("Failed to get providerId from node: %q. Err: %v", nodeName, err)
+			return nil, err
+		}
+		vm, err = cnsvsphere.GetVirtualMachineByUUID(nodeUUID, false)
+		if err != nil {
+			klog.Errorf("Couldn't find VM instance with nodeUUID %s, failed to discover with err: %v", nodeUUID, err)
+			return nil, err
+		}
+	} else {
+		obj := simulator.Map.Any("VirtualMachine").(*simulator.VirtualMachine)
+		vm = &cnsvsphere.VirtualMachine{
+			VirtualMachine: object.NewVirtualMachine(f.client, obj.Reference()),
+		}
+	}
+	return vm, nil
 }
 
 func (f *FakeNodeManager) GetSharedDatastoresInTopology(ctx context.Context, topologyRequirement *csi.TopologyRequirement, zoneKey string, regionKey string) ([]*cnsvsphere.DatastoreInfo, map[string][]map[string]string, error) {
@@ -219,11 +242,23 @@ func getControllerTest(t *testing.T) *controllerTest {
 		} else {
 			sharedDatastoreURL = simulator.Map.Any("Datastore").(*simulator.Datastore).Info.GetDatastoreInfo().Url
 		}
+
+		var k8sClient clientset.Interface
+		if k8senv := os.Getenv("KUBECONFIG"); k8senv != "" {
+			k8sClient, err = k8s.CreateKubernetesClientFromConfig(k8senv)
+			if err != nil {
+				t.Fatal(err)
+			}
+		} else {
+			k8sClient = testclient.NewSimpleClientset()
+		}
+
 		c := &controller{
 			manager: manager,
 			nodeMgr: &FakeNodeManager{
 				client:             vcenter.Client.Client,
 				sharedDatastoreURL: sharedDatastoreURL,
+				k8sClient:          k8sClient,
 			},
 		}
 		controllerTestInstance = &controllerTest{
@@ -275,7 +310,6 @@ func TestCreateVolumeWithStoragePolicy(t *testing.T) {
 		t.Fatal(err)
 	}
 	volID := respCreate.Volume.VolumeId
-
 	// Varify the volume has been create with corresponding storage policy ID
 	pc, err := pbm.NewClient(ctx, ct.vcenter.Client.Client)
 	if err != nil {
@@ -414,6 +448,40 @@ func TestCompleteControllerFlow(t *testing.T) {
 	if len(queryResult.Volumes) != 1 && queryResult.Volumes[0].VolumeId.Id != volID {
 		t.Fatalf("Failed to find the newly created volume with ID: %s", volID)
 	}
+
+	var NodeId string
+	if v := os.Getenv("VSPHERE_K8S_NODE"); v != "" {
+		NodeId = v
+	} else {
+		NodeId = simulator.Map.Any("VirtualMachine").(*simulator.VirtualMachine).Name
+	}
+
+	// Attach
+	reqControllerPublishVolume := &csi.ControllerPublishVolumeRequest{
+		VolumeId:         volID,
+		NodeId:           NodeId,
+		VolumeCapability: capabilities[0],
+		Readonly:         false,
+	}
+	t.Log(fmt.Sprintf("ControllerPublishVolume will be called with req +%v", *reqControllerPublishVolume))
+	respControllerPublishVolume, err := ct.controller.ControllerPublishVolume(ctx, reqControllerPublishVolume)
+	if err != nil {
+		t.Fatal(err)
+	}
+	diskUUID := respControllerPublishVolume.PublishContext[block.AttributeFirstClassDiskUUID]
+	t.Log(fmt.Sprintf("ControllerPublishVolume succeed, diskUUID %s is returned", diskUUID))
+
+	//Detach
+	reqControllerUnpublishVolume := &csi.ControllerUnpublishVolumeRequest{
+		VolumeId: volID,
+		NodeId:   NodeId,
+	}
+	t.Log(fmt.Sprintf("ControllerUnpublishVolume will be called with req +%v", *reqControllerUnpublishVolume))
+	_, err = ct.controller.ControllerUnpublishVolume(ctx, reqControllerUnpublishVolume)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log("ControllerUnpublishVolume succeed")
 
 	// Delete
 	reqDelete := &csi.DeleteVolumeRequest{

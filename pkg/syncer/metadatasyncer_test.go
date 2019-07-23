@@ -21,7 +21,6 @@ import (
 	"crypto/tls"
 	"fmt"
 	"github.com/davecgh/go-spew/spew"
-	"k8s.io/klog"
 	"log"
 	"testing"
 
@@ -137,20 +136,6 @@ func configFromEnvOrSim() (*cnsconfig.Config, func()) {
 	return cfg, func() {}
 }
 
-func K8sClientFromEnvOrSim(metadataSyncer *metadataSyncInformer) (clientset.Interface, error) {
-	// Create the kubernetes client from config or env
-	var k8sclient clientset.Interface
-	var err error
-	if k8senv := os.Getenv("KUBECONFIG"); k8senv != "" {
-		if k8sclient, err = k8s.NewClient(); err != nil {
-			return nil, err
-		}
-	} else {
-		k8sclient = testclient.NewSimpleClientset()
-	}
-	return k8sclient, nil
-}
-
 func TestSyncerWorkflows(t *testing.T) {
 	t.Log("TestSyncerWorkflows: start")
 	var cleanup func()
@@ -195,11 +180,11 @@ func TestSyncerWorkflows(t *testing.T) {
 		vcenter:              virtualCenter,
 	}
 
-	// Create the kubernetes client from config or env
-	if k8sclient, err = K8sClientFromEnvOrSim(metadataSyncer); err != nil {
-		klog.Errorf("Creating Kubernetes client failed. Err: %v", err)
-		return
-	}
+	// Create the kubernetes client
+	// Here we should use a faked client to avoid test inteference with running
+	// metadata syncer pod in real Kubernetes cluster
+	k8sclient = testclient.NewSimpleClientset()
+
 	metadataSyncer.k8sInformerManager = k8s.NewInformer(k8sclient)
 	metadataSyncer.pvLister = metadataSyncer.k8sInformerManager.GetPVLister()
 	metadataSyncer.pvcLister = metadataSyncer.k8sInformerManager.GetPVCLister()

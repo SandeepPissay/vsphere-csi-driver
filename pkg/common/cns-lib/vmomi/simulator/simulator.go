@@ -37,6 +37,7 @@ func New() *simulator.Registry {
 	r.Put(&CnsVolumeManager{
 		ManagedObjectReference: cnsvsphere.CnsVolumeManagerInstance,
 		volumes:                make(map[vim25types.ManagedObjectReference]map[cnstypes.CnsVolumeId]*cnstypes.CnsVolume),
+		attachments:            make(map[cnstypes.CnsVolumeId]vim25types.ManagedObjectReference),
 	})
 
 	return r
@@ -44,9 +45,11 @@ func New() *simulator.Registry {
 
 type CnsVolumeManager struct {
 	vim25types.ManagedObjectReference
-
-	volumes map[vim25types.ManagedObjectReference]map[cnstypes.CnsVolumeId]*cnstypes.CnsVolume
+	volumes     map[vim25types.ManagedObjectReference]map[cnstypes.CnsVolumeId]*cnstypes.CnsVolume
+	attachments map[cnstypes.CnsVolumeId]vim25types.ManagedObjectReference
 }
+
+const simulatorDiskUUID = "6000c298595bf4575739e9105b2c0c2d"
 
 func (m *CnsVolumeManager) CnsCreateVolume(ctx context.Context, req *cnstypes.CnsCreateVolume) soap.HasFault {
 	task := simulator.CreateTask(m, "CnsCreateVolume", func(*simulator.Task) (vim25types.AnyType, vim25types.BaseMethodFault) {
@@ -90,6 +93,7 @@ func (m *CnsVolumeManager) CnsCreateVolume(ctx context.Context, req *cnstypes.Cn
 					if !ok {
 						volumes = make(map[cnstypes.CnsVolumeId]*cnstypes.CnsVolume)
 						m.volumes[datastore.Self] = volumes
+
 					}
 
 					var policyId string
@@ -258,6 +262,73 @@ func (m *CnsVolumeManager) CnsUpdateVolumeMetadata(ctx context.Context, req *cns
 	})
 	return &methods.CnsUpdateVolumeBody{
 		Res: &cnstypes.CnsUpdateVolumeMetadataResponse{
+			Returnval: task.Run(),
+		},
+	}
+}
+
+// CnsAttachVolume simulates AttachVolume call for simulated vc
+func (m *CnsVolumeManager) CnsAttachVolume(ctx context.Context, req *cnstypes.CnsAttachVolume) soap.HasFault {
+	task := simulator.CreateTask(m, "CnsAttachVolume", func(task *simulator.Task) (vim25types.AnyType, vim25types.BaseMethodFault) {
+		if len(req.AttachSpecs) == 0 {
+			return nil, &vim25types.InvalidArgument{InvalidProperty: "CnsAttachVolumeSpec"}
+		}
+		operationResult := []cnstypes.BaseCnsVolumeOperationResult{}
+		for _, attachSpec := range req.AttachSpecs {
+			node := simulator.Map.Get(attachSpec.Vm).(*simulator.VirtualMachine)
+			if _, ok := m.attachments[attachSpec.VolumeId]; !ok {
+				m.attachments[attachSpec.VolumeId] = node.Self
+			} else {
+				return nil, &vim25types.ResourceInUse{
+					Name: attachSpec.VolumeId.Id,
+				}
+			}
+			operationResult = append(operationResult, &cnstypes.CnsVolumeAttachResult{
+				CnsVolumeOperationResult: cnstypes.CnsVolumeOperationResult{
+					VolumeId: attachSpec.VolumeId,
+				},
+				DiskUUID: simulatorDiskUUID,
+			})
+		}
+
+		return &cnstypes.CnsVolumeOperationBatchResult{
+			VolumeResults: operationResult,
+		}, nil
+	})
+
+	return &methods.CnsAttachVolumeBody{
+		Res: &cnstypes.CnsAttachVolumeResponse{
+			Returnval: task.Run(),
+		},
+	}
+}
+
+// CnsDetachVolume simulates DetachVolume call for simulated vc
+func (m *CnsVolumeManager) CnsDetachVolume(ctx context.Context, req *cnstypes.CnsDetachVolume) soap.HasFault {
+	task := simulator.CreateTask(m, "CnsDetachVolume", func(*simulator.Task) (vim25types.AnyType, vim25types.BaseMethodFault) {
+		if len(req.DetachSpecs) == 0 {
+			return nil, &vim25types.InvalidArgument{InvalidProperty: "CnsDetachVolumeSpec"}
+		}
+		operationResult := []cnstypes.BaseCnsVolumeOperationResult{}
+		for _, detachSpec := range req.DetachSpecs {
+			if _, ok := m.attachments[detachSpec.VolumeId]; ok {
+				delete(m.attachments, detachSpec.VolumeId)
+				operationResult = append(operationResult, &cnstypes.CnsVolumeOperationResult{
+					VolumeId: detachSpec.VolumeId,
+				})
+			} else {
+				return nil, &vim25types.InvalidArgument{
+					InvalidProperty: detachSpec.VolumeId.Id,
+				}
+			}
+		}
+
+		return &cnstypes.CnsVolumeOperationBatchResult{
+			VolumeResults: operationResult,
+		}, nil
+	})
+	return &methods.CnsDetachVolumeBody{
+		Res: &cnstypes.CnsDetachVolumeResponse{
 			Returnval: task.Run(),
 		},
 	}

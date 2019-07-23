@@ -283,6 +283,12 @@ endif
 ifndef VSPHERE_DATASTORE_URL
 	$(error Requires VSPHERE_DATASTORE_URL from a deployed testbed to run integration-unit-test)
 endif
+ifndef VSPHERE_K8S_NODE
+	$(error Requires VSPHERE_K8S_NODE from a deployed testbed to run integration-unit-test)
+endif
+ifndef KUBECONFIG
+	$(error Requires KUBECONFIG from a deployed testbed to run integration-unit-test)
+endif
 ifndef VSPHERE_INSECURE
 	$(error Requires VSPHERE_INSECURE from a deployed testbed to run integration-unit-test)
 endif

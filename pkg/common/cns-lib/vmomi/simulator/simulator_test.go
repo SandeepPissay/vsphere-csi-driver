@@ -119,6 +119,66 @@ func TestSimulator(t *testing.T) {
 	}
 	volumeId := createVolumeOperationRes.VolumeId.Id
 
+	// Attach
+	// Get a simulator DS
+	nodeVM := simulator.Map.Any("VirtualMachine").(*simulator.VirtualMachine)
+
+	attachSpecList := []cnstypes.CnsVolumeAttachDetachSpec{
+		{
+			VolumeId: createVolumeOperationRes.VolumeId,
+			Vm:       nodeVM.Self,
+		},
+	}
+	attachTask, err := cnsClient.AttachVolume(ctx, attachSpecList)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	attachTaskInfo, err := cnsvolume.GetTaskInfo(ctx, attachTask)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	attachTaskResult, err := cnsvolume.GetTaskResult(ctx, attachTaskInfo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if attachTaskResult == nil {
+		t.Fatalf("Empty attach task results")
+	}
+
+	attachVolumeOperationRes := attachTaskResult.GetCnsVolumeOperationResult()
+	if attachVolumeOperationRes.Fault != nil {
+		t.Fatalf("Failed to attach: fault=%s", spew.Sdump(attachVolumeOperationRes.Fault))
+	}
+
+	// Detach
+	// Delete
+	detachVolumeList := []cnstypes.CnsVolumeAttachDetachSpec{
+		{
+			VolumeId: createVolumeOperationRes.VolumeId,
+		},
+	}
+	detachTask, err := cnsClient.DetachVolume(ctx, detachVolumeList)
+
+	detachTaskInfo, err := cnsvolume.GetTaskInfo(ctx, detachTask)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	detachTaskResult, err := cnsvolume.GetTaskResult(ctx, detachTaskInfo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if detachTaskResult == nil {
+		t.Fatalf("Empty detach task results")
+	}
+
+	detachVolumeOperationRes := detachTaskResult.GetCnsVolumeOperationResult()
+	if detachVolumeOperationRes.Fault != nil {
+		t.Fatalf("Failed to detach volume: fault=%s", spew.Sdump(detachVolumeOperationRes.Fault))
+	}
+
 	// Query
 	queryFilter = cnstypes.CnsQueryFilter{}
 	queryResult, err = cnsClient.QueryVolume(ctx, queryFilter)

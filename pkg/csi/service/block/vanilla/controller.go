@@ -271,6 +271,7 @@ func (c *controller) ControllerPublishVolume(ctx context.Context, req *csi.Contr
 		klog.Error(msg)
 		return nil, status.Errorf(codes.Internal, msg)
 	}
+	klog.V(4).Infof("Found VirtualMachine for node:%q.", req.NodeId)
 	diskUUID, err := block.AttachVolumeUtil(ctx, c.manager, node, req.VolumeId)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to attach disk: %+q with node: %q err %+v", req.VolumeId, req.NodeId, err)
