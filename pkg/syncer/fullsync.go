@@ -104,9 +104,8 @@ func getPVsInBoundAvailableOrReleased(k8sclient clientset.Interface) ([]*v1.Pers
 	if err != nil {
 		return nil, err
 	}
-
 	for index, pv := range allPVs.Items {
-		if pv.Spec.CSI.Driver == service.Name {
+		if pv.Spec.CSI != nil && pv.Spec.CSI.Driver == service.Name {
 			klog.V(4).Infof("FullSync: pv %v is in state %v", pv.Spec.CSI.VolumeHandle, pv.Status.Phase)
 			if pv.Status.Phase == v1.VolumeBound || pv.Status.Phase == v1.VolumeAvailable || pv.Status.Phase == v1.VolumeReleased {
 				pvsInDesiredState = append(pvsInDesiredState, &allPVs.Items[index])
@@ -135,8 +134,11 @@ func fullSyncCreateVolumes(createSpecArray []cnstypes.CnsVolumeCreateSpec, metad
 	}
 	for _, createSpec := range createSpecArray {
 		// Create volume if present in currentK8sPVMap
+		if createSpec.BackingObjectDetails.(*cnstypes.CnsBlockBackingDetails) == nil {
+			continue
+		}
 		if _, existsInK8s := currentK8sPVMap[createSpec.BackingObjectDetails.(*cnstypes.CnsBlockBackingDetails).BackingDiskId]; existsInK8s {
-			klog.V(4).Infof("FullSync: Calling CreateVolume for volume %s with id %s and create spec %+v", createSpec.Name, createSpec.BackingObjectDetails.(*cnstypes.CnsBlockBackingDetails).BackingDiskId,spew.Sdump(createSpec))
+			klog.V(4).Infof("FullSync: Calling CreateVolume for volume %s with id %s and create spec %+v", createSpec.Name, createSpec.BackingObjectDetails.(*cnstypes.CnsBlockBackingDetails).BackingDiskId, spew.Sdump(createSpec))
 			_, err := volumes.GetManager(metadataSyncer.vcenter).CreateVolume(&createSpec)
 			if err != nil {
 				klog.Warningf("FullSync: Failed to create disk %s with id %s. Err: %+v", createSpec.Name, createSpec.BackingObjectDetails.(*cnstypes.CnsBlockBackingDetails).BackingDiskId, err)

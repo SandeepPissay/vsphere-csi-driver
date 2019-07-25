@@ -180,14 +180,14 @@ func pvcUpdated(oldObj, newObj interface{}, metadataSyncer *metadataSyncInformer
 
 	// Get pv object attached to pvc
 	pv, err := metadataSyncer.pvLister.Get(newPvc.Spec.VolumeName)
-	if err != nil {
+	if pv == nil || err != nil {
 		klog.Errorf("PVCUpdated: Error getting Persistent Volume for pvc %s in namespace %s with err: %v", newPvc.Name, newPvc.Namespace, err)
 		return
 	}
 
-	// Verify if pv is vsphere volume
-	if pv.Spec.CSI.Driver != service.Name {
-		klog.V(3).Infof("PVCUpdated: Not a Vsphere Volume")
+	// Verify if pv is vsphere csi volume
+	if pv.Spec.CSI == nil || pv.Spec.CSI.Driver != service.Name {
+		klog.V(3).Infof("PVCUpdated: Not a Vsphere CSI Volume")
 		return
 	}
 
@@ -231,14 +231,14 @@ func pvcDeleted(obj interface{}, metadataSyncer *metadataSyncInformer) {
 	}
 	// Get pv object attached to pvc
 	pv, err := metadataSyncer.pvLister.Get(pvc.Spec.VolumeName)
-	if err != nil {
+	if pv == nil || err != nil {
 		klog.Errorf("PVCDeleted: Error getting Persistent Volume for pvc %s in namespace %s with err: %v", pvc.Name, pvc.Namespace, err)
 		return
 	}
 
-	// Verify if pv is a vsphere volume
-	if pv.Spec.CSI.Driver != service.Name {
-		klog.V(3).Infof("PVCDeleted: Not a Vsphere Volume")
+	// Verify if pv is a vsphere csi volume
+	if pv.Spec.CSI == nil || pv.Spec.CSI.Driver != service.Name {
+		klog.V(3).Infof("PVCDeleted: Not a Vsphere CSI Volume")
 		return
 	}
 
@@ -285,9 +285,9 @@ func pvUpdated(oldObj, newObj interface{}, metadataSyncer *metadataSyncInformer)
 	}
 	klog.V(4).Infof("PVUpdated: PV Updated from %+v to %+v", oldPv, newPv)
 
-	// Check if vsphere volume
-	if newPv.Spec.CSI.Driver != service.Name {
-		klog.V(3).Infof("PVUpdated: PV is not a vsphere volume: %+v", newPv)
+	// Verify if pv is a vsphere csi volume
+	if oldPv.Spec.CSI == nil || newPv.Spec.CSI == nil || newPv.Spec.CSI.Driver != service.Name {
+		klog.V(3).Infof("PVUpdated: PV is not a Vsphere CSI Volume: %+v", newPv)
 		return
 	}
 	// Return if new PV status is Pending or Failed
@@ -361,9 +361,9 @@ func pvDeleted(obj interface{}, metadataSyncer *metadataSyncInformer) {
 	}
 	klog.V(4).Infof("PVDeleted: Deleting PV: %+v", pv)
 
-	// Check if vsphere volume
-	if pv.Spec.CSI.Driver != service.Name {
-		klog.V(3).Infof("PVDeleted: Not a vsphere volume: %+v", pv)
+	// Verify if pv is a vsphere csi volume
+	if pv.Spec.CSI == nil || pv.Spec.CSI.Driver != service.Name {
+		klog.V(3).Infof("PVDeleted: Not a Vsphere CSI Volume: %+v", pv)
 		return
 	}
 	var deleteDisk bool
@@ -465,9 +465,9 @@ func updatePodMetadata(pod *v1.Pod, metadataSyncer *metadataSyncInformer, delete
 				continue
 			}
 
-			// Verify if pv is vsphere volume
-			if pv.Spec.CSI.Driver != service.Name {
-				klog.V(3).Infof("Not a Vsphere volume")
+			// Verify if pv is vsphere csi volume
+			if pv.Spec.CSI == nil || pv.Spec.CSI.Driver != service.Name {
+				klog.V(3).Infof("Not a Vsphere CSI Volume")
 				continue
 			}
 			var metadataList []cnstypes.BaseCnsEntityMetadata
