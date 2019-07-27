@@ -22,9 +22,6 @@
 /cluster/images/csi/vsphere-csi*
 /cluster/images/syncer/vsphere-syncer*
 
-# Ignore vendor at the root of the project.
-/vendor
-
 # OSX trash
 .DS_Store
 
