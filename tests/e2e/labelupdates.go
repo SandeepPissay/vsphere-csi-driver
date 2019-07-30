@@ -19,18 +19,19 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"os"
+	"strconv"
+	"strings"
+	"time"
+
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
 	"github.com/vmware/govmomi/find"
 	"github.com/vmware/govmomi/object"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"os"
 	cnstypes "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vmomi/types"
-	"strconv"
-	"strings"
-	"time"
 
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/kubernetes/test/e2e/framework"
@@ -322,13 +323,12 @@ var _ bool = ginkgo.Describe("[csi-block-e2e] label-updates", func() {
 		ginkgo.By(fmt.Sprintf("Deleting pvc %s in namespace %s", pvc.Name, pvc.Namespace))
 		err = client.CoreV1().PersistentVolumeClaims(namespace).Delete(pvc.Name, nil)
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+		// Waiting for some time for PVC to be deleted correctly
+		ginkgo.By(fmt.Sprintf("Sleeping for %v seconds to allow PVC deletion", sleepTimeOut))
+		time.Sleep(time.Duration(sleepTimeOut) * time.Second)
 
-		pvcLabel, err := e2eVSphere.getLabelsForCNSVolume(pv.Spec.CSI.VolumeHandle, string(cnstypes.CnsKubernetesEntityTypePVC), pvc.Name, namespace)
-		if pvcLabel != nil {
-			framework.Logf("PVC name is successfully removed")
-		} else {
-			gomega.Expect(err).NotTo(gomega.HaveOccurred())
-		}
+		_, err = e2eVSphere.getLabelsForCNSVolume(pv.Spec.CSI.VolumeHandle, string(cnstypes.CnsKubernetesEntityTypePVC), pvc.Name, namespace)
+		gomega.Expect(err).To(gomega.HaveOccurred())
 
 		ginkgo.By(fmt.Sprintf("Deleting pv %s", pv.Name))
 		err = client.CoreV1().PersistentVolumes().Delete(pv.Name, nil)
