@@ -18,17 +18,35 @@ package main
 
 import (
 	"flag"
-	"k8s.io/klog"
 	"os"
-	metadatasyncer "sigs.k8s.io/vsphere-csi-driver/pkg/syncer"
+
+	"k8s.io/klog"
+	vTypes "sigs.k8s.io/vsphere-csi-driver/pkg/csi/types"
+	"sigs.k8s.io/vsphere-csi-driver/pkg/syncer"
+	"sigs.k8s.io/vsphere-csi-driver/pkg/syncer/podlistener"
+)
+
+const (
+	// WcpControllerType indicated WCP CSI Controller
+	WcpControllerType = "WCP"
 )
 
 // main is ignored when this package is built as a go plug-in.
 func main() {
 	klog.InitFlags(nil)
 	flag.Parse()
-	metadataSyncer := metadatasyncer.NewInformer()
-	if err := metadataSyncer.Init(); err != nil {
+
+	controllerType := os.Getenv(vTypes.EnvControllerType)
+	// Initialize Pod Listener gRPC server only if WCP controller is enabled
+	if controllerType == WcpControllerType {
+		if err := podlistener.InitPodListenerService(); err != nil {
+			klog.Errorf("Error initializing Pod Listener gRPC sever")
+			os.Exit(1)
+		}
+	}
+
+	syncer := syncer.NewInformer()
+	if err := syncer.InitMetadataSyncer(); err != nil {
 		klog.Errorf("Error initializing Metadata Syncer")
 		os.Exit(1)
 	}
