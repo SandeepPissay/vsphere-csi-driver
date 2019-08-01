@@ -20,12 +20,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/davecgh/go-spew/spew"
-	csictx "github.com/rexray/gocsi/context"
-	"k8s.io/api/core/v1"
-	"k8s.io/klog"
 	"os"
 	"reflect"
+	"strconv"
+	"time"
+
+	"github.com/davecgh/go-spew/spew"
+	csictx "github.com/rexray/gocsi/context"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/klog"
 	cnstypes "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vmomi/types"
 	volumes "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/volume"
 	cnsvsphere "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vsphere"
@@ -33,8 +36,6 @@ import (
 	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/block"
 	k8s "sigs.k8s.io/vsphere-csi-driver/pkg/kubernetes"
-	"strconv"
-	"time"
 )
 
 // new Returns uninitialized metadataSyncInformer
@@ -66,7 +67,7 @@ func getFullSyncIntervalInMin() int {
 }
 
 // Initializes the Metadata Sync Informer
-func (metadataSyncer *metadataSyncInformer) Init() error {
+func (metadataSyncer *metadataSyncInformer) InitMetadataSyncer() error {
 	var err error
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -75,13 +76,13 @@ func (metadataSyncer *metadataSyncInformer) Init() error {
 	if cfgPath == "" {
 		cfgPath = cnsconfig.DefaultCloudConfigPath
 	}
-	metadataSyncer.cfg, err = cnsconfig.GetCnsconfig(cfgPath)
+	metadataSyncer.Cfg, err = cnsconfig.GetCnsconfig(cfgPath)
 	if err != nil {
 		klog.Errorf("Failed to parse config. Err: %v", err)
 		return err
 	}
 
-	metadataSyncer.vcconfig, err = cnsvsphere.GetVirtualCenterConfig(metadataSyncer.cfg)
+	metadataSyncer.vcconfig, err = cnsvsphere.GetVirtualCenterConfig(metadataSyncer.Cfg)
 	if err != nil {
 		klog.Errorf("Failed to get VirtualCenterConfig. err=%v", err)
 		return err
@@ -207,7 +208,7 @@ func pvcUpdated(oldObj, newObj interface{}, metadataSyncer *metadataSyncInformer
 			Id: pv.Spec.CSI.VolumeHandle,
 		},
 		Metadata: cnstypes.CnsVolumeMetadata{
-			ContainerCluster: cnsvsphere.GetContainerCluster(metadataSyncer.cfg.Global.ClusterID, metadataSyncer.cfg.VirtualCenter[metadataSyncer.vcenter.Config.Host].User),
+			ContainerCluster: cnsvsphere.GetContainerCluster(metadataSyncer.Cfg.Global.ClusterID, metadataSyncer.Cfg.VirtualCenter[metadataSyncer.vcenter.Config.Host].User),
 			EntityMetadata:   metadataList,
 		},
 	}
@@ -258,7 +259,7 @@ func pvcDeleted(obj interface{}, metadataSyncer *metadataSyncInformer) {
 			Id: pv.Spec.CSI.VolumeHandle,
 		},
 		Metadata: cnstypes.CnsVolumeMetadata{
-			ContainerCluster: cnsvsphere.GetContainerCluster(metadataSyncer.cfg.Global.ClusterID, metadataSyncer.cfg.VirtualCenter[metadataSyncer.vcenter.Config.Host].User),
+			ContainerCluster: cnsvsphere.GetContainerCluster(metadataSyncer.Cfg.Global.ClusterID, metadataSyncer.Cfg.VirtualCenter[metadataSyncer.vcenter.Config.Host].User),
 			EntityMetadata:   metadataList,
 		},
 	}
@@ -319,7 +320,7 @@ func pvUpdated(oldObj, newObj interface{}, metadataSyncer *metadataSyncInformer)
 				Id: newPv.Spec.CSI.VolumeHandle,
 			},
 			Metadata: cnstypes.CnsVolumeMetadata{
-				ContainerCluster: cnsvsphere.GetContainerCluster(metadataSyncer.cfg.Global.ClusterID, metadataSyncer.cfg.VirtualCenter[metadataSyncer.vcenter.Config.Host].User),
+				ContainerCluster: cnsvsphere.GetContainerCluster(metadataSyncer.Cfg.Global.ClusterID, metadataSyncer.Cfg.VirtualCenter[metadataSyncer.vcenter.Config.Host].User),
 				EntityMetadata:   metadataList,
 			},
 		}
@@ -333,7 +334,7 @@ func pvUpdated(oldObj, newObj interface{}, metadataSyncer *metadataSyncInformer)
 			Name:       oldPv.Name,
 			VolumeType: block.BlockVolumeType,
 			Metadata: cnstypes.CnsVolumeMetadata{
-				ContainerCluster: cnsvsphere.GetContainerCluster(metadataSyncer.cfg.Global.ClusterID, metadataSyncer.cfg.VirtualCenter[metadataSyncer.vcenter.Config.Host].User),
+				ContainerCluster: cnsvsphere.GetContainerCluster(metadataSyncer.Cfg.Global.ClusterID, metadataSyncer.Cfg.VirtualCenter[metadataSyncer.vcenter.Config.Host].User),
 				EntityMetadata:   metadataList,
 			},
 			BackingObjectDetails: &cnstypes.CnsBlockBackingDetails{
@@ -478,7 +479,7 @@ func updatePodMetadata(pod *v1.Pod, metadataSyncer *metadataSyncInformer, delete
 					Id: pv.Spec.CSI.VolumeHandle,
 				},
 				Metadata: cnstypes.CnsVolumeMetadata{
-					ContainerCluster: cnsvsphere.GetContainerCluster(metadataSyncer.cfg.Global.ClusterID, metadataSyncer.cfg.VirtualCenter[metadataSyncer.vcenter.Config.Host].User),
+					ContainerCluster: cnsvsphere.GetContainerCluster(metadataSyncer.Cfg.Global.ClusterID, metadataSyncer.Cfg.VirtualCenter[metadataSyncer.vcenter.Config.Host].User),
 					EntityMetadata:   metadataList,
 				},
 			}

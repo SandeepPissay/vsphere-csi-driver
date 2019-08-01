@@ -17,8 +17,10 @@ limitations under the License.
 package syncer
 
 import (
+	"sync"
+
 	"github.com/davecgh/go-spew/spew"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	clientset "k8s.io/client-go/kubernetes"
@@ -29,7 +31,6 @@ import (
 	cnsvsphere "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vsphere"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/block"
-	"sync"
 )
 
 // triggerFullSync triggers full sync
@@ -52,7 +53,7 @@ func triggerFullSync(k8sclient clientset.Interface, metadataSyncer *metadataSync
 	//Call CNS QueryAll to get container volumes by cluster ID
 	queryFilter := cnstypes.CnsQueryFilter{
 		ContainerClusterIds: []string{
-			metadataSyncer.cfg.Global.ClusterID,
+			metadataSyncer.Cfg.Global.ClusterID,
 		},
 	}
 	querySelection := cnstypes.CnsQuerySelection{}
@@ -328,7 +329,7 @@ func constructCnsCreateSpec(pvList []*v1.PersistentVolume, pvToPVCMap pvcMap, pv
 			Name:       pv.Name,
 			VolumeType: block.BlockVolumeType,
 			Metadata: cnstypes.CnsVolumeMetadata{
-				ContainerCluster: cnsvsphere.GetContainerCluster(metadataSyncer.cfg.Global.ClusterID, metadataSyncer.cfg.VirtualCenter[metadataSyncer.vcenter.Config.Host].User),
+				ContainerCluster: cnsvsphere.GetContainerCluster(metadataSyncer.Cfg.Global.ClusterID, metadataSyncer.Cfg.VirtualCenter[metadataSyncer.vcenter.Config.Host].User),
 				EntityMetadata:   metadataList,
 			},
 			BackingObjectDetails: &cnstypes.CnsBlockBackingDetails{
@@ -354,7 +355,7 @@ func constructCnsUpdateSpec(pvUpdateList []*v1.PersistentVolume, pvToPVCMap pvcM
 				Id: pv.Spec.CSI.VolumeHandle,
 			},
 			Metadata: cnstypes.CnsVolumeMetadata{
-				ContainerCluster: cnsvsphere.GetContainerCluster(metadataSyncer.cfg.Global.ClusterID, metadataSyncer.cfg.VirtualCenter[metadataSyncer.vcenter.Config.Host].User),
+				ContainerCluster: cnsvsphere.GetContainerCluster(metadataSyncer.Cfg.Global.ClusterID, metadataSyncer.Cfg.VirtualCenter[metadataSyncer.vcenter.Config.Host].User),
 				EntityMetadata:   metadataList,
 			},
 		}
@@ -375,7 +376,7 @@ func constructCnsUpdateSpecWithPVCToBeDeleted(pvUpdateList []*v1.PersistentVolum
 		updateSpec := buildCnsMetadataSpecMarkedForDelete(pv, updateVolumeWithDeleteClaimOperation)
 		// volume exist in K8S and CNS cache, but PVC metadata does not exist in K8S
 		// need to delete PVC entries for this volume
-		updateSpec.Metadata.ContainerCluster = cnsvsphere.GetContainerCluster(metadataSyncer.cfg.Global.ClusterID, metadataSyncer.cfg.VirtualCenter[metadataSyncer.vcenter.Config.Host].User)
+		updateSpec.Metadata.ContainerCluster = cnsvsphere.GetContainerCluster(metadataSyncer.Cfg.Global.ClusterID, metadataSyncer.Cfg.VirtualCenter[metadataSyncer.vcenter.Config.Host].User)
 		updateSpecArray = append(updateSpecArray, updateSpec)
 		klog.V(4).Infof("FullSync: constructCnsUpdateSpecWithPVCToBeDeleted to update metadata for volume %s with delete flag true", pv.Spec.CSI.VolumeHandle)
 	}
@@ -391,7 +392,7 @@ func constructCnsUpdateSpecWithPodToBeDeleted(pvUpdateList []*v1.PersistentVolum
 		updateSpec := buildCnsMetadataSpecMarkedForDelete(pv, updateVolumeWithDeletePodOperation)
 		// volume exist in K8S and CNS cache, but Pod metadata does not exist in K8S
 		// need to delete Pod entries for this volume
-		updateSpec.Metadata.ContainerCluster = cnsvsphere.GetContainerCluster(metadataSyncer.cfg.Global.ClusterID, metadataSyncer.cfg.VirtualCenter[metadataSyncer.vcenter.Config.Host].User)
+		updateSpec.Metadata.ContainerCluster = cnsvsphere.GetContainerCluster(metadataSyncer.Cfg.Global.ClusterID, metadataSyncer.Cfg.VirtualCenter[metadataSyncer.vcenter.Config.Host].User)
 		updateSpecArray = append(updateSpecArray, updateSpec)
 		klog.V(4).Infof("FullSync: constructCnsUpdateSpecWithPodToBeDeleted to update metadata for volume %s with delete flag true", pv.Spec.CSI.VolumeHandle)
 	}

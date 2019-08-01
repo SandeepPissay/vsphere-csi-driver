@@ -17,12 +17,13 @@ limitations under the License.
 package syncer
 
 import (
-	"k8s.io/api/core/v1"
+	"sync"
+
+	v1 "k8s.io/api/core/v1"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	cnsvsphere "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vsphere"
-	cnsconfig "sigs.k8s.io/vsphere-csi-driver/pkg/common/config"
 	k8s "sigs.k8s.io/vsphere-csi-driver/pkg/kubernetes"
-	"sync"
+	"sigs.k8s.io/vsphere-csi-driver/pkg/syncer/types"
 )
 
 const (
@@ -75,9 +76,9 @@ type (
 )
 
 type metadataSyncInformer struct {
-	cfg                  *cnsconfig.Config
-	vcconfig             *cnsvsphere.VirtualCenterConfig
+	types.Commontypes
 	k8sInformerManager   *k8s.InformerManager
+	vcconfig             *cnsvsphere.VirtualCenterConfig
 	virtualcentermanager cnsvsphere.VirtualCenterManager
 	vcenter              *cnsvsphere.VirtualCenter
 	pvLister             corelisters.PersistentVolumeLister
