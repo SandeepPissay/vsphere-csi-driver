@@ -334,6 +334,17 @@ func (m *defaultManager) UpdateVolumeMetadata(spec *cnstypes.CnsVolumeMetadataUp
 		klog.Errorf("Failed to connect to Virtual Center with err: %v", err)
 		return err
 	}
+	// If the VSphereUser in the VolumeMetadataUpdateSpec is different from session user, update the VolumeMetadataUpdateSpec
+	s, err := m.virtualCenter.Client.SessionManager.UserSession(ctx)
+	if err != nil {
+		klog.Errorf("Failed to get usersession with err: %v", err)
+		return err
+	}
+	if s.UserName != spec.Metadata.ContainerCluster.VSphereUser {
+		klog.V(4).Infof("Update VSphereUser from %s to %s", spec.Metadata.ContainerCluster.VSphereUser, s.UserName)
+		spec.Metadata.ContainerCluster.VSphereUser = s.UserName
+	}
+
 	var cnsUpdateSpecList []cnstypes.CnsVolumeMetadataUpdateSpec
 	cnsUpdateSpec := cnstypes.CnsVolumeMetadataUpdateSpec{
 		VolumeId: cnstypes.CnsVolumeId{
