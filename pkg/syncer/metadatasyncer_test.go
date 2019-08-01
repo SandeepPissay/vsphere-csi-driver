@@ -20,13 +20,15 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"github.com/davecgh/go-spew/spew"
 	"log"
 	"testing"
 
+	"github.com/davecgh/go-spew/spew"
+	"k8s.io/klog"
+
 	"github.com/vmware/govmomi/simulator"
 	vimtypes "github.com/vmware/govmomi/vim25/types"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	cnssim "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vmomi/simulator"
 	cnstypes "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vmomi/types"
@@ -34,10 +36,10 @@ import (
 	cnsvsphere "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vsphere"
 	cnsconfig "sigs.k8s.io/vsphere-csi-driver/pkg/common/config"
 
+	"os"
+
 	"k8s.io/apimachinery/pkg/api/resource"
 	clientset "k8s.io/client-go/kubernetes"
-	testclient "k8s.io/client-go/kubernetes/fake"
-	"os"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service"
 	k8s "sigs.k8s.io/vsphere-csi-driver/pkg/kubernetes"
 )
@@ -174,17 +176,16 @@ func TestSyncerWorkflows(t *testing.T) {
 
 	// Initialize metadata syncer object
 	metadataSyncer = &metadataSyncInformer{
-		cfg:                  config,
 		vcconfig:             cnsVCenterConfig,
 		virtualcentermanager: virtualCenterManager,
 		vcenter:              virtualCenter,
 	}
-
-	// Create the kubernetes client
-	// Here we should use a faked client to avoid test inteference with running
-	// metadata syncer pod in real Kubernetes cluster
-	k8sclient = testclient.NewSimpleClientset()
-
+	metadataSyncer.Commontypes.Cfg = config
+	// Create the kubernetes client from config or env
+	if k8sclient, err = K8sClientFromEnvOrSim(metadataSyncer); err != nil {
+		klog.Errorf("Creating Kubernetes client failed. Err: %v", err)
+		return
+	}
 	metadataSyncer.k8sInformerManager = k8s.NewInformer(k8sclient)
 	metadataSyncer.pvLister = metadataSyncer.k8sInformerManager.GetPVLister()
 	metadataSyncer.pvcLister = metadataSyncer.k8sInformerManager.GetPVCLister()
@@ -254,8 +255,8 @@ func runTestMetadataSyncInformer(t *testing.T) {
 			DynamicData: vimtypes.DynamicData{},
 			ContainerCluster: cnstypes.CnsContainerCluster{
 				ClusterType: string(cnstypes.CnsClusterTypeKubernetes),
-				ClusterId:   metadataSyncer.cfg.Global.ClusterID,
-				VSphereUser: metadataSyncer.cfg.VirtualCenter[metadataSyncer.vcconfig.Host].User,
+				ClusterId:   metadataSyncer.Cfg.Global.ClusterID,
+				VSphereUser: metadataSyncer.Cfg.VirtualCenter[metadataSyncer.vcconfig.Host].User,
 			},
 		},
 		BackingObjectDetails: &cnstypes.CnsBackingObjectDetails{
