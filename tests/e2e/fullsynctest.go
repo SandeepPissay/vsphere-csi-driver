@@ -19,17 +19,18 @@ package e2e
 import (
 	"context"
 	"fmt"
-	"github.com/vmware/govmomi/find"
-	"github.com/vmware/govmomi/object"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/vmware/govmomi/find"
+	"github.com/vmware/govmomi/object"
+
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/kubernetes/test/e2e/framework"
@@ -308,7 +309,7 @@ var _ bool = ginkgo.Describe("[csi-block-e2e] full-sync-test", func() {
 	   11. cleanup to remove pvs and pvcliams
 	*/
 	ginkgo.It("Verify Multiple PVCs are deleted/updated after full sync", func() {
-		sc, err := createStorageClass(client, nil, nil, v1.PersistentVolumeReclaimRetain, "")
+		sc, err := createStorageClass(client, nil, nil, v1.PersistentVolumeReclaimRetain, "", "")
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		defer client.StorageV1().StorageClasses().Delete(sc.Name, nil)
 		var pvclaims []*v1.PersistentVolumeClaim

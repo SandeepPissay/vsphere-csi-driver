@@ -283,7 +283,7 @@ var _ bool = ginkgo.Describe("[csi-block-e2e] label-updates", func() {
 		}
 
 		ginkgo.By(fmt.Sprintf("Creating storage class"))
-		sc, err := createStorageClass(client, nil, nil, v1.PersistentVolumeReclaimRetain, "")
+		sc, err := createStorageClass(client, nil, nil, v1.PersistentVolumeReclaimRetain, "", "")
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 		ginkgo.By(fmt.Sprintf("Creating PVC"))

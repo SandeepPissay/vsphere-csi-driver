@@ -3,6 +3,9 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"reflect"
+	"strings"
+
 	"github.com/davecgh/go-spew/spew"
 	"github.com/onsi/gomega"
 	"github.com/vmware/govmomi"
@@ -15,10 +18,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/kubernetes/test/e2e/framework"
-	"reflect"
 	cnsmethods "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vmomi/methods"
 	cnstypes "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vmomi/types"
-	"strings"
 )
 
 type vSphere struct {
@@ -160,6 +161,20 @@ func (vs *vSphere) VerifySpbmPolicyOfVolume(volumeID string, storagePolicyName s
 	}
 	framework.Logf("Volume: %s is NOT associated with storage policy: %s", volumeID, profileID)
 	return false, nil
+}
+
+// GetSpbmPolicyID returns profile ID for the specified storagePolicyName
+func (vs *vSphere) GetSpbmPolicyID(storagePolicyName string) (string, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Get PBM Client
+	pbmClient, err := pbm.NewClient(ctx, vs.Client.Client)
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
+	profileID, err := pbmClient.ProfileIDByName(ctx, storagePolicyName)
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
+	framework.Logf("storage policy id: %s for storage policy name is: %s", profileID, storagePolicyName)
+	return profileID, err
 }
 
 // getLabelsForCNSVolume executes QueryVolume API on vCenter for requested volumeid and returns

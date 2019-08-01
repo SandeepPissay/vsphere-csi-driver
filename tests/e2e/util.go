@@ -3,12 +3,16 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"path/filepath"
+	"strings"
+
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
 	"github.com/vmware/govmomi/find"
 	"github.com/vmware/govmomi/object"
 	"github.com/vmware/govmomi/property"
 	"github.com/vmware/govmomi/vim25/mo"
+
 	vim25types "github.com/vmware/govmomi/vim25/types"
 	appsv1 "k8s.io/api/apps/v1"
 	storagev1 "k8s.io/api/storage/v1"
@@ -17,14 +21,12 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/kubernetes/test/e2e/manifest"
-	"path/filepath"
 	cnstypes "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vmomi/types"
 	csitypes "sigs.k8s.io/vsphere-csi-driver/pkg/csi/types"
-	"strings"
 
 	"errors"
 	"github.com/vmware/govmomi/vim25/types"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 )
 
 // getVSphereStorageClassSpec returns Storage Class Spec with supplied storage class parameters
@@ -159,21 +161,25 @@ func getPersistentVolumeClaimSpecWithStorageClass(namespace string, ds string, s
 
 // createPVCAndStorageClass helps creates a storage class with specified name, storageclass parameters and PVC using storage class
 func createPVCAndStorageClass(client clientset.Interface, pvcnamespace string, pvclaimlabels map[string]string, scParameters map[string]string, ds string,
-	allowedTopologies []v1.TopologySelectorLabelRequirement, bindingMode storagev1.VolumeBindingMode) (*storagev1.StorageClass, *v1.PersistentVolumeClaim, error) {
-	ginkgo.By(fmt.Sprintf("Creating StorageClass With scParameters: %+v and allowedTopologies: %+v", scParameters, allowedTopologies))
-	storageclass, err := createStorageClass(client, scParameters, allowedTopologies, "", bindingMode)
+	allowedTopologies []v1.TopologySelectorLabelRequirement, bindingMode storagev1.VolumeBindingMode, names ...string) (*storagev1.StorageClass, *v1.PersistentVolumeClaim, error) {
+	scName := ""
+	if len(names) > 0 {
+		scName = names[0]
+	}
+	storageclass, err := createStorageClass(client, scParameters, allowedTopologies, "", bindingMode, scName)
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 	pvclaim, err := createPVC(client, pvcnamespace, pvclaimlabels, ds, storageclass)
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
 	return storageclass, pvclaim, err
 }
 
 // createStorageClass helps creates a storage class with specified name, storageclass parameters
 func createStorageClass(client clientset.Interface, scParameters map[string]string, allowedTopologies []v1.TopologySelectorLabelRequirement,
-	scReclaimPolicy v1.PersistentVolumeReclaimPolicy, bindingMode storagev1.VolumeBindingMode) (*storagev1.StorageClass, error) {
-	ginkgo.By(fmt.Sprintf("Creating StorageClass With scParameters: %+v and allowedTopologies: %+v and ReclaimPolicy: %+v", scParameters, allowedTopologies, scReclaimPolicy))
-	storageclass, err := client.StorageV1().StorageClasses().Create(getVSphereStorageClassSpec("", scParameters, allowedTopologies, scReclaimPolicy, bindingMode))
+	scReclaimPolicy v1.PersistentVolumeReclaimPolicy, bindingMode storagev1.VolumeBindingMode, scName string) (*storagev1.StorageClass, error) {
+	ginkgo.By(fmt.Sprintf("Creating StorageClass [%q] With scParameters: %+v and allowedTopologies: %+v and ReclaimPolicy: %+v", scName, scParameters, allowedTopologies, scReclaimPolicy))
+	storageclass, err := client.StorageV1().StorageClasses().Create(getVSphereStorageClassSpec(scName, scParameters, allowedTopologies, scReclaimPolicy, bindingMode))
 	gomega.Expect(err).NotTo(gomega.HaveOccurred(), fmt.Sprintf("Failed to create storage class with err: %v", err))
 	return storageclass, err
 }
@@ -445,4 +451,24 @@ func getValidTopology(topologyMap map[string][]string) ([]string, []string) {
 		}
 	}
 	return regionValues, zoneValues
+}
+
+// createResourceQuota creates resource quota for the specified namespace.
+func createResourceQuota(client clientset.Interface, namespace string, size string, scName string) {
+	quotaName := "cns-test-quota"
+	resourceQuota := newTestResourceQuota(quotaName, size, scName)
+	resourceQuota, err := client.CoreV1().ResourceQuotas(namespace).Create(resourceQuota)
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
+	ginkgo.By(fmt.Sprintf("Create Resource quota: %+v", resourceQuota))
+}
+
+// newTestResourceQuota returns a quota that enforces default constraints for testing
+func newTestResourceQuota(name string, size string, scName string) *v1.ResourceQuota {
+	hard := v1.ResourceList{}
+	// test quota on discovered resource type
+	hard[v1.ResourceName(scName+rqStorageType)] = resource.MustParse(size)
+	return &v1.ResourceQuota{
+		ObjectMeta: metav1.ObjectMeta{Name: name},
+		Spec:       v1.ResourceQuotaSpec{Hard: hard},
+	}
 }
