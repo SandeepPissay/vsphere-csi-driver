@@ -18,21 +18,23 @@ package vanilla
 
 import (
 	"fmt"
+	"strings"
+
+	"math/rand"
+	"time"
+
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/vmware/govmomi/units"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"k8s.io/klog"
-	"math/rand"
 	cnstypes "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vmomi/types"
 	cnsvolume "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/volume"
 	cnsvsphere "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vsphere"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/common/config"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/block"
 	csitypes "sigs.k8s.io/vsphere-csi-driver/pkg/csi/types"
-	"strings"
-	"time"
 )
 
 var (
@@ -261,9 +263,11 @@ func (c *controller) ControllerPublishVolume(ctx context.Context, req *csi.Contr
 	*csi.ControllerPublishVolumeResponse, error) {
 
 	klog.V(4).Infof("ControllerPublishVolume: called with args %+v", *req)
-	err := validateControllerPublishVolumeRequest(req)
+	err := validateVanillaControllerPublishVolumeRequest(req)
 	if err != nil {
-		return nil, err
+		msg := fmt.Sprintf("Validation for PublishVolume Request: %+v has failed. Error: %v", *req, err)
+		klog.Error(msg)
+		return nil, status.Errorf(codes.Internal, msg)
 	}
 	node, err := c.nodeMgr.GetNodeByName(req.NodeId)
 	if err != nil {
@@ -293,9 +297,9 @@ func (c *controller) ControllerUnpublishVolume(ctx context.Context, req *csi.Con
 	*csi.ControllerUnpublishVolumeResponse, error) {
 
 	klog.V(4).Infof("ControllerUnpublishVolume: called with args %+v", *req)
-	err := validateControllerUnpublishVolumeRequest(req)
+	err := validateVanillaControllerUnpublishVolumeRequest(req)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to connect to virtual center. Error: %v", err)
+		msg := fmt.Sprintf("Validation for UnpublishVolume Request: %+v has failed. Error: %v", *req, err)
 		klog.Error(msg)
 		return nil, status.Errorf(codes.Internal, msg)
 	}

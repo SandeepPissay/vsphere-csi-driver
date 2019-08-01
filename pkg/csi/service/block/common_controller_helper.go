@@ -18,12 +18,13 @@ package block
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
+
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"k8s.io/klog"
-	"strconv"
-	"strings"
 )
 
 // ValidateCreateVolumeRequest is the helper function to validate
@@ -61,6 +62,48 @@ func ValidateDeleteVolumeRequest(req *csi.DeleteVolumeRequest) error {
 		msg := "Volume ID is a required parameter."
 		klog.Error(msg)
 		return status.Errorf(codes.InvalidArgument, msg)
+	}
+	return nil
+}
+
+// ValidateControllerPublishVolumeRequest is the helper function to validate
+// ControllerPublishVolumeRequest for all block controllers.
+// Function returns error if validation fails otherwise returns nil.
+func ValidateControllerPublishVolumeRequest(req *csi.ControllerPublishVolumeRequest) error {
+	//check for required parameters
+	if len(req.VolumeId) == 0 {
+		msg := "Volume ID is a required parameter."
+		klog.Error(msg)
+		return status.Error(codes.InvalidArgument, msg)
+	} else if len(req.NodeId) == 0 {
+		msg := "Node ID is a required parameter."
+		klog.Error(msg)
+		return status.Error(codes.InvalidArgument, msg)
+	}
+	volCap := req.GetVolumeCapability()
+	if volCap == nil {
+		return status.Error(codes.InvalidArgument, "Volume capability not provided")
+	}
+	caps := []*csi.VolumeCapability{volCap}
+	if !IsValidVolumeCapabilities(caps) {
+		return status.Error(codes.InvalidArgument, "Volume capability not supported")
+	}
+	return nil
+}
+
+// ValidateControllerUnpublishVolumeRequest is the helper function to validate
+// ControllerUnpublishVolumeRequest for all block controllers.
+// Function returns error if validation fails otherwise returns nil.
+func ValidateControllerUnpublishVolumeRequest(req *csi.ControllerUnpublishVolumeRequest) error {
+	//check for required parameters
+	if len(req.VolumeId) == 0 {
+		msg := "Volume ID is a required parameter."
+		klog.Error(msg)
+		return status.Error(codes.InvalidArgument, msg)
+	} else if len(req.NodeId) == 0 {
+		msg := "Node ID is a required parameter."
+		klog.Error(msg)
+		return status.Error(codes.InvalidArgument, msg)
 	}
 	return nil
 }

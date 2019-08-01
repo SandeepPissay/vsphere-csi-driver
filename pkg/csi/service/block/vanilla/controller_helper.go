@@ -18,12 +18,12 @@ package vanilla
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"k8s.io/klog"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/block"
-	"strings"
 )
 
 // validateVanillaCreateVolumeRequest is the helper function to validate
@@ -52,40 +52,12 @@ func validateVanillaDeleteVolumeRequest(req *csi.DeleteVolumeRequest) error {
 
 // validateControllerPublishVolumeRequest is the helper function to validate
 // ControllerPublishVolumeRequest. Function returns error if validation fails otherwise returns nil.
-func validateControllerPublishVolumeRequest(req *csi.ControllerPublishVolumeRequest) error {
-	//check for required parameters
-	if len(req.VolumeId) == 0 {
-		msg := "Volume ID is a required parameter."
-		klog.Error(msg)
-		return status.Errorf(codes.InvalidArgument, msg)
-	} else if len(req.NodeId) == 0 {
-		msg := "Node ID is a required parameter."
-		klog.Error(msg)
-		return status.Errorf(codes.InvalidArgument, msg)
-	}
-	volCap := req.GetVolumeCapability()
-	if volCap == nil {
-		return status.Error(codes.InvalidArgument, "Volume capability not provided")
-	}
-	caps := []*csi.VolumeCapability{volCap}
-	if !block.IsValidVolumeCapabilities(caps) {
-		return status.Error(codes.InvalidArgument, "Volume capability not supported")
-	}
-	return nil
+func validateVanillaControllerPublishVolumeRequest(req *csi.ControllerPublishVolumeRequest) error {
+	return block.ValidateControllerPublishVolumeRequest(req)
 }
 
 // validateControllerUnpublishVolumeRequest is the helper function to validate
 // ControllerUnpublishVolumeRequest. Function returns error if validation fails otherwise returns nil.
-func validateControllerUnpublishVolumeRequest(req *csi.ControllerUnpublishVolumeRequest) error {
-	//check for required parameters
-	if len(req.VolumeId) == 0 {
-		msg := "Volume ID is a required parameter."
-		klog.Error(msg)
-		return status.Errorf(codes.InvalidArgument, msg)
-	} else if len(req.NodeId) == 0 {
-		msg := "Node ID is a required parameter."
-		klog.Error(msg)
-		return status.Errorf(codes.InvalidArgument, msg)
-	}
-	return nil
+func validateVanillaControllerUnpublishVolumeRequest(req *csi.ControllerUnpublishVolumeRequest) error {
+	return block.ValidateControllerUnpublishVolumeRequest(req)
 }
