@@ -164,7 +164,7 @@ func (vs *vSphere) VerifySpbmPolicyOfVolume(volumeID string, storagePolicyName s
 }
 
 // GetSpbmPolicyID returns profile ID for the specified storagePolicyName
-func (vs *vSphere) GetSpbmPolicyID(storagePolicyName string) (string, error) {
+func (vs *vSphere) GetSpbmPolicyID(storagePolicyName string) string {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -172,9 +172,9 @@ func (vs *vSphere) GetSpbmPolicyID(storagePolicyName string) (string, error) {
 	pbmClient, err := pbm.NewClient(ctx, vs.Client.Client)
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	profileID, err := pbmClient.ProfileIDByName(ctx, storagePolicyName)
-	gomega.Expect(err).NotTo(gomega.HaveOccurred())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred(), fmt.Sprintf("Failed to get profileID from given profileName"))
 	framework.Logf("storage policy id: %s for storage policy name is: %s", profileID, storagePolicyName)
-	return profileID, err
+	return profileID
 }
 
 // getLabelsForCNSVolume executes QueryVolume API on vCenter for requested volumeid and returns

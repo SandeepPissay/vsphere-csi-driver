@@ -23,6 +23,7 @@ import (
 	"k8s.io/kubernetes/test/e2e/manifest"
 	cnstypes "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vmomi/types"
 	csitypes "sigs.k8s.io/vsphere-csi-driver/pkg/csi/types"
+	"time"
 
 	"errors"
 	"github.com/vmware/govmomi/vim25/types"
@@ -456,10 +457,13 @@ func getValidTopology(topologyMap map[string][]string) ([]string, []string) {
 // createResourceQuota creates resource quota for the specified namespace.
 func createResourceQuota(client clientset.Interface, namespace string, size string, scName string) {
 	quotaName := "cns-test-quota"
+	waitTime := 10
 	resourceQuota := newTestResourceQuota(quotaName, size, scName)
 	resourceQuota, err := client.CoreV1().ResourceQuotas(namespace).Create(resourceQuota)
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	ginkgo.By(fmt.Sprintf("Create Resource quota: %+v", resourceQuota))
+	ginkgo.By(fmt.Sprintf("Waiting for %v seconds to allow resourceQuota to be claimed", waitTime))
+	time.Sleep(time.Duration(waitTime) * time.Second)
 }
 
 // newTestResourceQuota returns a quota that enforces default constraints for testing

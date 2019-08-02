@@ -18,6 +18,7 @@ package e2e
 
 import (
 	"fmt"
+
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
@@ -47,11 +48,14 @@ const (
 	9. Delete the storage class.
 */
 
-var _ = ginkgo.Describe("[csi-block-e2e] statefulset", func() {
+var _ = ginkgo.Describe("[csi-block-e2e] [csi-common-e2e] statefulset", func() {
 	f := framework.NewDefaultFramework("e2e-vsphere-statefulset")
 	var (
-		namespace string
-		client    clientset.Interface
+		namespace             string
+		client                clientset.Interface
+		isK8SVanillaTestSetup bool
+		storagePolicyName     string
+		scParameters          map[string]string
 	)
 	ginkgo.BeforeEach(func() {
 		namespace = f.Namespace.Name
@@ -61,6 +65,10 @@ var _ = ginkgo.Describe("[csi-block-e2e] statefulset", func() {
 		if err == nil && sc != nil {
 			gomega.Expect(client.StorageV1().StorageClasses().Delete(sc.Name, nil)).NotTo(gomega.HaveOccurred())
 		}
+		scParameters = make(map[string]string)
+		isK8SVanillaTestSetup = GetAndExpectBoolEnvVar(envK8SVanillaTestSetup)
+		storagePolicyName = GetAndExpectStringEnvVar(envStoragePolicyNameForSharedDatastores)
+
 	})
 
 	ginkgo.AfterEach(func() {
@@ -70,7 +78,19 @@ var _ = ginkgo.Describe("[csi-block-e2e] statefulset", func() {
 
 	ginkgo.It("vSphere statefulset testing", func() {
 		ginkgo.By("Creating StorageClass for Statefulset")
-		scSpec := getVSphereStorageClassSpec(storageclassname, nil, nil, "", "")
+		// decide which test setup is available to run
+		if isK8SVanillaTestSetup {
+			ginkgo.By("CNS_TEST: Running for vanilla k8s setup")
+			scParameters = nil
+		} else {
+			ginkgo.By("CNS_TEST: Running for WCP setup")
+			profileID := e2eVSphere.GetSpbmPolicyID(storagePolicyName)
+			scParameters[scParamStoragePolicyID] = profileID
+			// create resource quota
+			createResourceQuota(client, namespace, rqLimit, storageclassname)
+		}
+
+		scSpec := getVSphereStorageClassSpec(storageclassname, scParameters, nil, "", "")
 		sc, err := client.StorageV1().StorageClasses().Create(scSpec)
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		defer client.StorageV1().StorageClasses().Delete(sc.Name, nil)

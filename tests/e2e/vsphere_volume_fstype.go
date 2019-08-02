@@ -23,7 +23,8 @@ import (
 
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
+	storagev1 "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/kubernetes/test/e2e/framework"
@@ -56,11 +57,14 @@ Test to verify if an invalid fstype specified in storage class fails pod creatio
  7. Verify if the MountVolume.MountDevice fails because it is unable to find the file system executable file on the node.
 */
 
-var _ = ginkgo.Describe("[csi-block-e2e] Volume Filesystem Type Test", func() {
+var _ = ginkgo.Describe("[csi-block-e2e] [csi-common-e2e] Volume Filesystem Type Test", func() {
 	f := framework.NewDefaultFramework("volume-fstype")
 	var (
-		client    clientset.Interface
-		namespace string
+		client                clientset.Interface
+		namespace             string
+		isK8SVanillaTestSetup bool
+		storagePolicyName     string
+		profileID             string
 	)
 	ginkgo.BeforeEach(func() {
 		client = f.ClientSet
@@ -70,29 +74,48 @@ var _ = ginkgo.Describe("[csi-block-e2e] Volume Filesystem Type Test", func() {
 		if !(len(nodeList.Items) > 0) {
 			framework.Failf("Unable to find ready and schedulable Node")
 		}
+		isK8SVanillaTestSetup = GetAndExpectBoolEnvVar(envK8SVanillaTestSetup)
+		if !isK8SVanillaTestSetup {
+			ginkgo.By("CNS_TEST: Running for WCP setup")
+			storagePolicyName = GetAndExpectStringEnvVar(envStoragePolicyNameForSharedDatastores)
+			profileID = e2eVSphere.GetSpbmPolicyID(storagePolicyName)
+			// create resource quota
+			createResourceQuota(client, namespace, rqLimit, storagePolicyName)
+		}
 	})
 
 	ginkgo.It("CSI - verify fstype - ext3 formatted volume", func() {
-		invokeTestForFstype(f, client, namespace, ext3FSType, ext3FSType)
+		invokeTestForFstype(f, client, namespace, ext3FSType, ext3FSType, isK8SVanillaTestSetup, storagePolicyName, profileID)
 	})
 
 	ginkgo.It("CSI - verify fstype - default value should be ext4", func() {
-		invokeTestForFstype(f, client, namespace, "", ext4FSType)
+		invokeTestForFstype(f, client, namespace, "", ext4FSType, isK8SVanillaTestSetup, storagePolicyName, profileID)
 	})
 
 	ginkgo.It("CSI - verify invalid fstype", func() {
-		invokeTestForInvalidFstype(f, client, namespace, invalidFSType)
+		invokeTestForInvalidFstype(f, client, namespace, invalidFSType, isK8SVanillaTestSetup, storagePolicyName, profileID)
 	})
 })
 
-func invokeTestForFstype(f *framework.Framework, client clientset.Interface, namespace string, fstype string, expectedContent string) {
+func invokeTestForFstype(f *framework.Framework, client clientset.Interface, namespace string, fstype string, expectedContent string, isK8SVanillaTestSetup bool, storagePolicyName string, profileID string) {
 	ginkgo.By(fmt.Sprintf("Invoking Test for fstype: %s", fstype))
 	scParameters := make(map[string]string)
 	scParameters["fstype"] = fstype
-
 	// Create Storage class and PVC
 	ginkgo.By("Creating Storage Class With Fstype")
-	storageclass, pvclaim, err := createPVCAndStorageClass(client, namespace, nil, scParameters, "", nil, "")
+	var storageclass *storagev1.StorageClass
+	var pvclaim *v1.PersistentVolumeClaim
+	var err error
+	// decide which test setup is available to run
+	if isK8SVanillaTestSetup {
+		ginkgo.By("CNS_TEST: Running for vanilla k8s setup")
+		storageclass, pvclaim, err = createPVCAndStorageClass(client, namespace, nil, scParameters, "", nil, "")
+	} else {
+		ginkgo.By("CNS_TEST: Running for WCP setup")
+		scParameters[scParamStoragePolicyID] = profileID
+		storageclass, pvclaim, err = createPVCAndStorageClass(client, namespace, nil, scParameters, "", nil, "", storagePolicyName)
+	}
+
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	defer client.StorageV1().StorageClasses().Delete(storageclass.Name, nil)
 
@@ -130,13 +153,25 @@ func invokeTestForFstype(f *framework.Framework, client clientset.Interface, nam
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 }
 
-func invokeTestForInvalidFstype(f *framework.Framework, client clientset.Interface, namespace string, fstype string) {
+func invokeTestForInvalidFstype(f *framework.Framework, client clientset.Interface, namespace string, fstype string, isK8SVanillaTestSetup bool, storagePolicyName string, profileID string) {
 	scParameters := make(map[string]string)
 	scParameters["fstype"] = fstype
 
 	// Create Storage class and PVC
 	ginkgo.By("Creating Storage Class With Invalid Fstype")
-	storageclass, pvclaim, err := createPVCAndStorageClass(client, namespace, nil, scParameters, "", nil, "")
+	var storageclass *storagev1.StorageClass
+	var pvclaim *v1.PersistentVolumeClaim
+	var err error
+	// decide which test setup is available to run
+	if isK8SVanillaTestSetup {
+		ginkgo.By("CNS_TEST: Running for vanilla k8s setup")
+		storageclass, pvclaim, err = createPVCAndStorageClass(client, namespace, nil, scParameters, "", nil, "")
+	} else {
+		ginkgo.By("CNS_TEST: Running for WCP setup")
+		scParameters[scParamStoragePolicyID] = profileID
+		storageclass, pvclaim, err = createPVCAndStorageClass(client, namespace, nil, scParameters, "", nil, "", storagePolicyName)
+	}
+
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	defer client.StorageV1().StorageClasses().Delete(storageclass.Name, nil)
 

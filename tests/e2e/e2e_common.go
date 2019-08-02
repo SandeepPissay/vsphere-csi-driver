@@ -61,6 +61,7 @@ const (
 	kubeSystemNamespace                        = "kube-system"
 	syncerStatefulsetName                      = "vsphere-csi-metadata-syncer"
 	rqStorageType                              = ".storageclass.storage.k8s.io/requests.storage"
+	rqLimit                                    = "10Gi"
 )
 
 // GetAndExpectStringEnvVar parses a string from env variable

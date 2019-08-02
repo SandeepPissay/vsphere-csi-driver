@@ -32,6 +32,7 @@ ESXi hosts in Cluster-3   : zone-c
 ## Setting env variables for All e2e tests
 ```shell
 $ export E2E_TEST_CONF_FILE="/path/to/e2eTest.conf"
+$ export K8S_VANILLA_ENVIRONMENT=true
 $ export SHARED_VSPHERE_DATASTORE_URL="ds:///vmfs/volumes/5cf05d97-4aac6e02-2940-02003e89d50e/"
 $ export NONSHARED_VSPHERE_DATASTORE_URL="ds:///vmfs/volumes/5cf05d98-b2c43515-d903-02003e89d50e/"
 $ export STORAGE_POLICY_FOR_SHARED_DATASTORES="vSAN Default Storage Policy"
@@ -42,7 +43,7 @@ $ export TOPOLOGY_WITH_ONLY_ONE_NODE="<region-3-with-only-one-node>:<zone-3-with
 $ export STORAGE_POLICY_FROM_INACCESSIBLE_ZONE="PolicyNameInaccessibleToSelectedTopologyValues"
 $ export INACCESSIBLE_ZONE_VSPHERE_DATASTORE_URL="DataStoreUrlInaccessibleToSelectedTopologyValues"
 ```
-Please update the values as per your testbed configuration.
+Please update the values as per your testbed configuration. You may want to set `K8S_VANILLA_ENVIRONMENT` to `true` while running for K8S vanilla setup and `false` for WCP testbed setup (as of now).
 
 ## To run full sync test, need do extra following steps
 

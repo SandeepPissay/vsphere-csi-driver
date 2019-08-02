@@ -22,7 +22,8 @@ import (
 
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
+	storagev1 "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/kubernetes/test/e2e/framework"
@@ -46,8 +47,9 @@ import (
 var _ = ginkgo.Describe("[csi-block-e2e] Storage Policy Based Volume Provisioning", func() {
 	f := framework.NewDefaultFramework("e2e-spbm-policy")
 	var (
-		client    clientset.Interface
-		namespace string
+		client                clientset.Interface
+		namespace             string
+		isK8SVanillaTestSetup bool
 	)
 	ginkgo.BeforeEach(func() {
 		client = f.ClientSet
@@ -57,23 +59,46 @@ var _ = ginkgo.Describe("[csi-block-e2e] Storage Policy Based Volume Provisionin
 		if !(len(nodeList.Items) > 0) {
 			framework.Failf("Unable to find ready and schedulable Node")
 		}
+		isK8SVanillaTestSetup = GetAndExpectBoolEnvVar(envK8SVanillaTestSetup)
 	})
 
-	ginkgo.It("Verify dynamic volume provisioning works when storage policy specified in the storageclass is compliant for shared datastores", func() {
+	ginkgo.It("[csi-common-e2e] Verify dynamic volume provisioning works when storage policy specified in the storageclass is compliant for shared datastores", func() {
 		storagePolicyNameForSharedDatastores := GetAndExpectStringEnvVar(envStoragePolicyNameForSharedDatastores)
 		ginkgo.By(fmt.Sprintf("Invoking test for storage policy: %s", storagePolicyNameForSharedDatastores))
 		scParameters := make(map[string]string)
-		scParameters[scParamStoragePolicyName] = storagePolicyNameForSharedDatastores
-		verifyStoragePolicyBasedVolumeProvisioning(f, client, namespace, scParameters)
+
+		// decide which test setup is available to run
+		if isK8SVanillaTestSetup {
+			ginkgo.By("CNS_TEST: Running for vanilla k8s setup")
+			scParameters[scParamStoragePolicyName] = storagePolicyNameForSharedDatastores
+		} else {
+			ginkgo.By("CNS_TEST: Running for WCP setup")
+			profileID := e2eVSphere.GetSpbmPolicyID(storagePolicyNameForSharedDatastores)
+			scParameters[scParamStoragePolicyID] = profileID
+			// create resource quota
+			createResourceQuota(client, namespace, rqLimit, storagePolicyNameForSharedDatastores)
+		}
+		verifyStoragePolicyBasedVolumeProvisioning(f, client, namespace, scParameters, isK8SVanillaTestSetup, storagePolicyNameForSharedDatastores)
 	})
 
-	ginkgo.It("Verify dynamic volume provisioning fails when storage policy specified in the storageclass is compliant for non-shared datastores", func() {
+	ginkgo.It("[csi-common-e2e] Verify dynamic volume provisioning fails when storage policy specified in the storageclass is compliant for non-shared datastores", func() {
 		storagePolicyNameForNonSharedDatastores := GetAndExpectStringEnvVar(envStoragePolicyNameForNonSharedDatastores)
 		ginkgo.By(fmt.Sprintf("Invoking test for storage policy: %s", storagePolicyNameForNonSharedDatastores))
 		scParameters := make(map[string]string)
-		scParameters[scParamStoragePolicyName] = storagePolicyNameForNonSharedDatastores
 
-		err := invokeInvalidPolicyTestNeg(client, namespace, scParameters)
+		// decide which test setup is available to run
+		if isK8SVanillaTestSetup {
+			ginkgo.By("CNS_TEST: Running for vanilla k8s setup")
+			scParameters[scParamStoragePolicyName] = storagePolicyNameForNonSharedDatastores
+		} else {
+			ginkgo.By("CNS_TEST: Running for WCP setup")
+			profileID := e2eVSphere.GetSpbmPolicyID(storagePolicyNameForNonSharedDatastores)
+			scParameters[scParamStoragePolicyID] = profileID
+			// create resource quota
+			createResourceQuota(client, namespace, rqLimit, storagePolicyNameForNonSharedDatastores)
+		}
+
+		err := invokeInvalidPolicyTestNeg(client, namespace, scParameters, isK8SVanillaTestSetup, storagePolicyNameForNonSharedDatastores)
 		gomega.Expect(err).To(gomega.HaveOccurred())
 		expectedErrorMsg := "No compatible datastore found for storagePolicy"
 		framework.Logf(fmt.Sprintf("expected error: %+q", expectedErrorMsg))
@@ -87,7 +112,7 @@ var _ = ginkgo.Describe("[csi-block-e2e] Storage Policy Based Volume Provisionin
 		scParameters := make(map[string]string)
 		scParameters[scParamStoragePolicyName] = f.Namespace.Name
 
-		err := invokeInvalidPolicyTestNeg(client, namespace, scParameters)
+		err := invokeInvalidPolicyTestNeg(client, namespace, scParameters, isK8SVanillaTestSetup, scParamStoragePolicyName)
 		gomega.Expect(err).To(gomega.HaveOccurred())
 		expectedErrorMsg := "no pbm profile found with name: \"" + f.Namespace.Name + "\""
 		framework.Logf(fmt.Sprintf("expected error: %+q", expectedErrorMsg))
@@ -99,8 +124,19 @@ var _ = ginkgo.Describe("[csi-block-e2e] Storage Policy Based Volume Provisionin
 })
 
 // verifyStoragePolicyBasedVolumeProvisioning helps invokes storage policy related positive e2e tests
-func verifyStoragePolicyBasedVolumeProvisioning(f *framework.Framework, client clientset.Interface, namespace string, scParameters map[string]string) {
-	storageclass, pvclaim, err := createPVCAndStorageClass(client, namespace, nil, scParameters, "", nil, "")
+func verifyStoragePolicyBasedVolumeProvisioning(f *framework.Framework, client clientset.Interface, namespace string, scParameters map[string]string, isK8SVanillaTestSetup bool, storagePolicyName string) {
+
+	var storageclass *storagev1.StorageClass
+	var pvclaim *v1.PersistentVolumeClaim
+	var err error
+	// decide which test setup is available to run
+	if isK8SVanillaTestSetup {
+		ginkgo.By("CNS_TEST: Running for vanilla k8s setup")
+		storageclass, pvclaim, err = createPVCAndStorageClass(client, namespace, nil, scParameters, "", nil, "")
+	} else {
+		ginkgo.By("CNS_TEST: Running for WCP setup")
+		storageclass, pvclaim, err = createPVCAndStorageClass(client, namespace, nil, scParameters, "", nil, "", storagePolicyName)
+	}
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	defer client.StorageV1().StorageClasses().Delete(storageclass.Name, nil)
 	defer framework.DeletePersistentVolumeClaim(client, pvclaim.Name, namespace)
@@ -112,7 +148,7 @@ func verifyStoragePolicyBasedVolumeProvisioning(f *framework.Framework, client c
 
 	ginkgo.By("Verifying if volume is provisioned using specified storage policy")
 	pv := getPvFromClaim(client, pvclaim.Namespace, pvclaim.Name)
-	ok, err := e2eVSphere.VerifySpbmPolicyOfVolume(pv.Spec.CSI.VolumeHandle, scParameters[scParamStoragePolicyName])
+	ok, err := e2eVSphere.VerifySpbmPolicyOfVolume(pv.Spec.CSI.VolumeHandle, storagePolicyName)
 	gomega.Expect(ok).To(gomega.BeTrue(), fmt.Sprintf("storage policy verification failed"))
 
 	ginkgo.By("Creating pod to attach PV to the node")
@@ -133,8 +169,19 @@ func verifyStoragePolicyBasedVolumeProvisioning(f *framework.Framework, client c
 }
 
 // invokeInvalidPolicyTestNeg helps invokes storage policy related negative e2e tests
-func invokeInvalidPolicyTestNeg(client clientset.Interface, namespace string, scParameters map[string]string) error {
-	storageclass, pvclaim, err := createPVCAndStorageClass(client, namespace, nil, scParameters, "", nil, "")
+func invokeInvalidPolicyTestNeg(client clientset.Interface, namespace string, scParameters map[string]string, isK8SVanillaTestSetup bool, storagePolicyName string) error {
+
+	var storageclass *storagev1.StorageClass
+	var pvclaim *v1.PersistentVolumeClaim
+	var err error
+	// decide which test setup is available to run
+	if isK8SVanillaTestSetup {
+		ginkgo.By("CNS_TEST: Running for vanilla k8s setup")
+		storageclass, pvclaim, err = createPVCAndStorageClass(client, namespace, nil, scParameters, "", nil, "")
+	} else {
+		ginkgo.By("CNS_TEST: Running for WCP setup")
+		storageclass, pvclaim, err = createPVCAndStorageClass(client, namespace, nil, scParameters, "", nil, "", storagePolicyName)
+	}
 	gomega.Expect(err).NotTo(gomega.HaveOccurred(), fmt.Sprintf("Failed to create a StorageClasse. Error: %v", err))
 	defer client.StorageV1().StorageClasses().Delete(storageclass.Name, nil)
 	defer framework.DeletePersistentVolumeClaim(client, pvclaim.Name, namespace)

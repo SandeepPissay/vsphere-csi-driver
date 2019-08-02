@@ -76,11 +76,10 @@ var _ = ginkgo.Describe("[csi-block-e2e] [csi-common-e2e] Volume Disk Size ", fu
 			storageclass, pvclaim, err = createPVCAndStorageClass(client, namespace, nil, scParameters, diskSize, nil, "")
 		} else {
 			ginkgo.By("CNS_TEST: Running for WCP setup")
-			profileID, err := e2eVSphere.GetSpbmPolicyID(storagePolicyName)
-			gomega.Expect(err).NotTo(gomega.HaveOccurred(), fmt.Sprintf("Failed to get profileID from given profileName"))
+			profileID := e2eVSphere.GetSpbmPolicyID(storagePolicyName)
 			scParameters[scParamStoragePolicyID] = profileID
 			// create resource quota
-			createResourceQuota(client, namespace, "10Gi", storagePolicyName)
+			createResourceQuota(client, namespace, rqLimit, storagePolicyName)
 			storageclass, pvclaim, err = createPVCAndStorageClass(client, namespace, nil, scParameters, diskSize, nil, "", storagePolicyName)
 		}
 
