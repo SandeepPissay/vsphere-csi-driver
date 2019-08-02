@@ -1,7 +1,14 @@
 package vsphere
 
 import (
+	"context"
+	"crypto/tls"
+	"encoding/pem"
 	"errors"
+	"fmt"
+
+	"github.com/vmware/govmomi/sts"
+	"github.com/vmware/govmomi/vim25"
 	"github.com/vmware/govmomi/vim25/soap"
 	"github.com/vmware/govmomi/vim25/types"
 	"reflect"
@@ -111,4 +118,29 @@ func CompareKubernetesMetadata(pvMetaData *cnstypes.CnsKubernetesEntityMetadata,
 		return false
 	}
 	return true
+}
+
+// Signer decodes the certificate and private key and returns SAML token needed for authentication
+func signer(ctx context.Context, client *vim25.Client, username string, password string) (*sts.Signer, error) {
+	pemBlock, _ := pem.Decode([]byte(username))
+	if pemBlock == nil {
+		return nil, nil
+	}
+	certificate, err := tls.X509KeyPair([]byte(username), []byte(password))
+	if err != nil {
+		return nil, errors.New(fmt.Sprintf("Failed to load X509 key pair. Error: %+v", err))
+	}
+	tokens, err := sts.NewClient(ctx, client)
+	if err != nil {
+		return nil, errors.New(fmt.Sprintf("Failed to create STS client. err: %+v", err))
+	}
+	req := sts.TokenRequest{
+		Certificate: &certificate,
+		Delegatable: true,
+	}
+	signer, err := tokens.Issue(ctx, req)
+	if err != nil {
+		return nil, errors.New(fmt.Sprintf("Failed to issue SAML token. err: %+v", err))
+	}
+	return signer, nil
 }

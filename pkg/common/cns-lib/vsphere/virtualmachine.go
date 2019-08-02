@@ -215,16 +215,31 @@ func (vm *VirtualMachine) GetHostSystem(ctx context.Context) (*object.HostSystem
 
 // GetTagManager returns tagManager using vm client
 func (vm *VirtualMachine) GetTagManager(ctx context.Context) (*tags.Manager, error) {
-	tagManager := tags.NewManager(rest.NewClient(vm.Client()))
+	restClient := rest.NewClient(vm.Client())
 	virtualCenter, err := GetVirtualCenterManager().GetVirtualCenter(vm.VirtualCenterHost)
 	if err != nil {
 		klog.Errorf("Failed to get virtualCenter. Error: %v", err)
 		return nil, err
 	}
-	user := url.UserPassword(virtualCenter.Config.Username, virtualCenter.Config.Password)
-	if err := tagManager.Login(ctx, user); err != nil {
-		klog.Errorf("Failed to login for tagManager. err %v", err)
+	signer, err := signer(ctx, vm.Client(), virtualCenter.Config.Username, virtualCenter.Config.Password)
+	if err != nil {
+		klog.Errorf("Failed to create the Signer. Error: %v", err)
 		return nil, err
+	}
+	if signer == nil {
+		klog.V(3).Info("Using plain text username and password")
+		user := url.UserPassword(virtualCenter.Config.Username, virtualCenter.Config.Password)
+		err = restClient.Login(ctx, user)
+	} else {
+		klog.V(3).Info("Using certificate and private key")
+		err = restClient.LoginByToken(restClient.WithSigner(ctx, signer))
+	}
+	if err != nil {
+		klog.Errorf("Failed to login for the rest client. Error: %v", err)
+	}
+	tagManager := tags.NewManager(restClient)
+	if tagManager == nil {
+		klog.Errorf("Failed to create a tagManager")
 	}
 	return tagManager, nil
 }
@@ -253,7 +268,7 @@ func (vm *VirtualMachine) GetAncestors(ctx context.Context) ([]mo.ManagedEntity,
 func (vm *VirtualMachine) GetZoneRegion(ctx context.Context, zoneCategoryName string, regionCategoryName string) (zone string, region string, err error) {
 	klog.V(4).Infof("GetZoneRegion: called with zoneCategoryName: %s, regionCategoryName: %s", zoneCategoryName, regionCategoryName)
 	tagManager, err := vm.GetTagManager(ctx)
-	if err != nil {
+	if err != nil || tagManager == nil {
 		klog.Errorf("Failed to get tagManager. Error: %v", err)
 		return "", "", err
 	}
@@ -308,7 +323,7 @@ func (vm *VirtualMachine) GetZoneRegion(ctx context.Context, zoneCategoryName st
 func (vm *VirtualMachine) IsInZoneRegion(ctx context.Context, zoneCategoryName string, regionCategoryName string, zoneValue string, regionValue string) (bool, error) {
 	klog.V(4).Infof("IsInZoneRegion: called with zoneCategoryName: %s, regionCategoryName: %s, zoneValue: %s, regionValue: %s", zoneCategoryName, regionCategoryName, zoneValue, regionValue)
 	tagManager, err := vm.GetTagManager(ctx)
-	if err != nil {
+	if err != nil || tagManager == nil {
 		klog.Errorf("Failed to get tagManager. Error: %v", err)
 		return false, err
 	}
