@@ -25,7 +25,7 @@ import (
 
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	storage "k8s.io/api/storage/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/kubernetes/test/e2e/framework"
@@ -48,17 +48,20 @@ import (
 		10. Delete storage class.
 */
 
-var _ = utils.SIGDescribe("[csi-block-e2e] Volume Operations Storm", func() {
+var _ = utils.SIGDescribe("[csi-block-e2e] [csi-common-e2e] Volume Operations Storm", func() {
 	f := framework.NewDefaultFramework("volume-ops-storm")
 	const defaultVolumeOpsScale = 30
 	var (
-		client            clientset.Interface
-		namespace         string
-		storageclass      *storage.StorageClass
-		pvclaims          []*v1.PersistentVolumeClaim
-		persistentvolumes []*v1.PersistentVolume
-		err               error
-		volumeOpsScale    int
+		client                clientset.Interface
+		namespace             string
+		scParameters          map[string]string
+		storageclass          *storage.StorageClass
+		pvclaims              []*v1.PersistentVolumeClaim
+		persistentvolumes     []*v1.PersistentVolume
+		err                   error
+		volumeOpsScale        int
+		isK8SVanillaTestSetup bool
+		storagePolicyName     string
 	)
 	ginkgo.BeforeEach(func() {
 		client = f.ClientSet
@@ -75,6 +78,9 @@ var _ = utils.SIGDescribe("[csi-block-e2e] Volume Operations Storm", func() {
 			volumeOpsScale = defaultVolumeOpsScale
 		}
 		pvclaims = make([]*v1.PersistentVolumeClaim, volumeOpsScale)
+		scParameters = make(map[string]string)
+		isK8SVanillaTestSetup = GetAndExpectBoolEnvVar(envK8SVanillaTestSetup)
+		storagePolicyName = GetAndExpectStringEnvVar(envStoragePolicyNameForSharedDatastores)
 	})
 
 	ginkgo.AfterEach(func() {
@@ -92,7 +98,21 @@ var _ = utils.SIGDescribe("[csi-block-e2e] Volume Operations Storm", func() {
 	ginkgo.It("create/delete pod with many volumes and verify no attach/detach call should fail", func() {
 		ginkgo.By(fmt.Sprintf("Running test with VOLUME_OPS_SCALE: %v", volumeOpsScale))
 		ginkgo.By("Creating Storage Class")
-		storageclass, err = client.StorageV1().StorageClasses().Create(getVSphereStorageClassSpec("", nil, nil, "", ""))
+
+		// decide which test setup is available to run
+		if isK8SVanillaTestSetup {
+			ginkgo.By("CNS_TEST: Running for vanilla k8s setup")
+			scParameters = nil
+			storagePolicyName = ""
+		} else {
+			ginkgo.By("CNS_TEST: Running for WCP setup")
+			profileID := e2eVSphere.GetSpbmPolicyID(storagePolicyName)
+			scParameters[scParamStoragePolicyID] = profileID
+			// create resource quota
+			createResourceQuota(client, namespace, "100Gi", storagePolicyName)
+		}
+
+		storageclass, err = client.StorageV1().StorageClasses().Create(getVSphereStorageClassSpec(storagePolicyName, scParameters, nil, "", ""))
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		defer client.StorageV1().StorageClasses().Delete(storageclass.Name, nil)
 
