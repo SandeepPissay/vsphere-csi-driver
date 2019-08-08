@@ -107,28 +107,26 @@ func (m *defaultManager) CreateVolume(spec *cnstypes.CnsVolumeCreateSpec) (*cnst
 		klog.Errorf("Failed to get taskInfo for CreateVolume task from vCenter %q with err: %v", m.virtualCenter.Config.Host, err)
 		return nil, err
 	}
-
+	klog.V(2).Infof("CreateVolume: VolumeName: %q, opId: %q", spec.Name, taskInfo.ActivationId)
 	// Get the taskResult
 	taskResult, err := GetTaskResult(ctx, taskInfo)
 
 	if err != nil {
-		klog.Errorf("unable to find the task result for CreateVolume task from vCenter %q with taskID %s, createResults %v",
-			m.virtualCenter.Config.Host, taskInfo.Task.Value, taskResult)
+		klog.Errorf("unable to find the task result for CreateVolume task from vCenter %q. taskID: %q, opId: %q createResults: %+v",
+			m.virtualCenter.Config.Host, taskInfo.Task.Value, taskInfo.ActivationId, taskResult)
 		return nil, err
 	}
 
 	if taskResult == nil {
-		klog.Errorf("taskResult is empty for CreateVolume task")
+		klog.Errorf("taskResult is empty for CreateVolume task: %q", taskInfo.ActivationId)
 		return nil, errors.New("taskResult is empty")
 	}
 	volumeOperationRes := taskResult.GetCnsVolumeOperationResult()
 	if volumeOperationRes.Fault != nil {
-		klog.Errorf("failed to create cns volume. createSpec: %s, fault: %s", spew.Sdump(spec), spew.Sdump(volumeOperationRes.Fault))
+		klog.Errorf("failed to create cns volume. createSpec: %q, fault: %q, opId: %q", spew.Sdump(spec), spew.Sdump(volumeOperationRes.Fault), taskInfo.ActivationId)
 		return nil, errors.New(volumeOperationRes.Fault.LocalizedMessage)
 	}
-	klog.V(2).Infof("Successfully retrieved the create Result in host %q with taskID %s and volumeID %s",
-		m.virtualCenter.Config.Host, taskInfo.Task.Value, volumeOperationRes.VolumeId.Id)
-
+	klog.V(2).Infof("CreateVolume: Volume created successfully. VolumeName: %q, opId: %q, volumeID: %q", spec.Name, taskInfo.ActivationId, volumeOperationRes.VolumeId.Id)
 	return &cnstypes.CnsVolumeId{
 		Id: volumeOperationRes.VolumeId.Id,
 	}, nil
@@ -170,7 +168,7 @@ func (m *defaultManager) AttachVolume(vm *cnsvsphere.VirtualMachine, volumeID st
 		klog.Errorf("Failed to get taskInfo for AttachVolume task from vCenter %q with err: %v", m.virtualCenter.Config.Host, err)
 		return "", err
 	}
-
+	klog.V(2).Infof("AttachVolume: volumeID: %q, vm: %q, opId: %q", volumeID, vm.String(), taskInfo.ActivationId)
 	// Get the taskResult
 	taskResult, err := GetTaskResult(ctx, taskInfo)
 	if err != nil {
@@ -180,7 +178,7 @@ func (m *defaultManager) AttachVolume(vm *cnsvsphere.VirtualMachine, volumeID st
 	}
 
 	if taskResult == nil {
-		klog.Errorf("taskResult is empty for AttachVolume task")
+		klog.Errorf("taskResult is empty for AttachVolume task: %q, opId: %q", taskInfo.Task.Value, taskInfo.ActivationId)
 		return "", errors.New("taskResult is empty")
 	}
 
@@ -196,12 +194,11 @@ func (m *defaultManager) AttachVolume(vm *cnsvsphere.VirtualMachine, volumeID st
 				return diskUUID, nil
 			}
 		}
-		klog.Errorf("failed to attach cns volume: %s to node vm: %s. fault: %s", volumeID, vm.InventoryPath, spew.Sdump(volumeOperationRes.Fault))
+		klog.Errorf("failed to attach cns volume: %q to node vm: %q. fault: %q. opId: %q", volumeID, vm.String(), spew.Sdump(volumeOperationRes.Fault), taskInfo.ActivationId)
 		return "", errors.New(volumeOperationRes.Fault.LocalizedMessage)
 	}
 	diskUUID := interface{}(taskResult).(*cnstypes.CnsVolumeAttachResult).DiskUUID
-	klog.V(3).Infof("Successfully attached the volume %s to node: %s in vCenter %q with taskID %s and Disk UUID is %s",
-		volumeID, vm.InventoryPath, m.virtualCenter.Config.Host, taskInfo.Task.Value, diskUUID)
+	klog.V(2).Infof("AttachVolume: Volume attached successfully. volumeID: %q, opId: %q, vm: %q, diskUUID: %q", volumeID, taskInfo.ActivationId, vm.String(), diskUUID)
 	return diskUUID, nil
 }
 
@@ -240,6 +237,7 @@ func (m *defaultManager) DetachVolume(vm *cnsvsphere.VirtualMachine, volumeID st
 		klog.Errorf("Failed to get taskInfo for DetachVolume task from vCenter %q with err: %v", m.virtualCenter.Config.Host, err)
 		return err
 	}
+	klog.V(2).Infof("DetachVolume: volumeID: %q, vm: %q, opId: %q", volumeID, vm.String(), taskInfo.ActivationId)
 	// Get the task results for the given task
 	taskResult, err := GetTaskResult(ctx, taskInfo)
 	if err != nil {
@@ -249,19 +247,17 @@ func (m *defaultManager) DetachVolume(vm *cnsvsphere.VirtualMachine, volumeID st
 	}
 
 	if taskResult == nil {
-		klog.Errorf("taskResult is empty for DetachVolume task")
+		klog.Errorf("taskResult is empty for DetachVolume task: %q, opId: %q", taskInfo.Task.Value, taskInfo.ActivationId)
 		return errors.New("taskResult is empty")
 	}
 
 	volumeOperationRes := taskResult.GetCnsVolumeOperationResult()
 
 	if volumeOperationRes.Fault != nil {
-		klog.Errorf("failed to detach cns volume:%s from node vm: %s. fault: %s", volumeID, vm.InventoryPath, spew.Sdump(volumeOperationRes.Fault))
+		klog.Errorf("failed to detach cns volume:%q from node vm: %q. fault: %q, opId: %q", volumeID, vm.InventoryPath, spew.Sdump(volumeOperationRes.Fault), taskInfo.ActivationId)
 		return errors.New(volumeOperationRes.Fault.LocalizedMessage)
 	}
-
-	klog.V(3).Infof("Successfully detached the volume %s from node: %s in vCenter %q with taskID %s",
-		volumeID, vm.InventoryPath, m.virtualCenter.Config.Host, taskInfo.Task.Value)
+	klog.V(2).Infof("DetachVolume: Volume detached successfully. volumeID: %q, vm: %q, opId: %q", volumeID, taskInfo.ActivationId, vm.String())
 	return nil
 }
 
@@ -297,6 +293,7 @@ func (m *defaultManager) DeleteVolume(volumeID string, deleteDisk bool) error {
 		klog.Errorf("Failed to get taskInfo for DeleteVolume task from vCenter %q with err: %v", m.virtualCenter.Config.Host, err)
 		return err
 	}
+	klog.V(2).Infof("DeleteVolume: volumeID: %q, opId: %q", volumeID, taskInfo.ActivationId)
 	// Get the task results for the given task
 	taskResult, err := GetTaskResult(ctx, taskInfo)
 	if err != nil {
@@ -305,18 +302,16 @@ func (m *defaultManager) DeleteVolume(volumeID string, deleteDisk bool) error {
 		return err
 	}
 	if taskResult == nil {
-		klog.Errorf("taskResult is empty for DeleteVolume task")
+		klog.Errorf("taskResult is empty for DeleteVolume task: %q, opID: %q", taskInfo.Task.Value, taskInfo.ActivationId)
 		return errors.New("taskResult is empty")
 	}
 
 	volumeOperationRes := taskResult.GetCnsVolumeOperationResult()
 	if volumeOperationRes.Fault != nil {
-		klog.Errorf("Failed to delete volume: %s, fault: %s", volumeID, spew.Sdump(volumeOperationRes.Fault))
+		klog.Errorf("Failed to delete volume: %q, fault: %q, opID: %q", volumeID, spew.Sdump(volumeOperationRes.Fault), taskInfo.ActivationId)
 		return errors.New(volumeOperationRes.Fault.LocalizedMessage)
 	}
-
-	klog.V(3).Infof("Successfully deleted the volume %s from vCenter %q with taskID %s", volumeID,
-		m.virtualCenter.Config.Host, taskInfo.Task.Value)
+	klog.V(2).Infof("DeleteVolume: Volume deleted successfully. volumeID: %q, opId: %q", volumeID, taskInfo.ActivationId)
 	return nil
 }
 
@@ -364,26 +359,25 @@ func (m *defaultManager) UpdateVolumeMetadata(spec *cnstypes.CnsVolumeMetadataUp
 		klog.Errorf("Failed to get taskInfo for UpdateVolume task from vCenter %q with err: %v", m.virtualCenter.Config.Host, err)
 		return err
 	}
+	klog.V(2).Infof("UpdateVolumeMetadata: volumeID: %q, opId: %q", spec.VolumeId.Id, taskInfo.ActivationId)
 	// Get the task results for the given task
 	taskResult, err := GetTaskResult(ctx, taskInfo)
 	if err != nil {
-		klog.Errorf("unable to find the task result for UpdateVolume task from vCenter %q with taskID %s and updateResults %v",
-			m.virtualCenter.Config.Host, taskInfo.Task.Value, taskResult)
+		klog.Errorf("unable to find the task result for UpdateVolume task from vCenter %q with taskID %q, opId: %q and updateResults %+v",
+			m.virtualCenter.Config.Host, taskInfo.Task.Value, taskInfo.ActivationId, taskResult)
 		return err
 	}
 
 	if taskResult == nil {
-		klog.Errorf("taskResult is empty for UpdateVolume task")
+		klog.Errorf("taskResult is empty for UpdateVolume task: %q, opId: %q", taskInfo.Task.Value, taskInfo.ActivationId)
 		return errors.New("taskResult is empty")
 	}
 	volumeOperationRes := taskResult.GetCnsVolumeOperationResult()
 	if volumeOperationRes.Fault != nil {
-		klog.Errorf("Failed to update volume. updateSpec: %s, fault: %s", spew.Sdump(spec), spew.Sdump(volumeOperationRes.Fault))
+		klog.Errorf("Failed to update volume. updateSpec: %q, fault: %q, opID: %q", spew.Sdump(spec), spew.Sdump(volumeOperationRes.Fault), taskInfo.ActivationId)
 		return errors.New(volumeOperationRes.Fault.LocalizedMessage)
 	}
-	klog.V(3).Infof("Successfully retrieved the update metadata for volume %s with spec %s, host %q and taskID %s",
-		spec.VolumeId.Id, spew.Sdump(spec), m.virtualCenter.Config.Host, taskInfo.Task.Value)
-
+	klog.V(2).Infof("UpdateVolumeMetadata: Volume metadata updated successfully. volumeID: %q, opId: %q", spec.VolumeId.Id, taskInfo.ActivationId)
 	return nil
 }
 
