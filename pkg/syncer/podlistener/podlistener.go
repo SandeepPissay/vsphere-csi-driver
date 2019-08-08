@@ -79,7 +79,9 @@ func initPodListenerType() (*podListener, error) {
 
 // InitPodListenerService initializes the Pod Listener Service
 func InitPodListenerService() error {
+	klog.V(2).Infof("Trying to initialize the Pod Listener gRPC service")
 	podListenerServicePort := getPodListenerServicePort()
+	klog.V(4).Infof("Pod Listener Service will be running on port %d", podListenerServicePort)
 	port := flag.Int("port", podListenerServicePort, "The Pod Listener service port")
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	if err != nil {
@@ -94,7 +96,7 @@ func InitPodListenerService() error {
 	RegisterPodListenerServer(grpcServer, server)
 	err = grpcServer.Serve(lis)
 	if err != nil {
-		klog.Errorf("Failed to accept incoming connections on pod listener gRPC server. Err: %v", err)
+		klog.Errorf("Failed to accept incoming connections on pod listener gRPC server. Err: %+v", err)
 		return err
 	}
 	klog.V(2).Infof("Successfully initialized the Pod Listener gRPC service")
@@ -168,7 +170,6 @@ func getPodListenerServicePort() int {
 				klog.Warningf("Pod Listener Service Port set in env variable X_CSI_POD_LISTENER_SERVICE_PORT %s is equal or less than 0, will use the default port %d", v, defaultPodListenerServicePort)
 			} else {
 				podListenerServicePort = value
-				klog.V(4).Infof("Pod Listener Service will be running on port %d", podListenerServicePort)
 			}
 		} else {
 			klog.Warningf("Pod Listener Service port set in env variable X_CSI_POD_LISTENER_SERVICE_PORT %s is invalid, will use the default port %d", v, defaultPodListenerServicePort)
