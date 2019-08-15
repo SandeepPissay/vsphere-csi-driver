@@ -95,7 +95,7 @@ status:
 apiVersion: csi.storage.k8s.io/v1alpha1
 kind: CSIDriver
 metadata:
-  name: block.vsphere.csi.vmware.com
+  name: csi.vsphere.vmware.com
 spec:
   attachRequired: true
   podInfoOnMountVersion: "v1"

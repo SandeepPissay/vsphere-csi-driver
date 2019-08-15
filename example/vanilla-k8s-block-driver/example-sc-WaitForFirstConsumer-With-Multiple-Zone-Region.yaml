@@ -2,7 +2,7 @@ kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
   name: example-vanilla-block-sc
-provisioner: block.vsphere.csi.vmware.com
+provisioner: csi.vsphere.vmware.com
 volumeBindingMode: WaitForFirstConsumer
 allowedTopologies:
   - matchLabelExpressions:

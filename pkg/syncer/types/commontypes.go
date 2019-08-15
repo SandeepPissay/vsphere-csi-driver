@@ -27,5 +27,5 @@ type Commontypes struct {
 
 const (
 	// VSphereCSIDriverName is the CSI driver name
-	VSphereCSIDriverName = "block.vsphere.csi.vmware.com"
+	VSphereCSIDriverName = "csi.vsphere.vmware.com"
 )

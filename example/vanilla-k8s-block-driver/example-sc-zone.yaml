@@ -4,7 +4,7 @@ metadata:
   name: example-vanilla-block-sc
   annotations:
     storageclass.kubernetes.io/is-default-class: "true"
-provisioner: block.vsphere.csi.vmware.com
+provisioner: csi.vsphere.vmware.com
 allowedTopologies:
   - matchLabelExpressions:
       - key: failure-domain.beta.kubernetes.io/zone

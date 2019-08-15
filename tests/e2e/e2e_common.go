@@ -31,7 +31,7 @@ const (
 	scParamDatastoreURL                        = "DatastoreURL"
 	diskSize                                   = "2Gi"
 	diskSizeInMb                               = int64(2048)
-	e2evSphereCSIBlockDriverName               = "block.vsphere.csi.vmware.com"
+	e2evSphereCSIBlockDriverName               = "csi.vsphere.vmware.com"
 	envVolumeOperationsScale                   = "VOLUME_OPS_SCALE"
 	envStoragePolicyNameForSharedDatastores    = "STORAGE_POLICY_FOR_SHARED_DATASTORES"
 	envStoragePolicyNameForNonSharedDatastores = "STORAGE_POLICY_FOR_NONSHARED_DATASTORES"
