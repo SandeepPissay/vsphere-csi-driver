@@ -18,13 +18,14 @@ package vanilla
 
 import (
 	"fmt"
+
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"golang.org/x/net/context"
 	"k8s.io/api/core/v1"
 	"k8s.io/klog"
 	cnsnode "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/node"
 	cnsvsphere "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vsphere"
-	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/block"
+	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/common"
 	csitypes "sigs.k8s.io/vsphere-csi-driver/pkg/csi/types"
 	k8s "sigs.k8s.io/vsphere-csi-driver/pkg/kubernetes"
 )
@@ -57,7 +58,7 @@ func (nodes *Nodes) nodeAdd(obj interface{}) {
 		klog.Warningf("nodeAdd: unrecognized object %+v", obj)
 		return
 	}
-	err := nodes.cnsNodeManager.RegisterNode(block.GetUUIDFromProviderID(node.Spec.ProviderID), node.Name)
+	err := nodes.cnsNodeManager.RegisterNode(common.GetUUIDFromProviderID(node.Spec.ProviderID), node.Name)
 	if err != nil {
 		klog.Warningf("Failed to register node:%q. err=%v", node.Name, err)
 	}

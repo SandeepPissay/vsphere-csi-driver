@@ -29,7 +29,7 @@ import (
 	cnsvolume "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/volume"
 	cnsvsphere "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vsphere"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/common/config"
-	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/block"
+	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/common"
 	csitypes "sigs.k8s.io/vsphere-csi-driver/pkg/csi/types"
 )
 
@@ -44,7 +44,7 @@ var (
 var getSharedDatastores = getSharedDatastoresInPodVMK8SCluster
 
 type controller struct {
-	manager *block.Manager
+	manager *common.Manager
 }
 
 // New creates a CNS controller
@@ -68,7 +68,7 @@ func (c *controller) Init(config *config.Config) error {
 		klog.Errorf("Failed to register VC with virtualCenterManager. err=%v", err)
 		return err
 	}
-	c.manager = &block.Manager{
+	c.manager = &common.Manager{
 		VcenterConfig:  vcenterconfig,
 		CnsConfig:      config,
 		VolumeManager:  cnsvolume.GetManager(vcenter),
@@ -77,13 +77,13 @@ func (c *controller) Init(config *config.Config) error {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	vc, err := block.GetVCenter(ctx, c.manager)
+	vc, err := common.GetVCenter(ctx, c.manager)
 	if err != nil {
 		klog.Errorf("Failed to get vcenter. err=%v", err)
 		return err
 	}
 	// Check vCenter API Version
-	if err = block.CheckAPI(vc.Client.ServiceContent.About.ApiVersion); err != nil {
+	if err = common.CheckAPI(vc.Client.ServiceContent.About.ApiVersion); err != nil {
 		klog.Errorf("checkAPI failed for vcenter API version: %s, err=%v", vc.Client.ServiceContent.About.ApiVersion, err)
 		return err
 	}
@@ -103,40 +103,40 @@ func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 	}
 
 	volSizeBytes := int64(req.GetCapacityRange().GetRequiredBytes())
-	volSizeMB := int64(block.RoundUpSize(volSizeBytes, block.MbInBytes))
+	volSizeMB := int64(common.RoundUpSize(volSizeBytes, common.MbInBytes))
 
 	var storagePolicyID string
 	var fsType string
 	// Support case insensitive parameters
 	for paramName := range req.Parameters {
 		param := strings.ToLower(paramName)
-		if param == block.AttributeStoragePolicyID {
+		if param == common.AttributeStoragePolicyID {
 			storagePolicyID = req.Parameters[paramName]
-		} else if param == block.AttributeFsType {
-			fsType = req.Parameters[block.AttributeFsType]
+		} else if param == common.AttributeFsType {
+			fsType = req.Parameters[common.AttributeFsType]
 		}
 	}
 
-	var createVolumeSpec = block.CreateVolumeSpec{
+	var createVolumeSpec = common.CreateVolumeSpec{
 		CapacityMB:      volSizeMB,
 		Name:            req.Name,
 		StoragePolicyID: storagePolicyID,
 	}
 	// Get shared datastores for the Kubernetes cluster
 	sharedDatastores, err := getSharedDatastores(ctx, c)
-	volumeID, err := block.CreateVolumeUtil(ctx, c.manager, &createVolumeSpec, sharedDatastores)
+	volumeID, err := common.CreateVolumeUtil(ctx, c.manager, &createVolumeSpec, sharedDatastores)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to create volume. Error: %+v", err)
 		klog.Error(msg)
 		return nil, status.Errorf(codes.Internal, msg)
 	}
 	attributes := make(map[string]string)
-	attributes[block.AttributeDiskType] = block.DiskTypeString
-	attributes[block.AttributeFsType] = fsType
+	attributes[common.AttributeDiskType] = common.DiskTypeString
+	attributes[common.AttributeFsType] = fsType
 	resp := &csi.CreateVolumeResponse{
 		Volume: &csi.Volume{
 			VolumeId:      volumeID,
-			CapacityBytes: int64(units.FileSize(volSizeMB * block.MbInBytes)),
+			CapacityBytes: int64(units.FileSize(volSizeMB * common.MbInBytes)),
 			VolumeContext: attributes,
 		},
 	}
@@ -154,7 +154,7 @@ func (c *controller) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequ
 		klog.Error(msg)
 		return nil, err
 	}
-	err = block.DeleteVolumeUtil(ctx, c.manager, req.VolumeId, true)
+	err = common.DeleteVolumeUtil(ctx, c.manager, req.VolumeId, true)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to delete volume: %q. Error: %+v", req.VolumeId, err)
 		klog.Error(msg)
@@ -219,7 +219,7 @@ func (c *controller) ControllerPublishVolume(ctx context.Context, req *csi.Contr
 	}
 
 	// Attach the volume to the node
-	diskUUID, err := block.AttachVolumeUtil(ctx, c.manager, podVM, req.VolumeId)
+	diskUUID, err := common.AttachVolumeUtil(ctx, c.manager, podVM, req.VolumeId)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to attach volume with volumeID: %s. Error: %+v", req.VolumeId, err)
 		klog.Error(msg)
@@ -227,8 +227,8 @@ func (c *controller) ControllerPublishVolume(ctx context.Context, req *csi.Contr
 	}
 
 	publishInfo := make(map[string]string, 0)
-	publishInfo[block.AttributeDiskType] = block.DiskTypeString
-	publishInfo[block.AttributeFirstClassDiskUUID] = block.FormatDiskUUID(diskUUID)
+	publishInfo[common.AttributeDiskType] = common.DiskTypeString
+	publishInfo[common.AttributeFirstClassDiskUUID] = common.FormatDiskUUID(diskUUID)
 	resp := &csi.ControllerPublishVolumeResponse{
 		PublishContext: publishInfo,
 	}
@@ -257,7 +257,7 @@ func (c *controller) ValidateVolumeCapabilities(ctx context.Context, req *csi.Va
 	klog.V(4).Infof("ControllerGetCapabilities: called with args %+v", *req)
 	volCaps := req.GetVolumeCapabilities()
 	var confirmed *csi.ValidateVolumeCapabilitiesResponse_Confirmed
-	if block.IsValidVolumeCapabilities(volCaps) {
+	if common.IsValidVolumeCapabilities(volCaps) {
 		confirmed = &csi.ValidateVolumeCapabilitiesResponse_Confirmed{VolumeCapabilities: volCaps}
 	}
 	return &csi.ValidateVolumeCapabilitiesResponse{
@@ -320,7 +320,7 @@ func (c *controller) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsRe
 
 // GetSharedDatastoresInPodVMK8SCluster gets the shared datastores for WCP PodVM cluster
 func getSharedDatastoresInPodVMK8SCluster(ctx context.Context, c *controller) ([]*cnsvsphere.DatastoreInfo, error) {
-	vc, err := block.GetVCenter(ctx, c.manager)
+	vc, err := common.GetVCenter(ctx, c.manager)
 	if err != nil {
 		klog.Errorf("Failed to get vCenter from Manager, err=%+v", err)
 		return nil, err

@@ -43,7 +43,7 @@ import (
 	cnsvolume "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/volume"
 	cnsvsphere "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vsphere"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/common/config"
-	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/block"
+	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/common"
 	k8s "sigs.k8s.io/vsphere-csi-driver/pkg/kubernetes"
 )
 
@@ -229,7 +229,7 @@ func getControllerTest(t *testing.T) *controllerTest {
 			t.Fatal(err)
 		}
 
-		manager := &block.Manager{
+		manager := &common.Manager{
 			VcenterConfig:  vcenterconfig,
 			CnsConfig:      config,
 			VolumeManager:  cnsvolume.GetManager(vcenter),
@@ -280,13 +280,13 @@ func TestCreateVolumeWithStoragePolicy(t *testing.T) {
 	// Create
 	params := make(map[string]string, 0)
 	if v := os.Getenv("VSPHERE_DATASTORE_URL"); v != "" {
-		params[block.AttributeDatastoreURL] = v
+		params[common.AttributeDatastoreURL] = v
 	}
 
 	// PBM simulator defaults
-	params[block.AttributeStoragePolicyName] = "vSAN Default Storage Policy"
+	params[common.AttributeStoragePolicyName] = "vSAN Default Storage Policy"
 	if v := os.Getenv("VSPHERE_STORAGE_POLICY_NAME"); v != "" {
-		params[block.AttributeStoragePolicyName] = v
+		params[common.AttributeStoragePolicyName] = v
 	}
 	capabilities := []*csi.VolumeCapability{
 		{
@@ -299,7 +299,7 @@ func TestCreateVolumeWithStoragePolicy(t *testing.T) {
 	reqCreate := &csi.CreateVolumeRequest{
 		Name: testVolumeName,
 		CapacityRange: &csi.CapacityRange{
-			RequiredBytes: 1 * block.GbInBytes,
+			RequiredBytes: 1 * common.GbInBytes,
 		},
 		Parameters:         params,
 		VolumeCapabilities: capabilities,
@@ -316,7 +316,7 @@ func TestCreateVolumeWithStoragePolicy(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	profileId, err := pc.ProfileIDByName(ctx, params[block.AttributeStoragePolicyName])
+	profileId, err := pc.ProfileIDByName(ctx, params[common.AttributeStoragePolicyName])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -389,7 +389,7 @@ func TestCompleteControllerFlow(t *testing.T) {
 	// Create
 	params := make(map[string]string, 0)
 	if v := os.Getenv("VSPHERE_DATASTORE_URL"); v != "" {
-		params[block.AttributeDatastoreURL] = v
+		params[common.AttributeDatastoreURL] = v
 	}
 	capabilities := []*csi.VolumeCapability{
 		{
@@ -402,7 +402,7 @@ func TestCompleteControllerFlow(t *testing.T) {
 	reqCreate := &csi.CreateVolumeRequest{
 		Name: testVolumeName,
 		CapacityRange: &csi.CapacityRange{
-			RequiredBytes: 1 * block.GbInBytes,
+			RequiredBytes: 1 * common.GbInBytes,
 		},
 		Parameters:         params,
 		VolumeCapabilities: capabilities,
@@ -468,7 +468,7 @@ func TestCompleteControllerFlow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	diskUUID := respControllerPublishVolume.PublishContext[block.AttributeFirstClassDiskUUID]
+	diskUUID := respControllerPublishVolume.PublishContext[common.AttributeFirstClassDiskUUID]
 	t.Log(fmt.Sprintf("ControllerPublishVolume succeed, diskUUID %s is returned", diskUUID))
 
 	//Detach

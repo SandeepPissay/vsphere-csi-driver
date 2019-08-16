@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package block
+package common
 
 const (
 	// MbInBytes is the number of bytes in one mebibyte.

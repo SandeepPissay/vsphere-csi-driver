@@ -19,6 +19,12 @@ package service
 import (
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"os"
+	"path"
+	"path/filepath"
+	"strings"
+
 	"github.com/akutz/gofsutil"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	csictx "github.com/rexray/gocsi/context"
@@ -26,16 +32,11 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"io/ioutil"
 	"k8s.io/klog"
-	"os"
-	"path"
-	"path/filepath"
 	cnsvsphere "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vsphere"
 	cnsconfig "sigs.k8s.io/vsphere-csi-driver/pkg/common/config"
-	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/block"
+	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/common"
 	csitypes "sigs.k8s.io/vsphere-csi-driver/pkg/csi/types"
-	"strings"
 )
 
 const (
@@ -114,11 +115,11 @@ func (s *service) NodeStageVolume(
 	}
 
 	attributes := req.VolumeContext
-	fsType, _ := attributes[block.AttributeFsType]
+	fsType, _ := attributes[common.AttributeFsType]
 	log.WithField("fsType", fsType).Info("Get fsType from VolumeContext")
 	if fsType == "" {
 		// no fsType is set in VolumeContext, use default "ext4"
-		fsType = block.DefaultFsType
+		fsType = common.DefaultFsType
 		log.WithField("fsType", fsType).Info("fsType is not set in VolumeContext, use default type")
 	}
 	if len(mnts) == 0 {
@@ -837,12 +838,12 @@ func getDiskID(volID string, pubCtx map[string]string) (string, error) {
 	var diskID string
 
 	if controllerType == VanillaK8SControllerType {
-		if _, ok := pubCtx[block.AttributeFirstClassDiskUUID]; !ok {
+		if _, ok := pubCtx[common.AttributeFirstClassDiskUUID]; !ok {
 			return "", status.Errorf(codes.InvalidArgument,
 				"Attribute: %s required in publish context",
-				block.AttributeFirstClassDiskUUID)
+				common.AttributeFirstClassDiskUUID)
 		}
-		diskID = pubCtx[block.AttributeFirstClassDiskUUID]
+		diskID = pubCtx[common.AttributeFirstClassDiskUUID]
 	} else {
 		diskID = volID
 	}

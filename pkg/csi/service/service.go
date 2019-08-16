@@ -18,11 +18,12 @@ package service
 
 import (
 	"context"
+
 	"k8s.io/klog"
 
-	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/block/vanilla"
-	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/block/wcp"
-	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/block/wcpguest"
+	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/vanilla"
+	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/wcp"
+	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/wcpguest"
 
 	"net"
 	"os"

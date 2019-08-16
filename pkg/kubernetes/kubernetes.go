@@ -18,7 +18,7 @@ package kubernetes
 
 import (
 	"k8s.io/klog"
-	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/block"
+	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/common"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientset "k8s.io/client-go/kubernetes"
@@ -64,7 +64,7 @@ func GetNodeVMUUID(k8sclient clientset.Interface, nodeName string) (string, erro
 		klog.Errorf("Failed to get kubernetes node with the name: %q. Err: %v", nodeName, err)
 		return "", err
 	}
-	k8sNodeUUID := block.GetUUIDFromProviderID(node.Spec.ProviderID)
+	k8sNodeUUID := common.GetUUIDFromProviderID(node.Spec.ProviderID)
 	klog.V(2).Infof("Retrieved node UUID: %q for the node: %q", k8sNodeUUID, nodeName)
 	return k8sNodeUUID, nil
 }
