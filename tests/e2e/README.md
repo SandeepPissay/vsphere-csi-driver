@@ -35,6 +35,7 @@ $ export E2E_TEST_CONF_FILE="/path/to/e2eTest.conf"
 $ export K8S_VANILLA_ENVIRONMENT=true
 $ export SHARED_VSPHERE_DATASTORE_URL="ds:///vmfs/volumes/5cf05d97-4aac6e02-2940-02003e89d50e/"
 $ export NONSHARED_VSPHERE_DATASTORE_URL="ds:///vmfs/volumes/5cf05d98-b2c43515-d903-02003e89d50e/"
+$ export DESTINATION_VSPHERE_DATASTORE_URL="ds:///vmfs/volumes/5ad05d98-c2d43415-a903-12003e89d50e/"
 $ export STORAGE_POLICY_FOR_SHARED_DATASTORES="vSAN Default Storage Policy"
 $ export STORAGE_POLICY_FOR_NONSHARED_DATASTORES="LocalDatastoresPolicy"
 $ export TOPOLOGY_WITH_SHARED_DATASTORE="<region-1-shared-datastore>:<zone-1-with-shared-datastore>"
