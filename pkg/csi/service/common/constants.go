@@ -45,6 +45,10 @@ const (
 	// For Example: FsType: "ext4"
 	AttributeFsType = "fstype"
 
+	// AttributeAffineToHost represents the ESX host moid to which this PV should be affinitized
+	// For Example: AffineToHost: "host-25"
+	AttributeAffineToHost = "affinetohost"
+
 	// DefaultFsType represents the default filesystem type which will be used to format the volume
 	// during mount if user does not specify the filesystem type in the Storage Class
 	DefaultFsType = "ext4"
@@ -70,4 +74,13 @@ const (
 	// MinSupportedVCenterMajor is the minimum, major version of vCenter
 	// on which CNS is supported.
 	MinSupportedVCenterPatch int = 3
+
+	// VsanAffinityKey is the profile param key to indicate which node the FCD should be affinitized to.
+	VsanAffinityKey string = "VSAN/affinity/affinity"
+
+	// VsanAffinityMandatory is the profile param key to turn on affinity of the volume to a specific ESX host.
+	VsanAffinityMandatory string = "VSAN/affinityMandatory/affinityMandatory"
+
+	// VsanMigrateForDecom is the profile param key to set the migrate mode for the volume.
+	VsanMigrateForDecom string = "VSAN/migrateForDecom/migrateForDecom"
 )

@@ -266,6 +266,7 @@ unit unit-test:
 build-unit-tests:
 	$(foreach pkg,$(PKGS_WITH_TESTS),go test $(TEST_FLAGS) -c $(pkg); )
 
+INTEGRATION_TEST_PKGS ?= ./pkg/syncer ./pkg/csi/service/wcp
 .PHONY: integration-unit-test
 integration-unit-test:
 ifndef VSPHERE_VCENTER
@@ -284,15 +285,17 @@ ifndef VSPHERE_DATASTORE_URL
 	$(error Requires VSPHERE_DATASTORE_URL from a deployed testbed to run integration-unit-test)
 endif
 ifndef VSPHERE_K8S_NODE
-	$(error Requires VSPHERE_K8S_NODE from a deployed testbed to run integration-unit-test)
+	$(warning VSPHERE_K8S_NODE not specified. Vanilla tests will be skipped.)
+else
+	$(eval INTEGRATION_TEST_PKGS += ./pkg/csi/service/vanilla)
 endif
 ifndef KUBECONFIG
-	$(error Requires KUBECONFIG from a deployed testbed to run integration-unit-test)
+	$(warning KUBECONFIG not specified. Vanilla tests will be skipped.)
 endif
 ifndef VSPHERE_INSECURE
 	$(error Requires VSPHERE_INSECURE from a deployed testbed to run integration-unit-test)
 endif
-	    go test $(TEST_FLAGS) -tags=integration-unit ./pkg/syncer ./pkg/csi/service/vanilla ./pkg/csi/service/wcp
+	go test $(TEST_FLAGS) -tags=integration-unit $(INTEGRATION_TEST_PKGS)
 
 # The default test target.
 .PHONY: test build-tests
