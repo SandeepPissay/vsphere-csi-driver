@@ -17,10 +17,10 @@ package volume
 import (
 	"context"
 	"errors"
-	"github.com/vmware/govmomi/object"
-	vimtypes "github.com/vmware/govmomi/vim25/types"
+	cnstypes "gitlab.eng.vmware.com/hatchway/govmomi/cns/types"
+	"gitlab.eng.vmware.com/hatchway/govmomi/object"
+	vimtypes "gitlab.eng.vmware.com/hatchway/govmomi/vim25/types"
 	"k8s.io/klog"
-	cnstypes "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vmomi/types"
 	cnsvsphere "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vsphere"
 )
 

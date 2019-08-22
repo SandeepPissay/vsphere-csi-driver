@@ -26,14 +26,14 @@ import (
 
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
-	"github.com/vmware/govmomi/find"
-	"github.com/vmware/govmomi/object"
+	"gitlab.eng.vmware.com/hatchway/govmomi/find"
+	"gitlab.eng.vmware.com/hatchway/govmomi/object"
 	v1 "k8s.io/api/core/v1"
 
+	cnstypes "gitlab.eng.vmware.com/hatchway/govmomi/cns/types"
 	storagev1 "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
-	cnstypes "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vmomi/types"
 
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/kubernetes/test/e2e/framework"

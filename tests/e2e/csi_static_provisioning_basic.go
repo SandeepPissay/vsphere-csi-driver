@@ -19,8 +19,8 @@ package e2e
 import (
 	"context"
 	"fmt"
-	"github.com/vmware/govmomi/find"
-	"github.com/vmware/govmomi/object"
+	"gitlab.eng.vmware.com/hatchway/govmomi/find"
+	"gitlab.eng.vmware.com/hatchway/govmomi/object"
 	"os"
 	"path/filepath"
 	"strconv"

@@ -19,22 +19,23 @@ import (
 	"crypto/tls"
 	"encoding/pem"
 	"fmt"
+	"gitlab.eng.vmware.com/hatchway/govmomi/cns"
 	"net"
 	neturl "net/url"
 	"strconv"
 	"sync"
 
 	csictx "github.com/rexray/gocsi/context"
-	"github.com/vmware/govmomi"
-	"github.com/vmware/govmomi/find"
-	"github.com/vmware/govmomi/object"
-	"github.com/vmware/govmomi/pbm"
-	"github.com/vmware/govmomi/session"
-	"github.com/vmware/govmomi/sts"
-	"github.com/vmware/govmomi/vim25"
-	"github.com/vmware/govmomi/vim25/mo"
-	"github.com/vmware/govmomi/vim25/soap"
-	"github.com/vmware/govmomi/vim25/types"
+	"gitlab.eng.vmware.com/hatchway/govmomi"
+	"gitlab.eng.vmware.com/hatchway/govmomi/find"
+	"gitlab.eng.vmware.com/hatchway/govmomi/object"
+	"gitlab.eng.vmware.com/hatchway/govmomi/pbm"
+	"gitlab.eng.vmware.com/hatchway/govmomi/session"
+	"gitlab.eng.vmware.com/hatchway/govmomi/sts"
+	"gitlab.eng.vmware.com/hatchway/govmomi/vim25"
+	"gitlab.eng.vmware.com/hatchway/govmomi/vim25/mo"
+	"gitlab.eng.vmware.com/hatchway/govmomi/vim25/soap"
+	"gitlab.eng.vmware.com/hatchway/govmomi/vim25/types"
 	"k8s.io/klog"
 	cnsconfig "sigs.k8s.io/vsphere-csi-driver/pkg/common/config"
 )
@@ -55,7 +56,7 @@ type VirtualCenter struct {
 	// PbmClient represents the govmomi PBM Client instance.
 	PbmClient *pbm.Client
 	// CnsClient represents the CNS client instance.
-	CnsClient       *CNSClient
+	CnsClient       *cns.Client
 	credentialsLock sync.Mutex
 }
 

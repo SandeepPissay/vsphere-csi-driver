@@ -8,12 +8,13 @@ import (
 
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
-	"github.com/vmware/govmomi/find"
-	"github.com/vmware/govmomi/object"
-	"github.com/vmware/govmomi/property"
-	"github.com/vmware/govmomi/vim25/mo"
+	"gitlab.eng.vmware.com/hatchway/govmomi/find"
+	"gitlab.eng.vmware.com/hatchway/govmomi/object"
+	"gitlab.eng.vmware.com/hatchway/govmomi/property"
+	"gitlab.eng.vmware.com/hatchway/govmomi/vim25/mo"
 
-	vim25types "github.com/vmware/govmomi/vim25/types"
+	cnstypes "gitlab.eng.vmware.com/hatchway/govmomi/cns/types"
+	vim25types "gitlab.eng.vmware.com/hatchway/govmomi/vim25/types"
 	appsv1 "k8s.io/api/apps/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -21,12 +22,11 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/kubernetes/test/e2e/manifest"
-	cnstypes "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vmomi/types"
 	csitypes "sigs.k8s.io/vsphere-csi-driver/pkg/csi/types"
 	"time"
 
 	"errors"
-	"github.com/vmware/govmomi/vim25/types"
+	"gitlab.eng.vmware.com/hatchway/govmomi/vim25/types"
 	v1 "k8s.io/api/core/v1"
 )
 

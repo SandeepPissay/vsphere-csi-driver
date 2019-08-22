@@ -16,7 +16,7 @@ package vsphere
 
 import (
 	"context"
-	"github.com/vmware/govmomi/pbm"
+	"gitlab.eng.vmware.com/hatchway/govmomi/pbm"
 	"k8s.io/klog"
 )
 

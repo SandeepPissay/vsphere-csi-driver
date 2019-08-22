@@ -21,10 +21,10 @@ import (
 	"fmt"
 
 	"github.com/davecgh/go-spew/spew"
-	vim25types "github.com/vmware/govmomi/vim25/types"
+	cnstypes "gitlab.eng.vmware.com/hatchway/govmomi/cns/types"
+	vim25types "gitlab.eng.vmware.com/hatchway/govmomi/vim25/types"
 	"golang.org/x/net/context"
 	"k8s.io/klog"
-	cnstypes "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vmomi/types"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vsphere"
 )
 

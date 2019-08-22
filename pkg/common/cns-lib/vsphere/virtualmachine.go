@@ -18,14 +18,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/vmware/govmomi/vapi/rest"
-	"github.com/vmware/govmomi/vapi/tags"
-	"github.com/vmware/govmomi/vim25/mo"
+	"gitlab.eng.vmware.com/hatchway/govmomi/vapi/rest"
+	"gitlab.eng.vmware.com/hatchway/govmomi/vapi/tags"
+	"gitlab.eng.vmware.com/hatchway/govmomi/vim25/mo"
 	"net/url"
 	"sync"
 
-	"github.com/vmware/govmomi/object"
-	"github.com/vmware/govmomi/vim25/types"
+	"gitlab.eng.vmware.com/hatchway/govmomi/object"
+	"gitlab.eng.vmware.com/hatchway/govmomi/vim25/types"
 	"k8s.io/klog"
 )
 

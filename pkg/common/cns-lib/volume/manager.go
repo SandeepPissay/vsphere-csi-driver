@@ -18,8 +18,8 @@ import (
 	"context"
 	"errors"
 	"github.com/davecgh/go-spew/spew"
+	cnstypes "gitlab.eng.vmware.com/hatchway/govmomi/cns/types"
 	"k8s.io/klog"
-	cnstypes "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vmomi/types"
 	cnsvsphere "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vsphere"
 	"sync"
 )
