@@ -1,13 +1,10 @@
-kind: StatefulSet
+kind: Deployment
 apiVersion: apps/v1
 metadata:
   name: vsphere-csi-controller
   namespace: kube-system
 spec:
-  serviceName: vsphere-csi-controller
   replicas: 1
-  updateStrategy:
-    type: "RollingUpdate"
   selector:
     matchLabels:
       app: vsphere-csi-controller
@@ -29,9 +26,11 @@ spec:
         - name: csi-attacher
           image: quay.io/k8scsi/csi-attacher:v1.1.1
           args:
-            - "--v=4"
+            - "--v=5"
             - "--timeout=60s"
             - "--csi-address=$(ADDRESS)"
+            - "--leader-election"
+            - "--leader-election-type=leases"
           env:
             - name: ADDRESS
               value: /csi/csi.sock
@@ -39,7 +38,7 @@ spec:
             - mountPath: /csi
               name: socket-dir
         - name: vsphere-csi-controller
-          image: cloudnativestorage/vsphere-block-csi-driver:latest
+          image: <your docker registry>/vsphere-block-csi-driver:latest
           lifecycle:
             preStop:
               exec:
@@ -71,9 +70,10 @@ spec:
             - mountPath: /var/lib/csi/sockets/pluginproxy/
               name: socket-dir
         - name: vsphere-syncer
-          image: cloudnativestorage/volume-metadata-syncer:latest
+          image: <your docker registry>/volume-metadata-syncer:latest
           args:
-            - "--v=2"
+            - "--v=5"
+            - "--leader-election"
           imagePullPolicy: "Always"
           env:
             - name: X_CSI_FULL_SYNC_INTERVAL_MINUTES
@@ -87,11 +87,13 @@ spec:
         - name: csi-provisioner
           image: quay.io/k8scsi/csi-provisioner:v1.2.1
           args:
-            - "--v=4"
+            - "--v=5"
             - "--timeout=60s"
             - "--csi-address=$(ADDRESS)"
             - "--feature-gates=Topology=true"
             - "--strict-topology"
+            - "--enable-leader-election"
+            - "--leader-election-type=leases"
           env:
             - name: ADDRESS
               value: /csi/csi.sock
