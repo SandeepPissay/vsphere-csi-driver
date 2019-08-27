@@ -43,6 +43,7 @@ const (
 	pollTimeoutShort                           = 1 * time.Minute / 2
 	scParamStoragePolicyID                     = "StoragePolicyId"
 	envK8SVanillaTestSetup                     = "K8S_VANILLA_ENVIRONMENT"
+	envSupervisorClusterNamespace              = "SVC_NAMESPACE"
 	envPandoraSyncWaitTime                     = "PANDORA_SYNC_WAIT_TIME"
 	envFullSyncWaitTime                        = "FULL_SYNC_WAIT_TIME"
 	defaultPandoraSyncWaitTime                 = 90
@@ -63,6 +64,8 @@ const (
 	syncerStatefulsetName                      = "vsphere-csi-metadata-syncer"
 	rqStorageType                              = ".storageclass.storage.k8s.io/requests.storage"
 	rqLimit                                    = "10Gi"
+	vmUUIDLabel                                = "vmware-system-vm-uuid"
+	quotaName                                  = "cns-test-quota"
 )
 
 // GetAndExpectStringEnvVar parses a string from env variable

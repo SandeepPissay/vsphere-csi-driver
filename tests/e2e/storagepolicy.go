@@ -17,8 +17,10 @@ limitations under the License.
 package e2e
 
 import (
+	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
@@ -53,13 +55,17 @@ var _ = ginkgo.Describe("[csi-block-e2e] Storage Policy Based Volume Provisionin
 	)
 	ginkgo.BeforeEach(func() {
 		client = f.ClientSet
-		namespace = f.Namespace.Name
+		isK8SVanillaTestSetup = GetAndExpectBoolEnvVar(envK8SVanillaTestSetup)
+		if isK8SVanillaTestSetup {
+			namespace = f.Namespace.Name
+		} else {
+			namespace = GetAndExpectStringEnvVar(envSupervisorClusterNamespace)
+		}
 		bootstrap()
 		nodeList := framework.GetReadySchedulableNodesOrDie(f.ClientSet)
 		if !(len(nodeList.Items) > 0) {
 			framework.Failf("Unable to find ready and schedulable Node")
 		}
-		isK8SVanillaTestSetup = GetAndExpectBoolEnvVar(envK8SVanillaTestSetup)
 	})
 
 	ginkgo.It("[csi-common-e2e] Verify dynamic volume provisioning works when storage policy specified in the storageclass is compliant for shared datastores", func() {
@@ -148,24 +154,50 @@ func verifyStoragePolicyBasedVolumeProvisioning(f *framework.Framework, client c
 
 	ginkgo.By("Verifying if volume is provisioned using specified storage policy")
 	pv := getPvFromClaim(client, pvclaim.Namespace, pvclaim.Name)
-	ok, err := e2eVSphere.VerifySpbmPolicyOfVolume(pv.Spec.CSI.VolumeHandle, storagePolicyName)
-	gomega.Expect(ok).To(gomega.BeTrue(), fmt.Sprintf("storage policy verification failed"))
+	volumeID := pv.Spec.CSI.VolumeHandle
+	storagePolicyExists, err := e2eVSphere.VerifySpbmPolicyOfVolume(volumeID, storagePolicyName)
+	gomega.Expect(storagePolicyExists).To(gomega.BeTrue(), fmt.Sprintf("storage policy verification failed"))
 
 	ginkgo.By("Creating pod to attach PV to the node")
 	pod, err := framework.CreatePod(client, namespace, nil, []*v1.PersistentVolumeClaim{pvclaim}, false, "")
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
-	ginkgo.By("Verify volume is attached to the node")
-	isDiskAttached, err := e2eVSphere.isVolumeAttachedToNode(client, pv.Spec.CSI.VolumeHandle, pod.Spec.NodeName)
+	var vmUUID string
+	var exists bool
+	nodeName := pod.Spec.NodeName
+	ginkgo.By(fmt.Sprintf("Verify volume: %s is attached to the node: %s", volumeID, nodeName))
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if isK8SVanillaTestSetup {
+		vmUUID = getNodeUUID(client, nodeName)
+	} else {
+		annotations := pod.Annotations
+		vmUUID, exists = annotations[vmUUIDLabel]
+		gomega.Expect(exists).To(gomega.BeTrue(), fmt.Sprintf("Pod doesn't have %s annotation", vmUUIDLabel))
+		_, err := e2eVSphere.getVMByUUID(ctx, vmUUID)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+	}
+	isDiskAttached, err := e2eVSphere.isVolumeAttachedToVM(client, volumeID, vmUUID)
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	gomega.Expect(isDiskAttached).To(gomega.BeTrue(), fmt.Sprintf("Volume is not attached to the node"))
 
 	ginkgo.By("Deleting the pod")
 	framework.DeletePodWithWait(f, client, pod)
-
-	ginkgo.By("Verify volume is detached from the node")
-	isDiskDetached, err := e2eVSphere.waitForVolumeDetachedFromNode(client, pv.Spec.CSI.VolumeHandle, pod.Spec.NodeName)
-	gomega.Expect(isDiskDetached).To(gomega.BeTrue(), fmt.Sprintf("Volume %q is not detached from the node %q", pv.Spec.CSI.VolumeHandle, pod.Spec.NodeName))
+	if isK8SVanillaTestSetup {
+		ginkgo.By(fmt.Sprintf("Verify volume: %s is detached to the node: %s", volumeID, nodeName))
+		isDiskDetached, err := e2eVSphere.waitForVolumeDetachedFromNode(client, volumeID, nodeName)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+		gomega.Expect(isDiskDetached).To(gomega.BeTrue(), fmt.Sprintf("Volume %q is not detached from the node %q", volumeID, nodeName))
+	} else {
+		ginkgo.By("Wait for 2 minutes for the pod to get terminated successfully")
+		time.Sleep(time.Duration(60) * time.Second)
+		ginkgo.By(fmt.Sprintf("Verify volume: %s is detached from PodVM with vmUUID: %s", volumeID, nodeName))
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		_, err := e2eVSphere.getVMByUUID(ctx, vmUUID)
+		gomega.Expect(err).To(gomega.HaveOccurred(), fmt.Sprintf("PodVM with vmUUID: %s still exists. So volume: %s is not detached from the PodVM", vmUUID, nodeName))
+		deleteResourceQuota(client, namespace)
+	}
 }
 
 // invokeInvalidPolicyTestNeg helps invokes storage policy related negative e2e tests

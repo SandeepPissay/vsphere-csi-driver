@@ -18,15 +18,16 @@ package e2e
 
 import (
 	"fmt"
+	"strings"
+	"time"
+
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/kubernetes/test/e2e/framework"
-	"strings"
-	"time"
 )
 
 var _ = ginkgo.Describe("[csi-block-e2e-zone] Basic-Topology-Aware-Provisioning", func() {
@@ -103,8 +104,9 @@ var _ = ginkgo.Describe("[csi-block-e2e-zone] Basic-Topology-Aware-Provisioning"
 		pod, err := framework.CreatePod(client, namespace, nil, []*v1.PersistentVolumeClaim{pvclaim}, false, "")
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
-		ginkgo.By("Verify volume is attached to the node")
-		isDiskAttached, err := e2eVSphere.isVolumeAttachedToNode(client, pv.Spec.CSI.VolumeHandle, pod.Spec.NodeName)
+		ginkgo.By(fmt.Sprintf("Verify volume:%s is attached to the node: %s", pv.Spec.CSI.VolumeHandle, pod.Spec.NodeName))
+		vmUUID := getNodeUUID(client, pod.Spec.NodeName)
+		isDiskAttached, err := e2eVSphere.isVolumeAttachedToVM(client, pv.Spec.CSI.VolumeHandle, vmUUID)
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		gomega.Expect(isDiskAttached).To(gomega.BeTrue(), fmt.Sprintf("Volume is not attached to the node"))
 
