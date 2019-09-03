@@ -23,6 +23,10 @@ const (
 	// GbInBytes is the number of bytes in one gibibyte.
 	GbInBytes = int64(1024 * 1024 * 1024)
 
+	// DefaultGbDiskSize is the default disk size in gibibytes.
+	// TODO: will make the DefaultGbDiskSize configurable in the future
+	DefaultGbDiskSize = int64(10)
+
 	// DiskTypeString is the value for the PersistentVolume's attribute "type"
 	DiskTypeString = "vSphere CNS Block Volume"
 
@@ -40,6 +44,10 @@ const (
 	// AttributeStoragePolicyID represents Storage Policy Id in the Storage Classs
 	// For Example: StoragePolicyId: "251bce41-cb24-41df-b46b-7c75aed3c4ee"
 	AttributeStoragePolicyID = "storagepolicyid"
+
+	// AttributeSupervisorStorageClas represents name of the Storage Class
+	// For example: StorageClassName: "silver"
+	AttributeSupervisorStorageClass = "svstorageclass"
 
 	// AttributeFsType represents filesystem type in the Storage Classs
 	// For Example: FsType: "ext4"
