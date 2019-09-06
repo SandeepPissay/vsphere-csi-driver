@@ -27,9 +27,9 @@ import (
 
 // version and namespace constants for task client
 const (
-	// ClientVersion "6.9.0" is mapped to 'vsan.version.version11'
+	// ClientVersion "7.0" is mapped to 'vsan.version.version13'
 	// This need to be changed if later VMODL version is bumped
-	taskClientVersion   = "6.9.0"
+	taskClientVersion   = "7.0"
 	taskClientNamespace = "urn:vsan"
 )
 

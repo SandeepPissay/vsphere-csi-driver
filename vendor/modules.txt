@@ -177,13 +177,13 @@ github.com/spf13/pflag
 # github.com/stretchr/testify v1.3.0
 github.com/stretchr/testify/require
 github.com/stretchr/testify/assert
-# gitlab.eng.vmware.com/hatchway/govmomi v0.0.0-20190822195948-d02eb439cf16
+# gitlab.eng.vmware.com/hatchway/govmomi v0.0.0-20190906183155-de093f2d06e9
+gitlab.eng.vmware.com/hatchway/govmomi/cns
 gitlab.eng.vmware.com/hatchway/govmomi/cns/types
-gitlab.eng.vmware.com/hatchway/govmomi/object
 gitlab.eng.vmware.com/hatchway/govmomi/vim25/types
 gitlab.eng.vmware.com/hatchway/govmomi
-gitlab.eng.vmware.com/hatchway/govmomi/cns
 gitlab.eng.vmware.com/hatchway/govmomi/find
+gitlab.eng.vmware.com/hatchway/govmomi/object
 gitlab.eng.vmware.com/hatchway/govmomi/pbm
 gitlab.eng.vmware.com/hatchway/govmomi/property
 gitlab.eng.vmware.com/hatchway/govmomi/session
@@ -197,10 +197,10 @@ gitlab.eng.vmware.com/hatchway/govmomi/units
 gitlab.eng.vmware.com/hatchway/govmomi/cns/methods
 gitlab.eng.vmware.com/hatchway/govmomi/pbm/types
 gitlab.eng.vmware.com/hatchway/govmomi/vim25/methods
+gitlab.eng.vmware.com/hatchway/govmomi/list
 gitlab.eng.vmware.com/hatchway/govmomi/nfc
 gitlab.eng.vmware.com/hatchway/govmomi/task
 gitlab.eng.vmware.com/hatchway/govmomi/vim25/progress
-gitlab.eng.vmware.com/hatchway/govmomi/list
 gitlab.eng.vmware.com/hatchway/govmomi/pbm/methods
 gitlab.eng.vmware.com/hatchway/govmomi/lookup
 gitlab.eng.vmware.com/hatchway/govmomi/lookup/types
