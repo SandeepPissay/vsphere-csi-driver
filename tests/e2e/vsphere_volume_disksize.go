@@ -52,10 +52,14 @@ var _ = ginkgo.Describe("[csi-block-e2e] [csi-common-e2e] Volume Disk Size ", fu
 	ginkgo.BeforeEach(func() {
 		bootstrap()
 		client = f.ClientSet
-		namespace = f.Namespace.Name
+		isK8SVanillaTestSetup = GetAndExpectBoolEnvVar(envK8SVanillaTestSetup)
+		if isK8SVanillaTestSetup {
+			namespace = f.Namespace.Name
+		} else {
+			namespace = GetAndExpectStringEnvVar(envSupervisorClusterNamespace)
+		}
 		scParameters = make(map[string]string)
 		datastoreURL = GetAndExpectStringEnvVar(envSharedDatastoreURL)
-		isK8SVanillaTestSetup = GetAndExpectBoolEnvVar(envK8SVanillaTestSetup)
 		storagePolicyName = GetAndExpectStringEnvVar(envStoragePolicyNameForSharedDatastores)
 		nodeList := framework.GetReadySchedulableNodesOrDie(f.ClientSet)
 		if !(len(nodeList.Items) > 0) {
@@ -108,5 +112,8 @@ var _ = ginkgo.Describe("[csi-block-e2e] [csi-common-e2e] Volume Disk Size ", fu
 			err = fmt.Errorf("Wrong disk size provisioned ")
 		}
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+		if !isK8SVanillaTestSetup {
+			deleteResourceQuota(client, namespace)
+		}
 	})
 })
