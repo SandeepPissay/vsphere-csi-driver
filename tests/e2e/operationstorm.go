@@ -66,6 +66,7 @@ var _ = utils.SIGDescribe("[csi-block-e2e] [csi-common-e2e] Volume Operations St
 	)
 	ginkgo.BeforeEach(func() {
 		client = f.ClientSet
+		isK8SVanillaTestSetup = GetAndExpectBoolEnvVar(envK8SVanillaTestSetup)
 		if isK8SVanillaTestSetup {
 			namespace = f.Namespace.Name
 		} else {
