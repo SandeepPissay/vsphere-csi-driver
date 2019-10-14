@@ -17,6 +17,6 @@ limitations under the License.
 package types
 
 const (
-	// EnvAPI is the name of the API to use with vSphere
-	EnvControllerType = "X_CSI_CONTROLLER_TYPE"
+	// EnvClusterFlavor is the k8s cluster type on which CSI Driver is being deployed
+	EnvClusterFlavor = "CLUSTER_FLAVOR"
 )
