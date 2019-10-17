@@ -15,6 +15,7 @@
 package node
 
 import (
+	"context"
 	"errors"
 	"sync"
 
@@ -42,8 +43,9 @@ type Manager interface {
 	// virtual machine with the given UUID.
 	DiscoverNode(nodeUUID string) error
 	// GetNode refreshes and returns the VirtualMachine for a registered node
-	// given its UUID.
-	GetNode(nodeUUID string) (*vsphere.VirtualMachine, error)
+	// given its UUID. If datacenter is present, GetNode will search within this
+	// datacenter given its UUID. If not, it will search in all registered datacenters.
+	GetNode(nodeUUID string, dc *vsphere.Datacenter) (*vsphere.VirtualMachine, error)
 	// GetNodeByName refreshes and returns the VirtualMachine for a registered node
 	// given its name.
 	GetNodeByName(nodeName string) (*vsphere.VirtualMachine, error)
@@ -127,7 +129,7 @@ func (m *defaultManager) GetNodeByName(nodeName string) (*vsphere.VirtualMachine
 		return nil, ErrNodeNotFound
 	}
 	if nodeUUID != nil && nodeUUID.(string) != "" {
-		return m.GetNode(nodeUUID.(string))
+		return m.GetNode(nodeUUID.(string), nil)
 	}
 	klog.V(2).Infof("Empty nodeUUID observed in cache for the node: %q", nodeName)
 	k8snodeUUID, err := k8s.GetNodeVMUUID(m.k8sClient, nodeName)
@@ -136,37 +138,47 @@ func (m *defaultManager) GetNodeByName(nodeName string) (*vsphere.VirtualMachine
 		return nil, err
 	}
 	m.nodeNameToUUID.Store(nodeName, k8snodeUUID)
-	return m.GetNode(k8snodeUUID)
+	return m.GetNode(k8snodeUUID, nil)
 
 }
 
 // GetNode refreshes and returns the VirtualMachine for a registered node
 // given its UUID
-func (m *defaultManager) GetNode(nodeUUID string) (*vsphere.VirtualMachine, error) {
+func (m *defaultManager) GetNode(nodeUUID string, dc *vsphere.Datacenter) (*vsphere.VirtualMachine, error) {
 	vmInf, discovered := m.nodeVMs.Load(nodeUUID)
 	if !discovered {
 		klog.V(2).Infof("Node hasn't been discovered yet with nodeUUID %s", nodeUUID)
+		var vm *vsphere.VirtualMachine
+		var err error
+		if dc != nil {
+			vm, err = dc.GetVirtualMachineByUUID(context.TODO(), nodeUUID, false)
+			if err != nil {
+				klog.Errorf("Failed to find node with nodeUUID %s on datacenter: %+v with err: %v", nodeUUID, dc, err)
+				return nil, err
+			}
+			m.nodeVMs.Store(nodeUUID, vm)
+		} else {
+			if err = m.DiscoverNode(nodeUUID); err != nil {
+				klog.Errorf("Failed to discover node with nodeUUID %s with err: %v", nodeUUID, err)
+				return nil, err
+			}
 
-		if err := m.DiscoverNode(nodeUUID); err != nil {
-			klog.Errorf("Failed to discover node with nodeUUID %s with err: %v", nodeUUID, err)
-			return nil, err
+			vmInf, _ = m.nodeVMs.Load(nodeUUID)
+			vm = vmInf.(*vsphere.VirtualMachine)
 		}
-
-		vmInf, _ = m.nodeVMs.Load(nodeUUID)
-		klog.V(2).Infof("Node was successfully discovered with nodeUUID %s in vm %v", nodeUUID, vmInf)
-
-		return vmInf.(*vsphere.VirtualMachine), nil
+		klog.V(2).Infof("Node was successfully discovered with nodeUUID %s in vm %v", nodeUUID, vm)
+		return vm, nil
 	}
 
 	vm := vmInf.(*vsphere.VirtualMachine)
-	klog.V(1).Infof("Renewing virtual machine %v with nodeUUID %s", vm, nodeUUID)
+	klog.V(1).Infof("Renewing virtual machine %v with nodeUUID %q", vm, nodeUUID)
 
 	if err := vm.Renew(true); err != nil {
-		klog.Errorf("Failed to renew VM %v with nodeUUID %s with err: %v", vm, nodeUUID, err)
+		klog.Errorf("Failed to renew VM %v with nodeUUID %q with err: %v", vm, nodeUUID, err)
 		return nil, err
 	}
 
-	klog.V(1).Infof("VM %v was successfully renewed with nodeUUID %s", vm, nodeUUID)
+	klog.V(4).Infof("VM %v was successfully renewed with nodeUUID %q", vm, nodeUUID)
 	return vm, nil
 }
 
