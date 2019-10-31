@@ -2,9 +2,10 @@ package e2e
 
 import (
 	"fmt"
-	"gopkg.in/gcfg.v1"
 	"io"
 	"os"
+
+	"gopkg.in/gcfg.v1"
 )
 
 // ENV variable to specify path of the E2E test config file
