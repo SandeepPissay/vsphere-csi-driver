@@ -18,7 +18,8 @@ RUN tdnf -y install \
   util-linux \
   e2fsprogs \
   xfsprogs \
-  btrfs-progs
+  btrfs-progs \
+  nfs-utils
 
 RUN tdnf clean all
 
