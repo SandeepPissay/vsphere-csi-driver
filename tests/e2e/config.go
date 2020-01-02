@@ -28,6 +28,8 @@ type e2eTestConfig struct {
 		InsecureFlag bool `gcfg:"insecure-flag"`
 		// Datacenter in which VMs are located.
 		Datacenters string `gcfg:"datacenters"`
+		// Target datastore urls for provisioning file volumes.
+		TargetvSANFileShareDatastoreURLs string `gcfg:"targetvSANFileShareDatastoreURLs"`
 	}
 }
 
