@@ -10,10 +10,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM photon:2.0
+FROM photon:3.0
 
 RUN tdnf -y remove toybox
-
+RUN tdnf -y upgrade
 RUN tdnf -y install \
   util-linux \
   e2fsprogs \
