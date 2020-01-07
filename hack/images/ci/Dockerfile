@@ -3,7 +3,7 @@
 ################################################################################
 # The golang image is used to create the project's module and build caches
 # and is also the image on which this image is based.
-ARG GOLANG_IMAGE=golang:1.12
+ARG GOLANG_IMAGE=golang:1.13
 
 ################################################################################
 ##                            GO MOD CACHE STAGE                              ##
@@ -17,7 +17,16 @@ COPY cmd ./cmd/
 ARG GOOS
 ARG GOARCH
 ENV GOOS=${GOOS:-linux} GOARCH=${GOARCH:-amd64}
+
+ARG SSH_PRIVATE_KEY
+RUN mkdir /root/.ssh/ && \
+    echo "${SSH_PRIVATE_KEY}" > /root/.ssh/id_rsa && \
+    chmod -R 600 /root/.ssh/id_rsa && \
+    ssh-keyscan -t rsa gitlab.eng.vmware.com >> /root/.ssh/known_hosts
+RUN git config --global --add url."git@gitlab.eng.vmware.com:".insteadOf "https://gitlab.eng.vmware.com/"
 RUN go mod download && go mod verify
+RUN rm /root/.ssh/id_rsa && \
+    rm /root/.ssh/known_hosts
 
 ################################################################################
 ##                           GO BUILD CACHE STAGE                             ##
@@ -43,12 +52,6 @@ RUN LDFLAGS=$(cat ldflags.txt) && \
 ################################################################################
 FROM ${GOLANG_IMAGE} as lint
 RUN go get -u golang.org/x/lint/golint
-
-################################################################################
-##                             KUBETEST STAGE                                 ##
-################################################################################
-FROM ${GOLANG_IMAGE} as kubetest
-RUN go get -u k8s.io/test-infra/kubetest
 
 ################################################################################
 ##                               MAIN STAGE                                   ##
@@ -116,11 +119,6 @@ ENV DOCKER_IN_DOCKER_ENABLED=true
 ##                             INSTALL LINT                                   ##
 ################################################################################
 COPY --from=lint /go/bin/golint /usr/local/bin/
-
-################################################################################
-##                           INSTALL KUBETEST                                 ##
-################################################################################
-COPY --from=kubetest /go/bin/kubetest /usr/local/bin/
 
 ################################################################################
 ##                         PRIME GO MOD & BUILD CACHES                        ##
