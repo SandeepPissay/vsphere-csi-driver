@@ -7,6 +7,7 @@ package v1alpha1
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 const (
@@ -29,8 +30,8 @@ type VirtualMachine struct {
 type VirtualMachinePowerState string
 
 const (
-	VirtualMachinePoweredOff = "poweredOff"
-	VirtualMachinePoweredOn  = "poweredOn"
+	VirtualMachinePoweredOff VirtualMachinePowerState = "poweredOff"
+	VirtualMachinePoweredOn  VirtualMachinePowerState = "poweredOn"
 )
 
 type VMStatusPhase string
@@ -56,20 +57,21 @@ type VirtualMachineNetworkInterface struct {
 
 // VirtualMachineSpec defines the desired state of VirtualMachine
 type VirtualMachineSpec struct {
-	ImageName  string               `json:"imageName"`
-	ClassName  string               `json:"className"`
-	PowerState string               `json:"powerState"`
-	Env        corev1.EnvVar        `json:"env,omitempty"`
-	Ports      []VirtualMachinePort `json:"ports,omitempty"`
+	ImageName         string                           `json:"imageName"`
+	ClassName         string                           `json:"className"`
+	PowerState        VirtualMachinePowerState         `json:"powerState"`
+	Ports             []VirtualMachinePort             `json:"ports,omitempty"`
+	VmMetadata        *VirtualMachineMetadata          `json:"vmMetadata,omitempty"`
+	StorageClass      string                           `json:"storageClass,omitempty"`
+	NetworkInterfaces []VirtualMachineNetworkInterface `json:"networkInterfaces,omitempty"`
 	// +optional
-	ResourcePolicyName string                           `json:"resourcePolicyName"`
-	VmMetadata         *VirtualMachineMetadata          `json:"vmMetadata,omitempty"`
-	NetworkInterfaces  []VirtualMachineNetworkInterface `json:"networkInterfaces,omitempty"`
-	StorageClass       string                           `json:"storageClass,omitempty"`
+	ResourcePolicyName string `json:"resourcePolicyName"`
 	// +optional
 	// +patchMergeKey=name
 	// +patchStrategy=merge
 	Volumes []VirtualMachineVolumes `json:"volumes,omitempty" patchStrategy:"merge" patchMergeKey:"name"`
+	// +optional
+	ReadinessProbe *Probe `json:"readinessProbe,omitempty"`
 }
 
 // VirtualMachineMetadata defines the guest customization
@@ -119,6 +121,29 @@ type VirtualMachineVolumeStatus struct {
 
 	// Error represents the last error seen when attaching or detaching a volume and will be empty if attachment succeeds
 	Error string `json:"error"`
+}
+
+// Probe describes a health check to be performed against a VM to determine whether it is
+// alive or ready to receive traffic.
+type Probe struct {
+	// TCPSocket specifies an action involving a TCP port.
+	// +optional
+	TCPSocket *TCPSocketAction `json:"tcpSocket,omitempty"`
+	// Number of seconds after which the probe times out.
+	// Defaults to 1 second. Minimum value is 1.
+	// +optional
+	TimeoutSeconds int32 `json:"timeoutSeconds,omitempty"`
+}
+
+// TCPSocketAction describes an action based on opening a socket
+type TCPSocketAction struct {
+	// Number or name of the port to access on the VirtualMachine.
+	// Number must be in the range 1 to 65535.
+	// Name must be an IANA_SVC_NAME.
+	Port intstr.IntOrString `json:"port"`
+	// Optional: Host name to connect to, defaults to the VirtualMachine IP.
+	// +optional
+	Host string `json:"host,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

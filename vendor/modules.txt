@@ -177,7 +177,7 @@ github.com/spf13/pflag
 # github.com/stretchr/testify v1.3.0
 github.com/stretchr/testify/require
 github.com/stretchr/testify/assert
-# gitlab.eng.vmware.com/core-build/vm-operator-client v0.0.0-20191016202444-5037bc71c2f8
+# gitlab.eng.vmware.com/core-build/vm-operator-client v0.0.0-20191227172040-5bbd4d3b4e69
 gitlab.eng.vmware.com/core-build/vm-operator-client/pkg/apis/vmoperator/v1alpha1
 gitlab.eng.vmware.com/core-build/vm-operator-client/pkg/client/clientset/versioned/typed/vmoperator/v1alpha1
 gitlab.eng.vmware.com/core-build/vm-operator-client/pkg/client/clientset/versioned/scheme
@@ -250,7 +250,7 @@ golang.org/x/net/html/atom
 # golang.org/x/oauth2 v0.0.0-20190402181905-9f3314589c9a
 golang.org/x/oauth2
 golang.org/x/oauth2/internal
-# golang.org/x/sys v0.0.0-20190405154228-4b34438f7a67
+# golang.org/x/sys v0.0.0-20200107162124-548cf772de50
 golang.org/x/sys/unix
 golang.org/x/sys/windows
 golang.org/x/sys/cpu
