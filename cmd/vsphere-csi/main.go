@@ -18,8 +18,6 @@ package main
 
 import (
 	"context"
-	"flag"
-	"k8s.io/klog"
 
 	"github.com/rexray/gocsi"
 
@@ -29,8 +27,6 @@ import (
 
 // main is ignored when this package is built as a go plug-in.
 func main() {
-	klog.InitFlags(nil)
-	flag.Parse()
 	gocsi.Run(
 		context.Background(),
 		csitypes.Name,
