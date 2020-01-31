@@ -50,6 +50,8 @@ github.com/emicklei/go-restful/log
 github.com/evanphx/json-patch
 # github.com/fatih/camelcase v1.0.0
 github.com/fatih/camelcase
+# github.com/fsnotify/fsnotify v1.4.7
+github.com/fsnotify/fsnotify
 # github.com/ghodss/yaml v1.0.0
 github.com/ghodss/yaml
 # github.com/go-logr/logr v0.1.0
@@ -197,7 +199,7 @@ github.com/stretchr/testify/require
 gitlab.eng.vmware.com/core-build/vm-operator-client/pkg/apis/vmoperator/v1alpha1
 gitlab.eng.vmware.com/core-build/vm-operator-client/pkg/client/clientset/versioned/scheme
 gitlab.eng.vmware.com/core-build/vm-operator-client/pkg/client/clientset/versioned/typed/vmoperator/v1alpha1
-# gitlab.eng.vmware.com/hatchway/govmomi v0.0.0-20191220191310-2ac7ed31c085
+# gitlab.eng.vmware.com/hatchway/govmomi v0.0.0-20200130212314-d702571e701c
 gitlab.eng.vmware.com/hatchway/govmomi
 gitlab.eng.vmware.com/hatchway/govmomi/cns
 gitlab.eng.vmware.com/hatchway/govmomi/cns/methods
@@ -331,7 +333,7 @@ golang.org/x/xerrors
 golang.org/x/xerrors/internal
 # gomodules.xyz/jsonpatch/v2 v2.0.1
 gomodules.xyz/jsonpatch/v2
-# google.golang.org/appengine v1.4.0
+# google.golang.org/appengine v1.6.5
 google.golang.org/appengine/internal
 google.golang.org/appengine/internal/base
 google.golang.org/appengine/internal/datastore
