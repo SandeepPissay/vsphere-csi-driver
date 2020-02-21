@@ -101,6 +101,11 @@ GLOBAL OPTIONS
 
         Enabling this option sets X_CSI_REQ_ID_INJECTION=true.
 
+    X_CSI_LOG_DISABLE_VOL_CTX
+        A flag that disables the logging of the VolumeContext field.
+
+        Only takes effect if Request or Reply logging is enabled.
+
     X_CSI_REQ_ID_INJECTION
         A flag that enables request ID injection. The ID is parsed from
         the incoming request's metadata with a key of "csi.requestid".
@@ -120,29 +125,28 @@ GLOBAL OPTIONS
         Invalid responses are marshalled into a gRPC error with a code
         of "Internal."
 
+    X_CSI_SPEC_DISABLE_LEN_CHECK
+        A flag that disables validation of CSI message field lengths.
+
     X_CSI_REQUIRE_STAGING_TARGET_PATH
         A flag that enables treating the following fields as required:
             * NodePublishVolumeRequest.StagingTargetPath
 
-    X_CSI_REQUIRE_NODE_ID
+    X_CSI_REQUIRE_VOL_CONTEXT
         A flag that enables treating the following fields as required:
-            * ControllerPublishVolumeRequest.NodeId
-            * NodeGetIdResponse.NodeId
+            * ControllerPublishVolumeRequest.VolumeContext
+            * ValidateVolumeCapabilitiesRequest.VolumeContext
+            * ValidateVolumeCapabilitiesResponse.VolumeContext
+            * NodeStageVolumeRequest.VolumeContext
+            * NodePublishVolumeRequest.VolumeContext
 
         Enabling this option sets X_CSI_SPEC_REQ_VALIDATION=true.
 
-    X_CSI_REQUIRE_PUB_VOL_INFO
+    X_CSI_REQUIRE_PUB_CONTEXT
         A flag that enables treating the following fields as required:
-            * ControllerPublishVolumeResponse.PublishVolumeInfo
-            * NodePublishVolumeRequest.PublishVolumeInfo
-
-        Enabling this option sets X_CSI_SPEC_REQ_VALIDATION=true.
-
-    X_CSI_REQUIRE_VOL_ATTRIBS
-        A flag that enables treating the following fields as required:
-            * ControllerPublishVolumeRequest.VolumeAttributes
-            * ValidateVolumeCapabilitiesRequest.VolumeAttributes
-            * NodePublishVolumeRequest.VolumeAttributes
+            * ControllerPublishVolumeResponse.PublishContext
+            * NodeStageVolumeRequest.PublishContext
+            * NodePublishVolumeRequest.PublishContext
 
         Enabling this option sets X_CSI_SPEC_REQ_VALIDATION=true.
 

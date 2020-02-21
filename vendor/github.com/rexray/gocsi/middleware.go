@@ -25,12 +25,12 @@ func (sp *StoragePlugin) initInterceptors(ctx context.Context) {
 	var (
 		withReqLogging         = sp.getEnvBool(ctx, EnvVarReqLogging)
 		withRepLogging         = sp.getEnvBool(ctx, EnvVarRepLogging)
+		withDisableLogVolCtx   = sp.getEnvBool(ctx, EnvVarLoggingDisableVolCtx)
 		withSerialVol          = sp.getEnvBool(ctx, EnvVarSerialVolAccess)
 		withSpec               = sp.getEnvBool(ctx, EnvVarSpecValidation)
 		withStgTgtPath         = sp.getEnvBool(ctx, EnvVarRequireStagingTargetPath)
-		withNodeID             = sp.getEnvBool(ctx, EnvVarRequireNodeID)
-		withPubVolInfo         = sp.getEnvBool(ctx, EnvVarRequirePubVolInfo)
-		withVolAttribs         = sp.getEnvBool(ctx, EnvVarRequireVolAttribs)
+		withVolContext         = sp.getEnvBool(ctx, EnvVarRequireVolContext)
+		withPubContext         = sp.getEnvBool(ctx, EnvVarRequirePubContext)
 		withCreds              = sp.getEnvBool(ctx, EnvVarCreds)
 		withCredsNewVol        = sp.getEnvBool(ctx, EnvVarCredsCreateVol)
 		withCredsDelVol        = sp.getEnvBool(ctx, EnvVarCredsDeleteVol)
@@ -38,6 +38,7 @@ func (sp *StoragePlugin) initInterceptors(ctx context.Context) {
 		withCredsCtrlrUnpubVol = sp.getEnvBool(ctx, EnvVarCredsCtrlrUnpubVol)
 		withCredsNodeStgVol    = sp.getEnvBool(ctx, EnvVarCredsNodeStgVol)
 		withCredsNodePubVol    = sp.getEnvBool(ctx, EnvVarCredsNodePubVol)
+		withDisableFieldLen    = sp.getEnvBool(ctx, EnvVarDisableFieldLen)
 	)
 
 	// Enable all cred requirements if the general option is enabled.
@@ -62,11 +63,10 @@ func (sp *StoragePlugin) initInterceptors(ctx context.Context) {
 	if !withSpecReq {
 		withSpecReq = withCreds ||
 			withStgTgtPath ||
-			withNodeID ||
-			withPubVolInfo ||
-			withVolAttribs
-		log.WithField("withSpecRep", withSpecRep).Debug(
-			"init implicit rep validation")
+			withVolContext ||
+			withPubContext
+		log.WithField("withSpecReq", withSpecReq).Debug(
+			"init implicit req validation")
 	}
 
 	// Check to see if spec request or response validation are overridden.
@@ -91,6 +91,11 @@ func (sp *StoragePlugin) initInterceptors(ctx context.Context) {
 			loggingOpts []logging.Option
 			w           = newLogger(log.Debugf)
 		)
+
+		if withDisableLogVolCtx {
+			loggingOpts = append(loggingOpts, logging.WithDisableLogVolumeContext())
+			log.Debug("disabled logging of VolumeContext field")
+		}
 
 		if withReqLogging {
 			loggingOpts = append(loggingOpts, logging.WithRequestLogging(w))
@@ -162,20 +167,20 @@ func (sp *StoragePlugin) initInterceptors(ctx context.Context) {
 			log.Debug("enabled spec validator opt: " +
 				"requires starging target path")
 		}
-		if withNodeID {
+		if withVolContext {
 			specOpts = append(specOpts,
-				specvalidator.WithRequiresNodeID())
-			log.Debug("enabled spec validator opt: requires node ID")
+				specvalidator.WithRequiresVolumeContext())
+			log.Debug("enabled spec validator opt: requires vol context")
 		}
-		if withPubVolInfo {
+		if withPubContext {
 			specOpts = append(specOpts,
-				specvalidator.WithRequiresPublishInfo())
-			log.Debug("enabled spec validator opt: requires pub info")
+				specvalidator.WithRequiresPublishContext())
+			log.Debug("enabled spec validator opt: requires pub context")
 		}
-		if withVolAttribs {
+		if withDisableFieldLen {
 			specOpts = append(specOpts,
-				specvalidator.WithRequiresVolumeAttributes())
-			log.Debug("enabled spec validator opt: requires vol attribs")
+				specvalidator.WithDisableFieldLenCheck())
+			log.Debug("disabled spec validator opt: field length check")
 		}
 		sp.Interceptors = append(sp.Interceptors,
 			specvalidator.NewServerSpecValidator(specOpts...))

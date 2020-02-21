@@ -36,14 +36,26 @@ type FolderSpec struct {
 	Name string `json:"name,omitempty"`
 }
 
+// ClusterModuleSpec defines a ClusterModule in VC.
+type ClusterModuleSpec struct {
+	GroupName string `json:"groupname"`
+}
+
 // VirtualMachineSetResourcePolicySpec defines the desired state of VirtualMachineSetResourcePolicy
 type VirtualMachineSetResourcePolicySpec struct {
-	ResourcePool ResourcePoolSpec `json:"resourcepool,omitempty"`
-	Folder       FolderSpec       `json:"folder,omitempty"`
+	ResourcePool   ResourcePoolSpec    `json:"resourcepool,omitempty"`
+	Folder         FolderSpec          `json:"folder,omitempty"`
+	ClusterModules []ClusterModuleSpec `json:"clustermodules,omitempty"`
+}
+
+type ClusterModuleStatus struct {
+	GroupName  string `json:"groupname"`
+	ModuleUuid string `json:"moduleUUID"`
 }
 
 // VirtualMachineSetResourcePolicyStatus defines the observed state of VirtualMachineSetResourcePolicy
 type VirtualMachineSetResourcePolicyStatus struct {
+	ClusterModules []ClusterModuleStatus `json:"clustermodules"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

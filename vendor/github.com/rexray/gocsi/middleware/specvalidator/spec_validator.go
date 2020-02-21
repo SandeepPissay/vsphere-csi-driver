@@ -25,15 +25,15 @@ type opts struct {
 	reqValidation               bool
 	repValidation               bool
 	requiresStagingTargetPath   bool
-	requiresNodeID              bool
-	requiresPubVolInfo          bool
-	requiresVolAttribs          bool
+	requiresVolContext          bool
+	requiresPubContext          bool
 	requiresCtlrNewVolSecrets   bool
 	requiresCtlrDelVolSecrets   bool
 	requiresCtlrPubVolSecrets   bool
 	requiresCtlrUnpubVolSecrets bool
 	requiresNodeStgVolSecrets   bool
 	requiresNodePubVolSecrets   bool
+	disableFieldLenCheck        bool
 }
 
 // WithRequestValidation is a Option that enables request validation.
@@ -50,15 +50,6 @@ func WithResponseValidation() Option {
 	}
 }
 
-// WithRequiresNodeID is a Option that indicates
-// ControllerPublishVolume requests and NodeGetId responses must
-// contain non-empty node ID data.
-func WithRequiresNodeID() Option {
-	return func(o *opts) {
-		o.requiresNodeID = true
-	}
-}
-
 // WithRequiresStagingTargetPath is a Option that indicates
 // NodePublishVolume requests must have non-empty StagingTargetPath
 // fields.
@@ -68,21 +59,22 @@ func WithRequiresStagingTargetPath() Option {
 	}
 }
 
-// WithRequiresPublishInfo is a Option that indicates
-// ControllerPublishVolume responses and NodePublishVolume requests must
-// contain non-empty publish volume info data.
-func WithRequiresPublishInfo() Option {
+// WithRequiresVolumeContext is a Option that indicates
+// ControllerPublishVolume requests, ValidateVolumeCapabilities requests,
+// NodeStageVolume requests, and NodePublishVolume requests must contain
+// non-empty publish volume context data.
+func WithRequiresVolumeContext() Option {
 	return func(o *opts) {
-		o.requiresPubVolInfo = true
+		o.requiresVolContext = true
 	}
 }
 
-// WithRequiresVolumeAttributes is a Option that indicates
-// ControllerPublishVolume, ValidateVolumeCapabilities, and NodePublishVolume
-// requests must contain non-empty volume attribute data.
-func WithRequiresVolumeAttributes() Option {
+// WithRequiresPublishContext is a Option that indicates
+// ControllerPublishVolume responses, NodePublishVolume requests, and
+// NodeStageVolume requests must contain non-empty publish volume context data.
+func WithRequiresPublishContext() Option {
 	return func(o *opts) {
-		o.requiresVolAttribs = true
+		o.requiresPubContext = true
 	}
 }
 
@@ -137,6 +129,14 @@ func WithRequiresNodeStageVolumeSecrets() Option {
 func WithRequiresNodePublishVolumeSecrets() Option {
 	return func(o *opts) {
 		o.requiresNodePubVolSecrets = true
+	}
+}
+
+// WithDisableFieldLenCheck is a Option
+// that indicates that the length of fields should not be validated
+func WithDisableFieldLenCheck() Option {
+	return func(o *opts) {
+		o.disableFieldLenCheck = true
 	}
 }
 
@@ -263,14 +263,16 @@ func (s *interceptor) handle(
 type interceptorHasVolumeID interface {
 	GetVolumeId() string
 }
-type interceptorHasNodeID interface {
-	NodeGetId() string
-}
 type interceptorHasUserCredentials interface {
 	GetUserCredentials() map[string]string
 }
-type interceptorHasVolumeAttributes interface {
-	GetVolumeAttributes() map[string]string
+
+type interceptorHasVolumeContext interface {
+	GetVolumeContext() map[string]string
+}
+
+type interceptorHasPublishContext interface {
+	GetPublishContext() map[string]string
 }
 
 func (s *interceptor) validateRequest(
@@ -283,8 +285,10 @@ func (s *interceptor) validateRequest(
 	}
 
 	// Validate field sizes.
-	if err := validateFieldSizes(req); err != nil {
-		return err
+	if !s.opts.disableFieldLenCheck {
+		if err := validateFieldSizes(req); err != nil {
+			return err
+		}
 	}
 
 	// Check to see if the request has a volume ID and if it is set.
@@ -296,25 +300,26 @@ func (s *interceptor) validateRequest(
 		}
 	}
 
-	// Check to see if the request has a node ID and if it is set.
-	// If the node ID is not set then return an error.
-	if s.opts.requiresNodeID {
-		if treq, ok := req.(interceptorHasNodeID); ok {
-			if treq.NodeGetId() == "" {
+	// Check to see if the request has volume context and if they're
+	// required. If the volume context is required by no attributes are
+	// specified then return an error.
+	if s.opts.requiresVolContext {
+		if treq, ok := req.(interceptorHasVolumeContext); ok {
+			if len(treq.GetVolumeContext()) == 0 {
 				return status.Error(
-					codes.InvalidArgument, "required: NodeID")
+					codes.InvalidArgument, "required: VolumeContext")
 			}
 		}
 	}
 
-	// Check to see if the request has volume attributes and if they're
-	// required. If the volume attributes are required by no attributes are
+	// Check to see if the request has publish context and if they're
+	// required. If the publish context is required by no attributes are
 	// specified then return an error.
-	if s.opts.requiresVolAttribs {
-		if treq, ok := req.(interceptorHasVolumeAttributes); ok {
-			if len(treq.GetVolumeAttributes()) == 0 {
+	if s.opts.requiresPubContext {
+		if treq, ok := req.(interceptorHasPublishContext); ok {
+			if len(treq.GetPublishContext()) == 0 {
 				return status.Error(
-					codes.InvalidArgument, "required: VolumeAttributes")
+					codes.InvalidArgument, "required: PublishContext")
 			}
 		}
 	}
@@ -344,6 +349,8 @@ func (s *interceptor) validateRequest(
 		//
 	case *csi.NodeStageVolumeRequest:
 		return s.validateNodeStageVolumeRequest(ctx, *tobj)
+	case *csi.NodeUnstageVolumeRequest:
+		return s.validateNodeUnstageVolumeRequest(ctx, *tobj)
 	case *csi.NodePublishVolumeRequest:
 		return s.validateNodePublishVolumeRequest(ctx, *tobj)
 	case *csi.NodeUnpublishVolumeRequest:
@@ -363,8 +370,10 @@ func (s *interceptor) validateResponse(
 	}
 
 	// Validate the field sizes.
-	if err := validateFieldSizes(rep); err != nil {
-		return err
+	if !s.opts.disableFieldLenCheck {
+		if err := validateFieldSizes(rep); err != nil {
+			return err
+		}
 	}
 
 	switch tobj := rep.(type) {
@@ -407,7 +416,7 @@ func (s *interceptor) validateCreateVolumeRequest(
 	if s.opts.requiresCtlrNewVolSecrets {
 		if len(req.Secrets) == 0 {
 			return status.Error(
-				codes.InvalidArgument, "required: ControllerCreateSecrets")
+				codes.InvalidArgument, "required: Secrets")
 		}
 	}
 
@@ -421,7 +430,7 @@ func (s *interceptor) validateDeleteVolumeRequest(
 	if s.opts.requiresCtlrDelVolSecrets {
 		if len(req.Secrets) == 0 {
 			return status.Error(
-				codes.InvalidArgument, "required: ControllerDeleteSecrets")
+				codes.InvalidArgument, "required: Secrets")
 		}
 	}
 
@@ -435,8 +444,13 @@ func (s *interceptor) validateControllerPublishVolumeRequest(
 	if s.opts.requiresCtlrPubVolSecrets {
 		if len(req.Secrets) == 0 {
 			return status.Error(
-				codes.InvalidArgument, "required: ControllerPublishSecrets")
+				codes.InvalidArgument, "required: Secrets")
 		}
+	}
+
+	if req.NodeId == "" {
+		return status.Error(
+			codes.InvalidArgument, "required: NodeID")
 	}
 
 	return validateVolumeCapabilityArg(req.VolumeCapability, true)
@@ -449,7 +463,7 @@ func (s *interceptor) validateControllerUnpublishVolumeRequest(
 	if s.opts.requiresCtlrUnpubVolSecrets {
 		if len(req.Secrets) == 0 {
 			return status.Error(
-				codes.InvalidArgument, "required: ControllerUnpublishSecrets")
+				codes.InvalidArgument, "required: Secrets")
 		}
 	}
 
@@ -479,19 +493,26 @@ func (s *interceptor) validateNodeStageVolumeRequest(
 			codes.InvalidArgument, "required: StagingTargetPath")
 	}
 
-	if s.opts.requiresPubVolInfo && len(req.PublishContext) == 0 {
-		return status.Error(
-			codes.InvalidArgument, "required: PublishContext")
-	}
-
 	if s.opts.requiresNodeStgVolSecrets {
 		if len(req.Secrets) == 0 {
 			return status.Error(
-				codes.InvalidArgument, "required: NodeStageSecrets")
+				codes.InvalidArgument, "required: Secrets")
 		}
 	}
 
 	return validateVolumeCapabilityArg(req.VolumeCapability, true)
+}
+
+func (s *interceptor) validateNodeUnstageVolumeRequest(
+	ctx context.Context,
+	req csi.NodeUnstageVolumeRequest) error {
+
+	if req.StagingTargetPath == "" {
+		return status.Error(
+			codes.InvalidArgument, "required: StagingTargetPath")
+	}
+
+	return nil
 }
 
 func (s *interceptor) validateNodePublishVolumeRequest(
@@ -508,15 +529,10 @@ func (s *interceptor) validateNodePublishVolumeRequest(
 			codes.InvalidArgument, "required: TargetPath")
 	}
 
-	if s.opts.requiresPubVolInfo && len(req.PublishContext) == 0 {
-		return status.Error(
-			codes.InvalidArgument, "required: PublishContext")
-	}
-
 	if s.opts.requiresNodePubVolSecrets {
 		if len(req.Secrets) == 0 {
 			return status.Error(
-				codes.InvalidArgument, "required: NodePublishSecrets")
+				codes.InvalidArgument, "required: Secrets")
 		}
 	}
 
@@ -547,9 +563,9 @@ func (s *interceptor) validateCreateVolumeResponse(
 		return status.Error(codes.Internal, "empty: Volume.Id")
 	}
 
-	if s.opts.requiresVolAttribs && len(rep.Volume.VolumeContext) == 0 {
+	if s.opts.requiresVolContext && len(rep.Volume.VolumeContext) == 0 {
 		return status.Error(
-			codes.Internal, "non-nil, empty: Volume.Attributes")
+			codes.Internal, "non-nil, empty: Volume.VolumeContext")
 	}
 
 	return nil
@@ -559,7 +575,7 @@ func (s *interceptor) validateControllerPublishVolumeResponse(
 	ctx context.Context,
 	rep csi.ControllerPublishVolumeResponse) error {
 
-	if s.opts.requiresPubVolInfo && len(rep.PublishContext) == 0 {
+	if s.opts.requiresPubContext && len(rep.PublishContext) == 0 {
 		return status.Error(codes.Internal, "empty: PublishContext")
 	}
 	return nil
@@ -652,9 +668,10 @@ func (s *interceptor) validateGetPluginInfoResponse(
 func (s *interceptor) validateNodeGetInfoResponse(
 	ctx context.Context,
 	rep csi.NodeGetInfoResponse) error {
-	if s.opts.requiresNodeID && rep.NodeId == "" {
+	if rep.NodeId == "" {
 		return status.Error(codes.Internal, "empty: NodeID")
 	}
+
 	return nil
 }
 

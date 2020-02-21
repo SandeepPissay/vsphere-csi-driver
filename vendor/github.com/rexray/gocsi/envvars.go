@@ -92,6 +92,14 @@ const (
 	// response logging to STDOUT.
 	EnvVarRepLogging = "X_CSI_REP_LOGGING"
 
+	// EnvVarLoggingDisableVolCtx is the name of the environment variable
+	// used to disable the logging of the VolumeContext field when request or
+	// response logging is enabled.
+	//
+	// Setting this environment variable to a truthy value disables the logging
+	// of the VolumeContext field
+	EnvVarLoggingDisableVolCtx = "X_CSI_LOG_DISABLE_VOL_CTX"
+
 	// EnvVarReqIDInjection is the name of the environment variable
 	// used to determine whether or not to enable request ID injection.
 	EnvVarReqIDInjection = "X_CSI_REQ_ID_INJECTION"
@@ -114,28 +122,27 @@ const (
 	// a code of "Internal."
 	EnvVarSpecRepValidation = "X_CSI_SPEC_REP_VALIDATION"
 
-	// EnvVarRequireNodeID is the name of the environment variable used
-	// to determine whether or not the node ID value is required for
-	// requests that accept it and responses that return it such as
-	// ControllerPublishVolume and GetNodeId.
-	EnvVarRequireNodeID = "X_CSI_REQUIRE_NODE_ID"
+	// EnvVarDisableFieldLen is the name of the environment variable used
+	// to determine whether or not to disable validation of CSI request and
+	// response field lengths against the permitted lenghts defined in the spec
+	EnvVarDisableFieldLen = "X_CSI_SPEC_DISABLE_LEN_CHECK"
 
 	// EnvVarRequireStagingTargetPath is the name of the environment variable
 	// used to determine whether or not the NodePublishVolume request field
 	// StagingTargetPath is required.
 	EnvVarRequireStagingTargetPath = "X_CSI_REQUIRE_STAGING_TARGET_PATH"
 
-	// EnvVarRequirePubVolInfo is the name of the environment variable used
-	// to determine whether or not publish volume info is required for
+	// EnvVarRequireVolContext is the name of the environment variable used
+	// to determine whether or not volume context is required for
 	// requests that accept it and responses that return it such as
 	// NodePublishVolume and ControllerPublishVolume.
-	EnvVarRequirePubVolInfo = "X_CSI_REQUIRE_PUB_VOL_INFO"
+	EnvVarRequireVolContext = "X_CSI_REQUIRE_VOL_CONTEXT"
 
-	// EnvVarRequireVolAttribs is the name of the environment variable used
-	// to determine whether or not volume attributes are required for
-	// requests that accept them and responses that return them such as
-	// ControllerPublishVolume and CreateVolume.
-	EnvVarRequireVolAttribs = "X_CSI_REQUIRE_VOL_ATTRIBS"
+	// EnvVarRequirePubContext is the name of the environment variable used
+	// to determine whether or not publish context is required for
+	// requests that accept it and responses that return it such as
+	// NodePublishVolume and ControllerPublishVolume.
+	EnvVarRequirePubContext = "X_CSI_REQUIRE_PUB_CONTEXT"
 
 	// EnvVarCreds is the name of the environment variable
 	// used to determine whether or not user credentials are required for

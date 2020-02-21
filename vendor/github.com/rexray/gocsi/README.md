@@ -211,6 +211,12 @@ environment variables:
       </td>
     </tr>
     <tr>
+      <td><code>X_CSI_LOG_DISABLE_VOL_CTX</code></td>
+      <td><p>A flag that disables the logging of the VolumeContext field.</p>
+      <p>Only takes effect if Request or Reply logging is enabled.</p>
+      </td>
+    </tr>
+    <tr>
       <td><code>X_CSI_REQ_ID_INJECTION</code></td>
       <td>A flag that enables request ID injection. The ID is parsed from
       the incoming request's metadata with a key of
@@ -238,6 +244,10 @@ environment variables:
       of <code>Internal</code>.</td>
     </tr>
     <tr>
+      <td><code>X_CSI_SPEC_DISABLE_LEN_CHECK</code></td>
+      <td>A flag that disables validation of CSI message field lengths.</td>
+    </tr>
+    <tr>
       <td><code>X_CSI_REQUIRE_STAGING_TARGET_PATH</code></td>
       <td>
         <p>A flag that enables treating the following fields as required:</p>
@@ -248,35 +258,27 @@ environment variables:
       </td>
     </tr>
     <tr>
-      <td><code>X_CSI_REQUIRE_NODE_ID</code></td>
+      <td><code>X_CSI_REQUIRE_VOL_CONTEXT</code></td>
       <td>
         <p>A flag that enables treating the following fields as required:</p>
         <ul>
-          <li><code>ControllerPublishVolumeRequest.NodeId</code></li>
-          <li><code>NodeGetIdResponse.NodeId</code></li>
-      </ul>
-      <p>Enabling this option sets <code>X_CSI_SPEC_REQ_VALIDATION=true</code></p>
-      </td>
-    </tr>
-    <tr>
-      <td><code>X_CSI_REQUIRE_PUB_VOL_INFO</code></td>
-      <td>
-        <p>A flag that enables treating the following fields as required:</p>
-        <ul>
-          <li><code>ControllerPublishVolumeResponse.PublishVolumeInfo</code></li>
-          <li><code>NodePublishVolumeRequest.PublishVolumeInfo</code></li>
+          <li><code>ControllerPublishVolumeRequest.VolumeContext</code></li>
+          <li><code>ValidateVolumeCapabilitiesRequest.VolumeContext</code></li>
+          <li><code>ValidateVolumeCapabilitiesResponse.VolumeContext</code></li>
+          <li><code>NodeStageVolumeRequest.VolumeContext</code></li>
+          <li><code>NodePublishVolumeRequest.VolumeContext</code></li>
         </ul>
         <p>Enabling this option sets <code>X_CSI_SPEC_REQ_VALIDATION=true</code></p>
       </td>
     </tr>
     <tr>
-      <td><code>X_CSI_REQUIRE_VOL_ATTRIBS</code></td>
+      <td><code>X_CSI_REQUIRE_PUB_CONTEXT</code></td>
       <td>
         <p>A flag that enables treating the following fields as required:</p>
         <ul>
-          <li><code>ControllerPublishVolumeRequest.VolumeAttributes</code></li>
-          <li><code>ValidateVolumeCapabilitiesRequest.VolumeAttributes</code></li>
-          <li><code>NodePublishVolumeRequest.VolumeAttributes</code></li>
+          <li><code>ControllerPublishVolumeResponse.PublishContext</code></li>
+          <li><code>NodeStageVolumeRequest.PublishContext</code></li>
+          <li><code>NodePublishVolumeRequest.PublishContext</code></li>
         </ul>
         <p>Enabling this option sets <code>X_CSI_SPEC_REQ_VALIDATION=true</code></p>
       </td>
