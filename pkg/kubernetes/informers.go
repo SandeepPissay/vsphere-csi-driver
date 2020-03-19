@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"k8s.io/client-go/informers"
-
 	clientset "k8s.io/client-go/kubernetes"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
@@ -100,6 +99,11 @@ func (im *InformerManager) GetPVLister() corelisters.PersistentVolumeLister {
 // GetPVCLister returns PVC Lister for the calling informer manager
 func (im *InformerManager) GetPVCLister() corelisters.PersistentVolumeClaimLister {
 	return im.informerFactory.Core().V1().PersistentVolumeClaims().Lister()
+}
+
+// GetPodLister returns Pod Lister for the calling informer manager
+func (im *InformerManager) GetPodLister() corelisters.PodLister {
+	return im.informerFactory.Core().V1().Pods().Lister()
 }
 
 // Listen starts the Informers
