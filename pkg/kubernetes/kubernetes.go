@@ -18,6 +18,7 @@ package kubernetes
 
 import (
 	"context"
+	"flag"
 	"io/ioutil"
 	"net"
 	"os"
@@ -29,6 +30,7 @@ import (
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	certutil "k8s.io/client-go/util/cert"
+
 	cnsconfig "sigs.k8s.io/vsphere-csi-driver/pkg/common/config"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/common"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/logger"
@@ -41,13 +43,26 @@ func NewClient(ctx context.Context) (clientset.Interface, error) {
 	log := logger.GetLogger(ctx)
 	var config *restclient.Config
 	var err error
-	log.Info("k8s client using in-cluster config")
-	config, err = restclient.InClusterConfig()
-	if err != nil {
-		log.Errorf("InClusterConfig failed %q", err)
-		return nil, err
-	}
 
+	kubecfgPath := os.Getenv(clientcmd.RecommendedConfigPathEnvVar)
+	if flag.Lookup("kubeconfig") != nil {
+		kubecfgPath = flag.Lookup("kubeconfig").Value.(flag.Getter).Get().(string)
+	}
+	if kubecfgPath != "" {
+		log.Infof("k8s client using kubeconfig from %s", kubecfgPath)
+		config, err = clientcmd.BuildConfigFromFlags("", kubecfgPath)
+		if err != nil {
+			log.Errorf("BuildConfigFromFlags failed %v", err)
+			return nil, err
+		}
+	} else {
+		log.Info("k8s client using in-cluster config")
+		config, err = restclient.InClusterConfig()
+		if err != nil {
+			log.Errorf("InClusterConfig failed %v", err)
+			return nil, err
+		}
+	}
 	return clientset.NewForConfig(config)
 }
 
@@ -152,14 +167,14 @@ func getSupervisorClientThroughput(ctx context.Context) (float32, int) {
 	qps := defaultSupervisorClientQPS
 	burst := defaultSupervisorClientBurst
 	if v := os.Getenv(types.EnvSupervisorClientQPS); v != "" {
-		if value, err := strconv.ParseFloat(v, 32); (err != nil || float32(value) < minSupervisorClientQPS || float32(value) > maxSupervisorClientQPS) {
+		if value, err := strconv.ParseFloat(v, 32); err != nil || float32(value) < minSupervisorClientQPS || float32(value) > maxSupervisorClientQPS {
 			log.Warnf("Invalid value set for env variable %s: %v. Using default value.", types.EnvSupervisorClientQPS, v)
 		} else {
 			qps = float32(value)
 		}
 	}
 	if v := os.Getenv(types.EnvSupervisorClientBurst); v != "" {
-		if value, err := strconv.Atoi(v); (err != nil || value < minSupervisorClientBurst || value > maxSupervisorClientBurst) {
+		if value, err := strconv.Atoi(v); err != nil || value < minSupervisorClientBurst || value > maxSupervisorClientBurst {
 			log.Warnf("Invalid value set for env variable %s: %v. Using default value.", types.EnvSupervisorClientBurst, v)
 		} else {
 			burst = value
