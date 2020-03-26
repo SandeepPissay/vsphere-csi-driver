@@ -174,7 +174,7 @@ github.com/prometheus/common/model
 # github.com/prometheus/procfs v0.0.2
 github.com/prometheus/procfs
 github.com/prometheus/procfs/internal/fs
-# github.com/rexray/gocsi v1.2.0
+# github.com/rexray/gocsi v1.2.1
 github.com/rexray/gocsi
 github.com/rexray/gocsi/context
 github.com/rexray/gocsi/middleware/logging
