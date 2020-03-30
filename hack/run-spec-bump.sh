@@ -57,37 +57,12 @@ function update_mirrors () {
    git push
    
    printf "\n\n"
-
-   success=""
-
-   until [[ ${success} == 'yes' || ${success} == 'no' ]]; do 
-      read -r -p "Merge request approved (yes/no): " success;
-   done
-
-   if [ "${success}" == 'no' ]; then
-      printf "Merge request denied. Exiting\n"
-      exit 1
-   else 
-      printf "Merge request approved! Moving on..\n"
-   fi
 	
    git tag v0.0.1.alpha+vmware."${INTERNAL_VSPHERE_TAG}"
 
    git push --tags
+
    printf "\n\n"
-
-   success=""
-
-   until [[ ${success} == 'yes' || ${success} == 'no' ]]; do 
-      read -r -p "Merge request approved (yes/no): " success;
-   done
-
-   if [ "${success}" == 'no' ]; then
-      printf "Merge request denied. Exiting\n"
-      exit 1
-   else 
-      printf "Merge request approved! Moving on..\n"
-   fi
 
    cd ..
 
@@ -108,7 +83,7 @@ EOF
    done
 
    version="v0.0.1.alpha+vmware"
-   read -r -p "Do you want to alter the version of vsphere-csi-driver? Default: v0.0.1.alpha+vmware (yes/no) ": alter;
+   read -r -p "Do you want to alter the version of vsphere-csi-driver? Default: v0.0.1.alpha+vmware (yes/no): " alter;
 
    if [[ ${alter} == "yes" ]]; then
       read -r -p "Enter new version: " version;
@@ -249,19 +224,23 @@ function update_cayman_photon() {
      
       printf "\n\tSTEP 4(c): Updating VSPHERE_CSI_DRIVER_CLN in support/gobuild/specs/cayman_photon.py\n\n"
       sed -i "s/^VSPHERE_CSI_DRIVER_CLN.*/VSPHERE_CSI_DRIVER_CLN = '\${VSPHERE_CSI_DRIVER_COMMIT}'/" support/gobuild/specs/cayman_photon.py
+      
+      printf "\n\tSTEP 4(d): Updating VSPHERE_CSI_DRIVER_CLN in support/gobuild/specs/cayman_guest_photon.py\n\n"
+      sed -i "s/^VSPHERE_CSI_DRIVER_CLN.*/VSPHERE_CSI_DRIVER_CLN = '\${VSPHERE_CSI_DRIVER_COMMIT}'/" support/gobuild/specs/cayman_guest_photon.py
 
-      printf "\n\tSTEP 4(d): Committing changes to cayman_photon on branch %s\n\n" "\${branch_name}"
+      printf "\n\tSTEP 4(e): Committing changes to cayman_photon on branch %s\n\n" "\${branch_name}"
       git add . 
       git commit -s -m "Spec bump for vSphere CSI driver."
 
       git push --set-upstream origin \${branch_name}
 
       /build/apps/bin/gobuild sandbox queue cayman_stateless_photon --accept-defaults --branch \${branch_name} --buildtype release --no-changeset
+      /build/apps/bin/gobuild sandbox queue cayman_wcp_guest_cluster_photon --branch \${branch_name} --no-changeset --buildtype release --accept-defaults
 EOF
 
 }
 
-printf "\tWelcome! This script automates the vsphere csi driver spec bump onto cayman photon. Usage:\n\n\t\t./run-spec-bump.sh <commit1> <commit2> <vsphere-tag>\n\n\t<commit1> - commit id (exclusive) from the master branch on core-build/mirrors_internal_vsphere-csi-driver from which you want to begin the cherry-picking.\n\t<commit2> - commit id (inclusive) from the master branch on core-build/mirrors_internal_vsphere-csi-driver upto which you want to run the cherry-picking.\n\t<vsphere-tag> - newest tag on mirrors_internal_vsphere-csi-driver that will be created for this spec bump. Take the highest existing tag number and add 1.\n\nIf this script encounters any errors, it will print the error message and exit. Intermediate failures require the user to triage and perform the spec bump manually."
+printf "\tWelcome! This script automates the vsphere csi driver spec bump onto cayman photon. Usage:\n\n\t\t./run-spec-bump.sh <commit1> <commit2> <vsphere-tag>\n\n\t<commit1> - commit id (exclusive) from the master branch on core-build/mirrors_internal_vsphere-csi-driver from which you want to begin the cherry-picking. This is effectively the last existing commit on cns_csi branch.\n\t<commit2> - commit id (inclusive) from the master branch on core-build/mirrors_internal_vsphere-csi-driver upto which you want to run the cherry-picking.\n\t<vsphere-tag> - newest tag on mirrors_internal_vsphere-csi-driver. NOTE: Only enter the number that will used as a postfix for v0.0.1.alpha+vmware.<vsphere-tag>. Take the highest existing tag number and add 1. For eg, if the highest tag is v0.0.1.alpha+vmware.39, <vsphere-tag> would be 40.\n\nIf this script encounters any errors, it will print the error message and exit. Intermediate failures require the user to triage and perform the spec bump manually.\n\n"
 
 START_COMMIT=${1:-'FAIL'}
 END_COMMIT=${2:-'FAIL'}
