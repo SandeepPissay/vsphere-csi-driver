@@ -24,7 +24,6 @@ require (
 	github.com/grpc-ecosystem/go-grpc-middleware v1.1.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway v1.12.1 // indirect
 	github.com/hashicorp/golang-lru v0.5.3 // indirect
-	github.com/imdario/mergo v0.3.7 // indirect
 	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect
 	github.com/kubernetes-csi/csi-lib-utils v0.7.0
 	github.com/onsi/ginkgo v1.12.0
@@ -45,7 +44,7 @@ require (
 	golang.org/x/lint v0.0.0-20200302205851-738671d3881b // indirect
 	golang.org/x/net v0.0.0-20200226121028-0de0cce0169b
 	golang.org/x/sys v0.0.0-20200331124033-c3d80250170d // indirect
-	golang.org/x/tools v0.0.0-20200413161937-250b2131eb8b // indirect
+	golang.org/x/tools v0.0.0-20200427213009-655248709eb0 // indirect
 	google.golang.org/appengine v1.6.5 // indirect
 	google.golang.org/grpc v1.26.0
 	gopkg.in/gcfg.v1 v1.2.3
@@ -60,6 +59,7 @@ require (
 	k8s.io/client-go v0.17.0
 	k8s.io/cloud-provider v0.0.0-00010101000000-000000000000 // indirect
 	k8s.io/cluster-bootstrap v0.0.0-00010101000000-000000000000 // indirect
+	k8s.io/component-base v0.18.0 // indirect
 	k8s.io/csi-translation-lib v0.0.0-00010101000000-000000000000 // indirect
 	k8s.io/kube-aggregator v0.0.0-00010101000000-000000000000 // indirect
 	k8s.io/kube-openapi v0.0.0-20191107075043-30be4d16710a
@@ -79,7 +79,7 @@ replace (
 	k8s.io/cloud-provider => k8s.io/cloud-provider v0.0.0-20191212015549-86a326830157
 	k8s.io/cluster-bootstrap => k8s.io/cluster-bootstrap v0.0.0-20191212015531-26b810c03ac1
 	k8s.io/code-generator => k8s.io/code-generator v0.0.0-20190311093542-50b561225d70
-	k8s.io/component-base => k8s.io/component-base v0.0.0-20191212015026-7bd5511f1bb2
+	k8s.io/component-base => k8s.io/component-base v0.17.0
 	k8s.io/cri-api => k8s.io/cri-api v0.15.8-beta.1
 	k8s.io/csi-translation-lib => k8s.io/csi-translation-lib v0.0.0-20191212015623-92af21758231
 	k8s.io/kube-aggregator => k8s.io/kube-aggregator v0.0.0-20191212015114-c9678d254875
