@@ -21,10 +21,13 @@ import (
 	"fmt"
 	"strings"
 
+	"sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/node"
+
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/common"
+	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/logger"
 )
 
 // validateVanillaCreateVolumeRequest is the helper function to validate
@@ -69,5 +72,17 @@ func validateVanillaControllerUnpublishVolumeRequest(ctx context.Context, req *c
 // ExpandVolumeRequest for Vanilla CSI driver.
 // Function returns error if validation fails otherwise returns nil.
 func validateVanillaControllerExpandVolumeRequest(ctx context.Context, req *csi.ControllerExpandVolumeRequest) error {
-	return common.ValidateControllerExpandVolumeRequest(ctx, req)
+	log := logger.GetLogger(ctx)
+	if err := common.ValidateControllerExpandVolumeRequest(ctx, req); err != nil {
+		return err
+	}
+
+	nodeManager := node.GetManager(ctx)
+	nodes, err := nodeManager.GetAllNodes(ctx)
+	if err != nil {
+		msg := fmt.Sprintf("failed to find VirtualMachines for all registered nodes. Error: %v", err)
+		log.Error(msg)
+		return status.Error(codes.Internal, msg)
+	}
+	return common.IsOnlineExpansion(ctx, req.GetVolumeId(), nodes)
 }
