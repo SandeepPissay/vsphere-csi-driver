@@ -119,7 +119,7 @@ github.com/matttproud/golang_protobuf_extensions/pbutil
 github.com/modern-go/concurrent
 # github.com/modern-go/reflect2 v1.0.1
 github.com/modern-go/reflect2
-# github.com/onsi/ginkgo v1.11.0
+# github.com/onsi/ginkgo v1.12.0
 github.com/onsi/ginkgo
 github.com/onsi/ginkgo/config
 github.com/onsi/ginkgo/internal/codelocation
@@ -138,7 +138,7 @@ github.com/onsi/ginkgo/reporters/stenographer
 github.com/onsi/ginkgo/reporters/stenographer/support/go-colorable
 github.com/onsi/ginkgo/reporters/stenographer/support/go-isatty
 github.com/onsi/ginkgo/types
-# github.com/onsi/gomega v1.7.0
+# github.com/onsi/gomega v1.7.1
 github.com/onsi/gomega
 github.com/onsi/gomega/format
 github.com/onsi/gomega/internal/assertion
@@ -193,55 +193,53 @@ github.com/spf13/pflag
 # github.com/stretchr/testify v1.4.0
 github.com/stretchr/testify/assert
 github.com/stretchr/testify/require
+# github.com/vmware-tanzu/vm-operator-api v0.1.0
+github.com/vmware-tanzu/vm-operator-api/api/v1alpha1
+# github.com/vmware/govmomi v0.22.2-0.20200329172045-a01612b98505
+github.com/vmware/govmomi
+github.com/vmware/govmomi/cns
+github.com/vmware/govmomi/cns/methods
+github.com/vmware/govmomi/cns/simulator
+github.com/vmware/govmomi/cns/types
+github.com/vmware/govmomi/find
+github.com/vmware/govmomi/list
+github.com/vmware/govmomi/lookup
+github.com/vmware/govmomi/lookup/methods
+github.com/vmware/govmomi/lookup/types
+github.com/vmware/govmomi/nfc
+github.com/vmware/govmomi/object
+github.com/vmware/govmomi/ovf
+github.com/vmware/govmomi/pbm
+github.com/vmware/govmomi/pbm/methods
+github.com/vmware/govmomi/pbm/simulator
+github.com/vmware/govmomi/pbm/types
+github.com/vmware/govmomi/property
+github.com/vmware/govmomi/session
+github.com/vmware/govmomi/simulator
+github.com/vmware/govmomi/simulator/esx
+github.com/vmware/govmomi/simulator/internal
+github.com/vmware/govmomi/simulator/vpx
+github.com/vmware/govmomi/sts
+github.com/vmware/govmomi/sts/internal
+github.com/vmware/govmomi/task
+github.com/vmware/govmomi/units
+github.com/vmware/govmomi/vapi/internal
+github.com/vmware/govmomi/vapi/rest
+github.com/vmware/govmomi/vapi/tags
+github.com/vmware/govmomi/vim25
+github.com/vmware/govmomi/vim25/debug
+github.com/vmware/govmomi/vim25/methods
+github.com/vmware/govmomi/vim25/mo
+github.com/vmware/govmomi/vim25/progress
+github.com/vmware/govmomi/vim25/soap
+github.com/vmware/govmomi/vim25/types
+github.com/vmware/govmomi/vim25/xml
+github.com/vmware/govmomi/vsan
+github.com/vmware/govmomi/vsan/methods
+github.com/vmware/govmomi/vsan/types
+github.com/vmware/govmomi/vsan/vsanfs/types
 # github.com/zekroTJA/timedmap v0.0.0-20191029102728-85f9d45635d7
 github.com/zekroTJA/timedmap
-# gitlab.eng.vmware.com/core-build/vm-operator-client v0.0.0-20200109223959-f49bf2cf25a4
-gitlab.eng.vmware.com/core-build/vm-operator-client/pkg/apis/vmoperator/v1alpha1
-gitlab.eng.vmware.com/core-build/vm-operator-client/pkg/client/clientset/versioned/scheme
-gitlab.eng.vmware.com/core-build/vm-operator-client/pkg/client/clientset/versioned/typed/vmoperator/v1alpha1
-# gitlab.eng.vmware.com/hatchway/govmomi v0.0.0-20200309205830-1d2cc4bf13c8
-gitlab.eng.vmware.com/hatchway/govmomi
-gitlab.eng.vmware.com/hatchway/govmomi/cns
-gitlab.eng.vmware.com/hatchway/govmomi/cns/methods
-gitlab.eng.vmware.com/hatchway/govmomi/cns/simulator
-gitlab.eng.vmware.com/hatchway/govmomi/cns/types
-gitlab.eng.vmware.com/hatchway/govmomi/find
-gitlab.eng.vmware.com/hatchway/govmomi/list
-gitlab.eng.vmware.com/hatchway/govmomi/lookup
-gitlab.eng.vmware.com/hatchway/govmomi/lookup/methods
-gitlab.eng.vmware.com/hatchway/govmomi/lookup/types
-gitlab.eng.vmware.com/hatchway/govmomi/nfc
-gitlab.eng.vmware.com/hatchway/govmomi/object
-gitlab.eng.vmware.com/hatchway/govmomi/ovf
-gitlab.eng.vmware.com/hatchway/govmomi/pbm
-gitlab.eng.vmware.com/hatchway/govmomi/pbm/methods
-gitlab.eng.vmware.com/hatchway/govmomi/pbm/simulator
-gitlab.eng.vmware.com/hatchway/govmomi/pbm/types
-gitlab.eng.vmware.com/hatchway/govmomi/property
-gitlab.eng.vmware.com/hatchway/govmomi/session
-gitlab.eng.vmware.com/hatchway/govmomi/simulator
-gitlab.eng.vmware.com/hatchway/govmomi/simulator/esx
-gitlab.eng.vmware.com/hatchway/govmomi/simulator/internal
-gitlab.eng.vmware.com/hatchway/govmomi/simulator/vpx
-gitlab.eng.vmware.com/hatchway/govmomi/sts
-gitlab.eng.vmware.com/hatchway/govmomi/sts/internal
-gitlab.eng.vmware.com/hatchway/govmomi/task
-gitlab.eng.vmware.com/hatchway/govmomi/units
-gitlab.eng.vmware.com/hatchway/govmomi/vapi/internal
-gitlab.eng.vmware.com/hatchway/govmomi/vapi/rest
-gitlab.eng.vmware.com/hatchway/govmomi/vapi/tags
-gitlab.eng.vmware.com/hatchway/govmomi/vim25
-gitlab.eng.vmware.com/hatchway/govmomi/vim25/debug
-gitlab.eng.vmware.com/hatchway/govmomi/vim25/methods
-gitlab.eng.vmware.com/hatchway/govmomi/vim25/mo
-gitlab.eng.vmware.com/hatchway/govmomi/vim25/progress
-gitlab.eng.vmware.com/hatchway/govmomi/vim25/soap
-gitlab.eng.vmware.com/hatchway/govmomi/vim25/types
-gitlab.eng.vmware.com/hatchway/govmomi/vim25/xml
-gitlab.eng.vmware.com/hatchway/govmomi/vsan
-gitlab.eng.vmware.com/hatchway/govmomi/vsan/methods
-gitlab.eng.vmware.com/hatchway/govmomi/vsan/types
-gitlab.eng.vmware.com/hatchway/govmomi/vsan/vsanfs/types
 # go.uber.org/atomic v1.5.1
 go.uber.org/atomic
 # go.uber.org/multierr v1.4.0
@@ -284,7 +282,7 @@ golang.org/x/net/websocket
 # golang.org/x/oauth2 v0.0.0-20180821212333-d2e6202438be
 golang.org/x/oauth2
 golang.org/x/oauth2/internal
-# golang.org/x/sys v0.0.0-20200107162124-548cf772de50
+# golang.org/x/sys v0.0.0-20200331124033-c3d80250170d
 golang.org/x/sys/cpu
 golang.org/x/sys/unix
 golang.org/x/sys/windows
@@ -398,7 +396,7 @@ gopkg.in/square/go-jose.v2/jwt
 gopkg.in/tomb.v1
 # gopkg.in/warnings.v0 v0.1.2
 gopkg.in/warnings.v0
-# gopkg.in/yaml.v2 v2.2.3
+# gopkg.in/yaml.v2 v2.2.4
 gopkg.in/yaml.v2
 # honnef.co/go/tools v0.0.1-2019.2.3
 honnef.co/go/tools/arg
@@ -426,7 +424,7 @@ honnef.co/go/tools/staticcheck/vrp
 honnef.co/go/tools/stylecheck
 honnef.co/go/tools/unused
 honnef.co/go/tools/version
-# k8s.io/api v0.17.0 => k8s.io/api v0.0.0-20191004102349-159aefb8556b
+# k8s.io/api v0.17.4 => k8s.io/api v0.0.0-20191004102349-159aefb8556b
 k8s.io/api/admission/v1beta1
 k8s.io/api/admissionregistration/v1beta1
 k8s.io/api/apps/v1
@@ -472,7 +470,7 @@ k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset
 k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/scheme
 k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/typed/apiextensions/v1beta1
 k8s.io/apiextensions-apiserver/pkg/features
-# k8s.io/apimachinery v0.17.1-beta.0 => k8s.io/apimachinery v0.0.0-20191004074956-c5d2f014d689
+# k8s.io/apimachinery v0.17.4 => k8s.io/apimachinery v0.0.0-20191004074956-c5d2f014d689
 k8s.io/apimachinery/pkg/api/equality
 k8s.io/apimachinery/pkg/api/errors
 k8s.io/apimachinery/pkg/api/meta
@@ -1004,7 +1002,7 @@ k8s.io/utils/path
 k8s.io/utils/pointer
 k8s.io/utils/strings
 k8s.io/utils/trace
-# sigs.k8s.io/controller-runtime v0.3.0
+# sigs.k8s.io/controller-runtime v0.5.0 => sigs.k8s.io/controller-runtime v0.3.0
 sigs.k8s.io/controller-runtime/pkg/cache
 sigs.k8s.io/controller-runtime/pkg/cache/internal
 sigs.k8s.io/controller-runtime/pkg/client
@@ -1026,7 +1024,9 @@ sigs.k8s.io/controller-runtime/pkg/predicate
 sigs.k8s.io/controller-runtime/pkg/reconcile
 sigs.k8s.io/controller-runtime/pkg/recorder
 sigs.k8s.io/controller-runtime/pkg/runtime/inject
+sigs.k8s.io/controller-runtime/pkg/runtime/scheme
 sigs.k8s.io/controller-runtime/pkg/runtime/signals
+sigs.k8s.io/controller-runtime/pkg/scheme
 sigs.k8s.io/controller-runtime/pkg/source
 sigs.k8s.io/controller-runtime/pkg/source/internal
 sigs.k8s.io/controller-runtime/pkg/webhook
