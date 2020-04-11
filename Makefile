@@ -397,28 +397,20 @@ test-e2e:
 ################################################################################
 ##                                 LINTING                                    ##
 ################################################################################
-FMT_FLAGS ?= -d -e -s -w
-.PHONY: fmt
+.PHONY: check fmt lint staticcheck vet
+check: fmt lint staticcheck vet
+
 fmt:
-	f="$$(mktemp)" && \
-	find . -name "*.go" | grep -v vendor | xargs gofmt $(FMT_FLAGS) | tee "$${f}"; \
-	test -z "$$(head -n 1 "$${f}")"
+	hack/check-format.sh
 
-.PHONY: vet
-vet:
-	go vet ./...
-
-.PHONY: lint
 lint:
-	hack/verify-golint.sh
+	hack/check-lint.sh
 
-.PHONY: check
-check: build-dirs
-	JUNIT_REPORT="$(abspath $(ARTIFACTS)/junit_check.xml)" hack/check.sh
+staticcheck:
+	hack/check-staticcheck.sh
 
-.PHONY: check-warn
-check-warn:
-	-$(MAKE) check
+vet:
+	hack/check-vet.sh
 
 ################################################################################
 ##                                 BUILD IMAGES                               ##

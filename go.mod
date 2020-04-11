@@ -43,13 +43,15 @@ require (
 	go.uber.org/multierr v1.4.0 // indirect
 	go.uber.org/zap v1.13.0
 	golang.org/x/lint v0.0.0-20200302205851-738671d3881b // indirect
-	golang.org/x/net v0.0.0-20191209160850-c0dbc17a3553
+	golang.org/x/net v0.0.0-20200226121028-0de0cce0169b
 	golang.org/x/sys v0.0.0-20200331124033-c3d80250170d // indirect
+	golang.org/x/tools v0.0.0-20200410194907-79a7a3126eef // indirect
 	google.golang.org/appengine v1.6.5 // indirect
 	google.golang.org/grpc v1.26.0
 	gopkg.in/gcfg.v1 v1.2.3
 	gopkg.in/square/go-jose.v2 v2.3.1 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
+	honnef.co/go/tools v0.0.1-2020.1.3 // indirect
 	k8s.io/api v0.17.4
 	k8s.io/apiextensions-apiserver v0.0.0-20190918201827-3de75813f604
 	k8s.io/apimachinery v0.17.4

@@ -14,19 +14,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set -uo pipefail
+set -o errexit
+set -o nounset
+set -o pipefail
 
 # Fetching ginkgo for running the test
 export GO111MODULE=on
-go mod vendor && go get -u github.com/onsi/ginkgo/ginkgo
-if [ $? -ne 0 ]
+if ! go mod vendor && go get -u github.com/onsi/ginkgo/ginkgo
 then
     echo "go mod vendor or go get ginkgo error"
     exit 1
 fi
 
 # Exporting KUBECONFIG path if not set
-if [ -z ${KUBECONFIG-} ]; then
+if [ -z "${KUBECONFIG-}" ]; then
     export KUBECONFIG=$HOME/.kube/config
 fi
 
@@ -39,13 +40,13 @@ then
 fi
 
 OPTS=""
-if [ -z ${GINKGO_OPTS-} ]; then
+if [ -z "${GINKGO_OPTS-}" ]; then
     OPTS="-v"
 else
     OPTS="-v $GINKGO_OPTS"
 fi
 
-ginkgo $OPTS --focus="$FOCUS" tests/e2e
+ginkgo "$OPTS" --focus="$FOCUS" tests/e2e
 
 # Checking for test status
 TEST_PASS=$?
