@@ -115,9 +115,9 @@ func (c *controller) Init(config *config.Config) error {
 				}
 			case err, ok := <-watcher.Errors:
 				if !ok {
+					log.Errorf("fsnotify error: %+v", err)
 					return
 				}
-				log.Errorf("fsnotify error: %+v", err)
 			}
 			log.Debugf("fsnotify event processed")
 		}
