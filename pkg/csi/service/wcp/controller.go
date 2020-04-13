@@ -140,10 +140,12 @@ func (c *controller) ReloadConfiguration() {
 	cfg, err := common.GetConfig(ctx)
 	if err != nil {
 		log.Errorf("Failed to read config. Error: %+v", err)
+		return
 	}
 	newVCConfig, err := cnsvsphere.GetVirtualCenterConfig(cfg)
 	if err != nil {
 		log.Errorf("Failed to get VirtualCenterConfig. err=%v", err)
+		return
 	}
 	if newVCConfig != nil {
 		var vcenter *cnsvsphere.VirtualCenter
@@ -154,11 +156,13 @@ func (c *controller) ReloadConfiguration() {
 			err = c.manager.VcenterManager.UnregisterAllVirtualCenters(ctx)
 			if err != nil {
 				log.Errorf("Failed to unregister vcenter with virtualCenterManager.")
+				return
 			}
 			log.Debugf("Registering virtual center: %q with virtualCenterManager", newVCConfig.Host)
 			vcenter, err = c.manager.VcenterManager.RegisterVirtualCenter(ctx, newVCConfig)
 			if err != nil {
 				log.Errorf("Failed to register VC with virtualCenterManager. err=%v", err)
+				return
 			}
 			c.manager.VcenterManager = cnsvsphere.GetVirtualCenterManager(ctx)
 		} else {
