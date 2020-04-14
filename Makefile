@@ -397,14 +397,17 @@ test-e2e:
 ################################################################################
 ##                                 LINTING                                    ##
 ################################################################################
-.PHONY: check fmt lint staticcheck vet
-check: fmt lint staticcheck vet
+.PHONY: check fmt lint shellcheck staticcheck vet
+check: fmt lint shellcheck staticcheck vet
 
 fmt:
 	hack/check-format.sh
 
 lint:
 	hack/check-lint.sh
+
+shellcheck:
+	hack/check-shell.sh
 
 staticcheck:
 	hack/check-staticcheck.sh
