@@ -441,8 +441,10 @@ $(IMAGE_SYNCER_D):
 else
 $(IMAGE_SYNCER_D): $(SYNCER_BIN) | $(DOCKER_SOCK)
 	cp -f $< cluster/images/syncer/vsphere-syncer
+	cp -r pkg/syncer/cnsoperator/config cluster/images/syncer
 	docker build -t $(IMAGE_SYNCER):$(VERSION) cluster/images/syncer
 	docker tag $(IMAGE_SYNCER):$(VERSION) $(IMAGE_SYNCER):latest
+	@rm -rf cluster/images/syncer/config
 	@rm -f cluster/images/syncer/vsphere-syncer && touch $@
 endif
 

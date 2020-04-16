@@ -15,5 +15,7 @@ FROM photon:3.0
 RUN tdnf -y remove toybox
 RUN tdnf -y upgrade
 ADD vsphere-syncer /bin/
+RUN mkdir -p config
+ADD config/cnsregistervolume_crd.yaml /config/
 
 ENTRYPOINT ["/bin/vsphere-syncer"]
