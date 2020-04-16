@@ -66,10 +66,58 @@ func createCustomResourceDefinition(ctx context.Context, clientSet apiextensions
 		return err
 	}
 
-	// CRD takes some time to be established
-	// Creating an instance of non-established runs into errors. So, wait for CRD to be created
-	err = wait.Poll(pollTime, timeout, func() (bool, error) {
-		crd, err = clientSet.ApiextensionsV1beta1().CustomResourceDefinitions().Get(crdName, metav1.GetOptions{})
+	log.Infof("%q CRD created successfully", crdName)
+	err = waitForCustomResourceToBeEstablished(ctx, clientSet, crdName)
+	if err != nil {
+		log.Errorf("CRD %q created but failed to establish. Err: %+v", crdName, err)
+	}
+	return err
+}
+
+// createCustomResourceDefinitionFromManifest creates custom resource definition from manifest file
+func createCustomResourceDefinitionFromManifest(ctx context.Context,
+	clientSet apiextensionsclientset.Interface, fileName string) error {
+	log := logger.GetLogger(ctx)
+	manifestcrd, err := getCRDFromManifest(ctx, fileName)
+	if err != nil {
+		log.Errorf("Failed to read the CRD spec from manifest file: %s with err: %+v", fileName, err)
+		return err
+	}
+
+	crdName := manifestcrd.ObjectMeta.Name
+	crd, err := clientSet.ApiextensionsV1beta1().CustomResourceDefinitions().Get(crdName, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		_, err = clientSet.ApiextensionsV1beta1().CustomResourceDefinitions().Create(crd)
+		if err != nil {
+			log.Errorf("Failed to create %q CRD with err: %+v", crdName, err)
+			return err
+		}
+	} else {
+		crd.Spec = manifestcrd.Spec
+		crd.Status = manifestcrd.Status
+		_, err = clientSet.ApiextensionsV1beta1().CustomResourceDefinitions().Update(crd)
+		if err != nil {
+			log.Errorf("Failed to update %q CRD with err: %+v", crdName, err)
+			return err
+		}
+		log.Infof("%q CRD updated successfully", crdName)
+		return nil
+	}
+
+	log.Infof("%q CRD created successfully", crdName)
+	err = waitForCustomResourceToBeEstablished(ctx, clientSet, crdName)
+	if err != nil {
+		log.Errorf("CRD %q created but failed to establish. Err: %+v", crdName, err)
+	}
+	return err
+}
+
+// waitForCustomResourceToBeEstablished waits until the CRD status is Established
+func waitForCustomResourceToBeEstablished(ctx context.Context,
+	clientSet apiextensionsclientset.Interface, crdName string) error {
+	log := logger.GetLogger(ctx)
+	err := wait.Poll(pollTime, timeout, func() (bool, error) {
+		crd, err := clientSet.ApiextensionsV1beta1().CustomResourceDefinitions().Get(crdName, metav1.GetOptions{})
 		if err != nil {
 			log.Errorf("Failed to get %q CRD with err: %+v", crdName, err)
 			return false, err
@@ -86,16 +134,15 @@ func createCustomResourceDefinition(ctx context.Context, clientSet apiextensions
 				}
 			}
 		}
-
 		return false, err
 	})
 
 	// If there is an error, delete the object to keep it clean.
 	if err != nil {
-		log.Infof("Cleanup %q CRD because the CRD created was not succesfully established. Error: %+v", crdName, err)
+		log.Infof("Cleanup %q CRD because the CRD created was not succesfully established. Err: %+v", crdName, err)
 		deleteErr := clientSet.ApiextensionsV1beta1().CustomResourceDefinitions().Delete(crdName, nil)
 		if deleteErr != nil {
-			log.Errorf("Failed to delete %q CRD with error: %+v", crdName, deleteErr)
+			log.Errorf("Failed to delete %q CRD with err: %+v", crdName, deleteErr)
 		}
 	}
 	return err
