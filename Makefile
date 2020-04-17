@@ -129,7 +129,7 @@ export SYNCER_BIN_SRCS
 endif
 
 syncer_manifest: controller-gen
-	$(CONTROLLER_GEN) crd:trivialVersions=true paths=./pkg/syncer/storagepool/... output:crd:dir=pkg/syncer/storagepool/config
+	$(CONTROLLER_GEN) crd:trivialVersions=true paths=./pkg/syncer/storagepool/... output:crd:dir=pkg/apis/storagepool/config
 # find or download controller-gen
 # download controller-gen if necessary
 controller-gen:
@@ -441,7 +441,7 @@ $(IMAGE_SYNCER_D):
 else
 $(IMAGE_SYNCER_D): $(SYNCER_BIN) | $(DOCKER_SOCK)
 	cp -f $< cluster/images/syncer/vsphere-syncer
-	cp -r pkg/syncer/cnsoperator/config cluster/images/syncer
+	cp -r pkg/apis/cnsoperator/config cluster/images/syncer
 	docker build -t $(IMAGE_SYNCER):$(VERSION) cluster/images/syncer
 	docker tag $(IMAGE_SYNCER):$(VERSION) $(IMAGE_SYNCER):latest
 	@rm -rf cluster/images/syncer/config

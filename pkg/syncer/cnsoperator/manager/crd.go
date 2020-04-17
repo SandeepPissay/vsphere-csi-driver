@@ -28,7 +28,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 
-	"sigs.k8s.io/vsphere-csi-driver/pkg/syncer/cnsoperator/apis"
+	apis "sigs.k8s.io/vsphere-csi-driver/pkg/apis/cnsoperator"
 )
 
 const (
