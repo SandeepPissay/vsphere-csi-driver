@@ -443,7 +443,7 @@ func (c *controller) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequ
 	if err != nil {
 		return nil, err
 	}
-	err = common.DeleteVolumeUtil(ctx, c.manager, req.VolumeId, true)
+	err = common.DeleteVolumeUtil(ctx, c.manager.VolumeManager, req.VolumeId, true)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to delete volume: %q. Error: %+v", req.VolumeId, err)
 		log.Error(msg)

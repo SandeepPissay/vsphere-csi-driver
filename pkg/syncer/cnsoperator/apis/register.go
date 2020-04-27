@@ -33,9 +33,12 @@ import (
 // GroupName represents the group for cns operator apis
 const GroupName = "cns.vmware.com"
 
+// Version represents the version for cns operator apis
+const Version = "v1alpha1"
+
 var (
 	// SchemeGroupVersion is group version used to register these objects
-	SchemeGroupVersion = schema.GroupVersion{Group: GroupName, Version: "v1alpha1"}
+	SchemeGroupVersion = schema.GroupVersion{Group: GroupName, Version: Version}
 	// CnsNodeVMAttachmentPlural is plural of CnsNodeVmAttachment
 	CnsNodeVMAttachmentPlural = "cnsnodevmattachments"
 	// CnsVolumeMetadataPlural is plural of CnsVolumeMetadata

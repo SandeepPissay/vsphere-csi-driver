@@ -87,7 +87,7 @@ func createCustomResourceDefinitionFromManifest(ctx context.Context,
 	crdName := manifestcrd.ObjectMeta.Name
 	crd, err := clientSet.ApiextensionsV1beta1().CustomResourceDefinitions().Get(crdName, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
-		_, err = clientSet.ApiextensionsV1beta1().CustomResourceDefinitions().Create(crd)
+		_, err = clientSet.ApiextensionsV1beta1().CustomResourceDefinitions().Create(manifestcrd)
 		if err != nil {
 			log.Errorf("Failed to create %q CRD with err: %+v", crdName, err)
 			return err

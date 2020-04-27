@@ -560,9 +560,8 @@ github.com/vishvananda/netlink v0.0.0-20171020171820-b2de5d10e38e/go.mod h1:+SR5
 github.com/vishvananda/netns v0.0.0-20171111001504-be1fbeda1936/go.mod h1:ZjcWmFBXmLKZu9Nxj3WKYEafiSqer2rnvPr0en9UNpI=
 github.com/vmware-tanzu/vm-operator-api v0.1.0 h1:xM/NB1vQTqzBcvyMKbXzdJDfuJWgRhvKGy5S82n2nVQ=
 github.com/vmware-tanzu/vm-operator-api v0.1.0/go.mod h1:tLEBug46m/9BulOGnCB6HXwa2NyRsH9DI1KmKI573Vg=
-github.com/vmware/govmomi v0.20.1/go.mod h1:URlwyTFZX72RmxtxuaFL2Uj3fD1JTvZdx59bHWk6aFU=
-github.com/vmware/govmomi v0.22.2-0.20200329172045-a01612b98505 h1:+DJiAYxE/8P+4QYmE6jdpofrc5eSsxWJUU72jSLd3/c=
-github.com/vmware/govmomi v0.22.2-0.20200329172045-a01612b98505/go.mod h1:Y+Wq4lst78L85Ge/F8+ORXIWiKYqaro1vhAulACy9Lc=
+github.com/vmware/govmomi v0.22.2-0.20200420222347-5fceac570f29 h1:8S2J/LGp5U19G4tia+aq+KvlNPuynIeui7W8xc8PGqU=
+github.com/vmware/govmomi v0.22.2-0.20200420222347-5fceac570f29/go.mod h1:Y+Wq4lst78L85Ge/F8+ORXIWiKYqaro1vhAulACy9Lc=
 github.com/vmware/photon-controller-go-sdk v0.0.0-20170310013346-4a435daef6cc/go.mod h1:e6humHha1ekIwTCm+A5Qed5mG8V4JL+ChHcUOJ+L/8U=
 github.com/vmware/vmw-guestinfo v0.0.0-20170707015358-25eff159a728/go.mod h1:x9oS4Wk2s2u4tS29nEaDLdzvuHdB19CvSGJjPgkZJNk=
 github.com/xanzy/go-cloudstack v0.0.0-20160728180336-1e2cbf647e57/go.mod h1:s3eL3z5pNXF5FVybcT+LIVdId8pYn709yv6v5mrkrQE=
