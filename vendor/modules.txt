@@ -99,7 +99,7 @@ github.com/hpcloud/tail/ratelimiter
 github.com/hpcloud/tail/util
 github.com/hpcloud/tail/watch
 github.com/hpcloud/tail/winfile
-# github.com/imdario/mergo v0.3.7
+# github.com/imdario/mergo v0.3.6
 github.com/imdario/mergo
 # github.com/inconshreveable/mousetrap v1.0.0
 github.com/inconshreveable/mousetrap
@@ -188,14 +188,14 @@ github.com/rexray/gocsi/utils
 github.com/sirupsen/logrus
 # github.com/spf13/cobra v0.0.5
 github.com/spf13/cobra
-# github.com/spf13/pflag v1.0.3
+# github.com/spf13/pflag v1.0.5
 github.com/spf13/pflag
 # github.com/stretchr/testify v1.4.0
 github.com/stretchr/testify/assert
 github.com/stretchr/testify/require
 # github.com/vmware-tanzu/vm-operator-api v0.1.0
 github.com/vmware-tanzu/vm-operator-api/api/v1alpha1
-# github.com/vmware/govmomi v0.22.2-0.20200329172045-a01612b98505
+# github.com/vmware/govmomi v0.22.2-0.20200420222347-5fceac570f29
 github.com/vmware/govmomi
 github.com/vmware/govmomi/cns
 github.com/vmware/govmomi/cns/methods
@@ -779,7 +779,7 @@ k8s.io/cloud-provider/volume/helpers
 # k8s.io/cluster-bootstrap v0.0.0-00010101000000-000000000000 => k8s.io/cluster-bootstrap v0.0.0-20191212015531-26b810c03ac1
 k8s.io/cluster-bootstrap/token/api
 k8s.io/cluster-bootstrap/token/util
-# k8s.io/component-base v0.17.0 => k8s.io/component-base v0.0.0-20191212015026-7bd5511f1bb2
+# k8s.io/component-base v0.18.0 => k8s.io/component-base v0.17.0
 k8s.io/component-base/cli/flag
 k8s.io/component-base/config
 # k8s.io/csi-translation-lib v0.0.0-00010101000000-000000000000 => k8s.io/csi-translation-lib v0.0.0-20191212015623-92af21758231
@@ -999,7 +999,7 @@ k8s.io/kubernetes/test/utils/image
 k8s.io/kubernetes/third_party/forked/golang/expansion
 # k8s.io/sample-controller v0.0.0-00010101000000-000000000000 => k8s.io/sample-controller v0.0.0-20191212015209-bc15e564ed1e
 k8s.io/sample-controller/pkg/signals
-# k8s.io/utils v0.0.0-20190506122338-8fab8cb257d5
+# k8s.io/utils v0.0.0-20191114184206-e782cd3c129f
 k8s.io/utils/buffer
 k8s.io/utils/exec
 k8s.io/utils/integer
