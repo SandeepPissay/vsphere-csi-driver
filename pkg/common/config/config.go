@@ -45,8 +45,14 @@ const (
 	DefaultCloudConfigPath = "/etc/cloud/csi-vsphere.conf"
 	// DefaultGCConfigPath is the default path of GC config file
 	DefaultGCConfigPath = "/etc/cloud/pvcsi-config/cns-csi.conf"
+	// DefaultSVFeatureStateConfigPath is the default path of csi feature states config file in Supervisor Cluster
+	DefaultSVFeatureStateConfigPath = "/etc/vmware/wcp/csi-feature-states/csi-feature-states.conf"
+	// DefaultGCFeatureStateConfigPath is the default path of csi feature states config file in Guest Cluster
+	DefaultGCFeatureStateConfigPath = "/etc/cloud/csi-feature-states/csi-feature-states.conf"
 	// EnvVSphereCSIConfig contains the path to the CSI vSphere Config
 	EnvVSphereCSIConfig = "VSPHERE_CSI_CONFIG"
+	// EnvFeatureStates contains the path to the CSI Feature States Config
+	EnvFeatureStates = "FEATURE_STATES"
 	// EnvGCConfig contains the path to the CSI GC Config
 	EnvGCConfig = "GC_CONFIG"
 	// DefaultpvCSIProviderPath is the default path of pvCSI provider config
@@ -292,19 +298,7 @@ func validateConfig(ctx context.Context, cfg *Config) error {
 			}
 		}
 	}
-	if cfg.FeatureStates != (FeatureStateSwitches{}) {
-		if !cfg.FeatureStates.VolumeExtend {
-			log.Infof("Volume resize feature is disabled.")
-		}
-		if !cfg.FeatureStates.VolumeHealth {
-			log.Infof("Volume health feature is disabled.")
-		}
-	}
-	if cfg.FeatureStates == (FeatureStateSwitches{}) {
-		log.Debugf("No Feature State Switches defined in the Config.")
-		cfg.FeatureStates.VolumeExtend = DefaultFeatureStateValue
-		cfg.FeatureStates.VolumeHealth = DefaultFeatureStateValue
-	}
+
 	if cfg.Global.CnsRegisterVolumesCleanupIntervalInMin == 0 {
 		cfg.Global.CnsRegisterVolumesCleanupIntervalInMin = DefaultCnsRegisterVolumesCleanupIntervalInMin
 	}
@@ -356,6 +350,33 @@ func GetCnsconfig(ctx context.Context, cfgPath string) (*Config, error) {
 		}
 	}
 	return cfg, nil
+}
+
+// GetFeatureStatesConfig returns feature states config from specified file path
+func GetFeatureStatesConfig(ctx context.Context, featureStatesCfgPath string, cfg *Config) error {
+	log := logger.GetLogger(ctx)
+	log.Debugf("GetFeatureStatesConfig called with featureStatesCfgPath: %s", featureStatesCfgPath)
+	//Fetch feature state information in the csi-feature-states.conf if it exists
+	if _, err := os.Stat(featureStatesCfgPath); os.IsNotExist(err) {
+		log.Errorf("error reading csi-feature-states.conf\n")
+		return err
+	}
+	featureStatesConfig, err := os.Open(featureStatesCfgPath)
+	if err != nil {
+		log.Errorf("failed to open %s. Err: %v", featureStatesCfgPath, err)
+		return err
+	}
+	if err := gcfg.FatalOnly(gcfg.ReadInto(cfg, featureStatesConfig)); err != nil {
+		log.Errorf("error while reading config file: %+v", err)
+		return err
+	}
+	if !cfg.FeatureStates.VolumeExtend {
+		log.Infof("Volume resize feature is disabled.")
+	}
+	if !cfg.FeatureStates.VolumeHealth {
+		log.Infof("Volume health feature is disabled.")
+	}
+	return nil
 }
 
 // GetDefaultNetPermission returns the default file share net permission.
