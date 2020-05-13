@@ -195,7 +195,7 @@ github.com/stretchr/testify/assert
 github.com/stretchr/testify/require
 # github.com/vmware-tanzu/vm-operator-api v0.1.0
 github.com/vmware-tanzu/vm-operator-api/api/v1alpha1
-# github.com/vmware/govmomi v0.22.2-0.20200420222347-5fceac570f29
+# github.com/vmware/govmomi v0.22.2-0.20200423211401-3decde69e9aa
 github.com/vmware/govmomi
 github.com/vmware/govmomi/cns
 github.com/vmware/govmomi/cns/methods
@@ -310,7 +310,7 @@ golang.org/x/text/unicode/norm
 golang.org/x/text/width
 # golang.org/x/time v0.0.0-20190308202827-9d24e82272b4
 golang.org/x/time/rate
-# golang.org/x/tools v0.0.0-20200413161937-250b2131eb8b
+# golang.org/x/tools v0.0.0-20200507192325-6441d34c3f03
 golang.org/x/tools/go/analysis
 golang.org/x/tools/go/analysis/passes/inspect
 golang.org/x/tools/go/ast/astutil
@@ -325,9 +325,12 @@ golang.org/x/tools/go/packages
 golang.org/x/tools/go/types/objectpath
 golang.org/x/tools/go/types/typeutil
 golang.org/x/tools/internal/analysisinternal
+golang.org/x/tools/internal/event
+golang.org/x/tools/internal/event/core
+golang.org/x/tools/internal/event/keys
+golang.org/x/tools/internal/event/label
 golang.org/x/tools/internal/gocommand
 golang.org/x/tools/internal/packagesinternal
-golang.org/x/tools/internal/telemetry/event
 # golang.org/x/xerrors v0.0.0-20191204190536-9bdfabe68543
 golang.org/x/xerrors
 golang.org/x/xerrors/internal
