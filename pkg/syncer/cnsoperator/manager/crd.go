@@ -139,7 +139,7 @@ func waitForCustomResourceToBeEstablished(ctx context.Context,
 
 	// If there is an error, delete the object to keep it clean.
 	if err != nil {
-		log.Infof("Cleanup %q CRD because the CRD created was not succesfully established. Err: %+v", crdName, err)
+		log.Infof("Cleanup %q CRD because the CRD created was not successfully established. Err: %+v", crdName, err)
 		deleteErr := clientSet.ApiextensionsV1beta1().CustomResourceDefinitions().Delete(crdName, nil)
 		if deleteErr != nil {
 			log.Errorf("Failed to delete %q CRD with err: %+v", crdName, deleteErr)
