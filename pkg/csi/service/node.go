@@ -656,6 +656,12 @@ func (s *service) NodeGetInfo(
 	}
 	cfg, err := cnsconfig.GetCnsconfig(ctx, cfgPath)
 	if err != nil {
+		if os.IsNotExist(err) {
+			log.Infof("Config file not provided to node daemonset. Assuming non-topology aware cluster.")
+			return &csi.NodeGetInfoResponse{
+				NodeId: nodeID,
+			}, nil
+		}
 		log.Errorf("Failed to read cnsconfig. Error: %v", err)
 		return nil, status.Errorf(codes.Internal, err.Error())
 	}
@@ -663,6 +669,7 @@ func (s *service) NodeGetInfo(
 	topology := &csi.Topology{}
 
 	if cfg.Labels.Zone != "" && cfg.Labels.Region != "" {
+		log.Infof("Config file provided to node daemonset with zones and regions. Assuming topology aware cluster.")
 		vcenterconfig, err := cnsvsphere.GetVirtualCenterConfig(cfg)
 		if err != nil {
 			log.Errorf("Failed to get VirtualCenterConfig from cns config. err=%v", err)
