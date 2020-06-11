@@ -94,7 +94,7 @@ func (c *controller) Init(config *config.Config) error {
 	log.Infof("Initializing CNS controller")
 	var err error
 	// Get VirtualCenterManager instance and validate version
-	vcenterconfig, err := cnsvsphere.GetVirtualCenterConfig(config)
+	vcenterconfig, err := cnsvsphere.GetVirtualCenterConfig(ctx, config)
 	if err != nil {
 		log.Errorf("Failed to get VirtualCenterConfig. err=%v", err)
 		return err
@@ -195,7 +195,7 @@ func (c *controller) ReloadConfiguration(ctx context.Context) {
 		log.Errorf("Failed to read config. Error: %+v", err)
 		return
 	}
-	newVCConfig, err := cnsvsphere.GetVirtualCenterConfig(cfg)
+	newVCConfig, err := cnsvsphere.GetVirtualCenterConfig(ctx, cfg)
 	if err != nil {
 		log.Errorf("Failed to get VirtualCenterConfig. err=%v", err)
 		return
@@ -224,6 +224,7 @@ func (c *controller) ReloadConfiguration(ctx context.Context) {
 				log.Errorf("Failed to get VirtualCenter. err=%v", err)
 				return
 			}
+			vcenter.Config = newVCConfig
 		}
 		c.manager.VolumeManager.ResetManager(ctx, vcenter)
 		c.manager.VolumeManager = cnsvolume.GetManager(ctx, vcenter)
