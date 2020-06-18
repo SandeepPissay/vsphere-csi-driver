@@ -44,7 +44,8 @@ require (
 	golang.org/x/lint v0.0.0-20200302205851-738671d3881b // indirect
 	golang.org/x/net v0.0.0-20200226121028-0de0cce0169b
 	golang.org/x/sys v0.0.0-20200331124033-c3d80250170d // indirect
-	golang.org/x/tools v0.0.0-20200527183253-8e7acdbce89d // indirect
+	golang.org/x/text v0.3.2
+	golang.org/x/tools v0.0.0-20200617212913-87be026d3888 // indirect
 	google.golang.org/appengine v1.6.5 // indirect
 	google.golang.org/grpc v1.26.0
 	gopkg.in/gcfg.v1 v1.2.3
