@@ -15,14 +15,11 @@ metadata:
   name: vsphere-csi-controller-role
 rules:
   - apiGroups: [""]
-    resources: ["nodes", "pods", "configmaps"]
+    resources: ["nodes", "persistentvolumeclaims", "pods"]
     verbs: ["get", "list", "watch"]
   - apiGroups: [""]
-    resources: ["persistentvolumeclaims"]
-    verbs: ["get", "list", "watch", "update"]
-  - apiGroups: [""]
     resources: ["persistentvolumes"]
-    verbs: ["get", "list", "watch", "create", "update", "delete", "patch"]
+    verbs: ["get", "list", "watch", "create", "update", "delete"]
   - apiGroups: [""]
     resources: ["events"]
     verbs: ["get", "list", "watch", "create", "update", "patch"]
@@ -39,9 +36,6 @@ rules:
     resources: ["podsecuritypolicies"]
     verbs: ["use"]
     resourceNames: ["vmware-system-privileged"]
-  - apiGroups: [""]
-    resources: ["persistentvolumeclaims/status"]
-    verbs: ["update", "patch"]
 ---
 kind: Role
 apiVersion: rbac.authorization.k8s.io/v1
@@ -146,8 +140,6 @@ spec:
               value: "4"
             - name: ATTACHER_TIMEOUT_MINUTES
               value: "4"
-            - name: RESIZE_TIMEOUT_MINUTES
-              value: "4"
             - name: LOGGER_LEVEL
               value: "PRODUCTION" # Options: DEVELOPMENT, PRODUCTION
             - name: SUPERVISOR_CLIENT_QPS
@@ -214,19 +206,6 @@ spec:
           volumeMounts:
             - mountPath: /csi
               name: socket-dir
-        - name: csi-resizer
-          image: vmware.io/kubernetes-csi_external-resizer/kubernetes-csi_external-resizer:<image_tag>
-          args:
-            - "--v=4"
-            - "--csiTimeout=300s"
-            - "--csi-address=$(ADDRESS)"
-            - "--leader-election"
-          env:
-            - name: ADDRESS
-              value: /csi/csi.sock
-          volumeMounts:
-            - mountPath: /csi
-              name: socket-dir
       volumes:
          - name: pvcsi-provider-volume
            secret:
@@ -271,7 +250,7 @@ spec:
         lifecycle:
           preStop:
             exec:
-              command: ["/bin/sh", "-c", "rm -rf /registration/csi.vsphere.vmware.com-reg.sock /csi/csi.sock"]
+              command: ["/bin/sh", "-c", "rm -rf /registration/csi.vsphere.vmware.com /var/lib/kubelet/plugins_registry/csi.vsphere.vmware.com /var/lib/kubelet/plugins_registry/csi.vsphere.vmware.com-reg.sock"]
         args:
           - "--v=5"
           - "--csi-address=$(ADDRESS)"
@@ -280,7 +259,7 @@ spec:
           - name: ADDRESS
             value: /csi/csi.sock
           - name: DRIVER_REG_SOCK_PATH
-            value: /var/lib/kubelet/plugins/csi.vsphere.vmware.com/csi.sock
+            value: /var/lib/kubelet/plugins_registry/csi.vsphere.vmware.com/csi.sock
         securityContext:
           privileged: true
         volumeMounts:
@@ -322,9 +301,11 @@ spec:
       - name: liveness-probe
         image: vmware.io/csi-livenessprobe/csi-livenessprobe:<image_tag>
         args:
-        - --csi-address=/csi/csi.sock
+        - "--csi-address=$(ADDRESS)"
         imagePullPolicy: "IfNotPresent"
         env:
+        - name: ADDRESS
+          value: /csi/csi.sock
         volumeMounts:
         - name: plugin-dir
           mountPath: /csi
@@ -332,10 +313,10 @@ spec:
       - name: registration-dir
         hostPath:
           path: /var/lib/kubelet/plugins_registry
-          type: Directory
+          type: DirectoryOrCreate
       - name: plugin-dir
         hostPath:
-          path: /var/lib/kubelet/plugins/csi.vsphere.vmware.com/
+          path: /var/lib/kubelet/plugins_registry/csi.vsphere.vmware.com
           type: DirectoryOrCreate
       - name: pods-mount-dir
         hostPath:
@@ -344,12 +325,6 @@ spec:
       - name: device-dir
         hostPath:
           path: /dev
-      tolerations:
-        - effect: NoExecute
-          operator: Exists
-        - effect: NoSchedule
-          operator: Exists
-
 ---
 apiVersion: v1
 data:

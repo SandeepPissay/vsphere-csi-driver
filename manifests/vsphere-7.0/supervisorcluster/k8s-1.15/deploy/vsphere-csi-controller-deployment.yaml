@@ -162,4 +162,3 @@ spec:
           hostPath:
             path: /var/lib/csi/sockets/pluginproxy/csi.vsphere.vmware.com
             type: DirectoryOrCreate
-
