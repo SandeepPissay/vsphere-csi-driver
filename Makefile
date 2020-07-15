@@ -398,7 +398,7 @@ test-e2e:
 ##                                 LINTING                                    ##
 ################################################################################
 .PHONY: check fmt lint shellcheck staticcheck vet
-check: fmt lint shellcheck staticcheck vet
+check: fmt lint shellcheck staticcheck vet golangci-lint
 
 fmt:
 	hack/check-format.sh
