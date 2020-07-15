@@ -32,6 +32,7 @@ require (
 	github.com/pborman/uuid v1.2.0 // indirect
 	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
 	github.com/pkg/errors v0.8.1
+	github.com/prometheus/common v0.4.1
 	github.com/rexray/gocsi v1.2.1
 	github.com/spf13/cobra v0.0.5 // indirect
 	github.com/thecodeteam/gofsutil v0.1.2 // indirect
@@ -44,7 +45,6 @@ require (
 	golang.org/x/lint v0.0.0-20200302205851-738671d3881b // indirect
 	golang.org/x/net v0.0.0-20200625001655-4c5254603344
 	golang.org/x/sys v0.0.0-20200331124033-c3d80250170d // indirect
-	golang.org/x/text v0.3.2
 	golang.org/x/tools v0.0.0-20200713235242-6acd2ab80ede // indirect
 	google.golang.org/appengine v1.6.5 // indirect
 	google.golang.org/grpc v1.26.0

@@ -8,6 +8,11 @@ github.com/PuerkitoBio/urlesc
 github.com/akutz/gofsutil
 # github.com/akutz/gosync v0.1.0
 github.com/akutz/gosync
+# github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc
+github.com/alecthomas/template
+github.com/alecthomas/template/parse
+# github.com/alecthomas/units v0.0.0-20151022065526-2efee857e7cf
+github.com/alecthomas/units
 # github.com/beorn7/perks v1.0.0
 github.com/beorn7/perks/quantile
 # github.com/container-storage-interface/spec v1.2.0
@@ -170,6 +175,7 @@ github.com/prometheus/client_model/go
 # github.com/prometheus/common v0.4.1
 github.com/prometheus/common/expfmt
 github.com/prometheus/common/internal/bitbucket.org/ww/goautoneg
+github.com/prometheus/common/log
 github.com/prometheus/common/model
 # github.com/prometheus/procfs v0.0.2
 github.com/prometheus/procfs
@@ -253,22 +259,24 @@ go.uber.org/zap/internal/bufferpool
 go.uber.org/zap/internal/color
 go.uber.org/zap/internal/exit
 go.uber.org/zap/zapcore
-# golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550
+# golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
+golang.org/x/crypto/blowfish
+golang.org/x/crypto/chacha20
 golang.org/x/crypto/curve25519
 golang.org/x/crypto/ed25519
 golang.org/x/crypto/ed25519/internal/edwards25519
-golang.org/x/crypto/internal/chacha20
 golang.org/x/crypto/internal/subtle
 golang.org/x/crypto/pbkdf2
 golang.org/x/crypto/poly1305
 golang.org/x/crypto/ssh
+golang.org/x/crypto/ssh/internal/bcrypt_pbkdf
 golang.org/x/crypto/ssh/terminal
 # golang.org/x/lint v0.0.0-20200302205851-738671d3881b
 golang.org/x/lint
 golang.org/x/lint/golint
-# golang.org/x/mod v0.2.0
+# golang.org/x/mod v0.3.0
 golang.org/x/mod/semver
-# golang.org/x/net v0.0.0-20200226121028-0de0cce0169b
+# golang.org/x/net v0.0.0-20200625001655-4c5254603344
 golang.org/x/net/context
 golang.org/x/net/context/ctxhttp
 golang.org/x/net/html
@@ -288,6 +296,8 @@ golang.org/x/oauth2/internal
 golang.org/x/sys/cpu
 golang.org/x/sys/unix
 golang.org/x/sys/windows
+golang.org/x/sys/windows/registry
+golang.org/x/sys/windows/svc/eventlog
 # golang.org/x/text v0.3.2
 golang.org/x/text/encoding
 golang.org/x/text/encoding/charmap
@@ -312,7 +322,7 @@ golang.org/x/text/unicode/norm
 golang.org/x/text/width
 # golang.org/x/time v0.0.0-20190308202827-9d24e82272b4
 golang.org/x/time/rate
-# golang.org/x/tools v0.0.0-20200617212913-87be026d3888
+# golang.org/x/tools v0.0.0-20200713235242-6acd2ab80ede
 golang.org/x/tools/go/analysis
 golang.org/x/tools/go/analysis/passes/inspect
 golang.org/x/tools/go/ast/astutil
@@ -389,6 +399,8 @@ google.golang.org/grpc/serviceconfig
 google.golang.org/grpc/stats
 google.golang.org/grpc/status
 google.golang.org/grpc/tap
+# gopkg.in/alecthomas/kingpin.v2 v2.2.6
+gopkg.in/alecthomas/kingpin.v2
 # gopkg.in/fsnotify.v1 v1.4.7
 gopkg.in/fsnotify.v1
 # gopkg.in/gcfg.v1 v1.2.3
