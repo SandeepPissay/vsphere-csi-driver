@@ -407,7 +407,7 @@ lint:
 	hack/check-lint.sh
 
 golangci-lint:
-	docker run --rm -v $(PWD):/app -w /app golangci/golangci-lint:v1.27.0 golangci-lint run -v --timeout=300s
+	docker run --rm -v $(PWD):/app -w /app golangci/golangci-lint:v1.28.3 golangci-lint run -v  --timeout=1200s
 
 shellcheck:
 	hack/check-shell.sh
