@@ -137,9 +137,17 @@ spec:
 ---
 apiVersion: v1
 data:
-  "volume-extend": "true"
-  "volume-health": "true"
+  "csi-migration": "false"
 kind: ConfigMap
 metadata:
   name: csi-feature-states
+  namespace: kube-system
+---
+apiVersion: storage.k8s.io/v1beta1
+kind: CSIDriver
+metadata:
+  name: csi.vsphere.vmware.com
+spec:
+  attachRequired: true
+  podInfoOnMount: false
 ---
