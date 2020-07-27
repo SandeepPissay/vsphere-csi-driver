@@ -22,7 +22,6 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/prometheus/common/log"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/common"
@@ -44,10 +43,11 @@ type K8sOrchestrator struct {
 // Newk8sOrchestrator instantiates K8sOrchestrator object and returns this object
 func Newk8sOrchestrator() *K8sOrchestrator {
 	onceFork8sOrchestratorInstance.Do(func() {
+		ctx, log := logger.GetNewContextWithLogger()
 		log.Info("Initializing k8sOrchestratorInstance")
 		k8sOrchestratorInstance = &K8sOrchestrator{}
 		k8sOrchestratorInstance.featureStates = make(map[string]string)
-		ctx, log := logger.GetNewContextWithLogger()
+
 		k8sClient, _ := k8s.NewClient(ctx)
 		fssConfigMap, err := k8sClient.CoreV1().ConfigMaps(common.CSINamespace).Get(ctx, common.CSIFeatureStatesConfigMapName, metav1.GetOptions{})
 		if err != nil {
@@ -56,7 +56,7 @@ func Newk8sOrchestrator() *K8sOrchestrator {
 		} else {
 			updateFSSValues(ctx, fssConfigMap, k8sOrchestratorInstance)
 		}
-		// Set up kubernetes resource listeners for metadata syncer
+		// Set up kubernetes resource listeners for K8sOrchestrator instance
 		k8sOrchestratorInstance.informerManager = k8s.NewInformer(k8sClient)
 		k8sOrchestratorInstance.informerManager.AddConfigMapListener(
 			func(obj interface{}) {
@@ -86,7 +86,7 @@ func configMapAdded(obj interface{}, c *K8sOrchestrator) {
 		log.Warnf("configMapAdded: unrecognized object %+v", obj)
 		return
 	}
-	if fssConfigMap.Name == common.CSIFeatureStatesConfigMapName {
+	if fssConfigMap.Name == common.CSIFeatureStatesConfigMapName && fssConfigMap.Namespace == common.CSINamespace {
 		updateFSSValues(ctx, fssConfigMap, c)
 	}
 }
@@ -102,7 +102,7 @@ func configMapUpdated(oldObj, newObj interface{}, c *K8sOrchestrator) {
 		log.Warnf("configMapUpdated: unrecognized new object %+v", newObj)
 		return
 	}
-	if fssConfigMap.Name == common.CSIFeatureStatesConfigMapName {
+	if fssConfigMap.Name == common.CSIFeatureStatesConfigMapName && fssConfigMap.Namespace == common.CSINamespace {
 		updateFSSValues(ctx, fssConfigMap, c)
 	}
 }
@@ -118,12 +118,12 @@ func configMapDeleted(obj interface{}, c *K8sOrchestrator) {
 		log.Warnf("configMapDeleted: unrecognized object %+v", obj)
 		return
 	}
-	if fssConfigMap.Name == common.CSIFeatureStatesConfigMapName {
+	if fssConfigMap.Name == common.CSIFeatureStatesConfigMapName && fssConfigMap.Namespace == common.CSINamespace {
 		for featureName := range c.featureStates {
 			c.featureStates[featureName] = strconv.FormatBool(false)
 		}
+		log.Infof("configMapDeleted: %v deleted. Setting feature state values to false %v", fssConfigMap.Name, c.featureStates)
 	}
-	log.Infof("configMapDeleted: %v deleted. Setting feature state values to false %v", fssConfigMap.Name, c.featureStates)
 }
 
 // updateFSSValues updates feature state switch values in the k8sorchestrator
