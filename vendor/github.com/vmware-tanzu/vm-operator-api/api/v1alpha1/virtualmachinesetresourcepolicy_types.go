@@ -54,7 +54,6 @@ type ClusterModuleStatus struct {
 }
 
 // +genclient
-// +genclient:nonNamespaced
 // +kubebuilder:object:root=true
 // +kubebuilder:storageversion
 // +kubebuilder:subresource:status
@@ -82,5 +81,5 @@ type VirtualMachineSetResourcePolicyList struct {
 }
 
 func init() {
-	SchemeBuilder.Register(&VirtualMachineSetResourcePolicy{}, &VirtualMachineSetResourcePolicyList{})
+	RegisterTypeWithScheme(&VirtualMachineSetResourcePolicy{}, &VirtualMachineSetResourcePolicyList{})
 }

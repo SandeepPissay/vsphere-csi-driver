@@ -237,6 +237,7 @@ var kinds = map[string]reflect.Type{
 	"GuestOperationsManager":         reflect.TypeOf((*GuestOperationsManager)(nil)).Elem(),
 	"HostDatastoreBrowser":           reflect.TypeOf((*HostDatastoreBrowser)(nil)).Elem(),
 	"HostLocalAccountManager":        reflect.TypeOf((*HostLocalAccountManager)(nil)).Elem(),
+	"HostNetworkSystem":              reflect.TypeOf((*HostNetworkSystem)(nil)).Elem(),
 	"HostSystem":                     reflect.TypeOf((*HostSystem)(nil)).Elem(),
 	"IpPoolManager":                  reflect.TypeOf((*IpPoolManager)(nil)).Elem(),
 	"LicenseManager":                 reflect.TypeOf((*LicenseManager)(nil)).Elem(),
@@ -299,7 +300,7 @@ func loadObject(content types.ObjectContent) (mo.Reference, error) {
 // resolveReferences attempts to resolve any object references that were not included via Load()
 // example: Load's dir only contains a single OpaqueNetwork, we need to create a Datacenter and
 // place the OpaqueNetwork in the Datacenter's network folder.
-func (m *Model) resolveReferences() error {
+func (m *Model) resolveReferences(ctx *Context) error {
 	dc, ok := Map.Any("Datacenter").(*Datacenter)
 	if !ok {
 		// Need to have at least 1 Datacenter
@@ -327,7 +328,7 @@ func (m *Model) resolveReferences() error {
 				folder := dc.folder(me)
 				e.Parent = &folder.Self
 				log.Printf("%s adopted %s", e.Parent, ref)
-				folder.putChild(me)
+				folderPutChild(ctx, folder, me)
 			default:
 				return fmt.Errorf("unable to foster %s with parent type=%s", ref, e.Parent.Type)
 			}
@@ -340,6 +341,7 @@ func (m *Model) resolveReferences() error {
 
 // Load Model from the given directory, as created by the 'govc object.save' command.
 func (m *Model) Load(dir string) error {
+	ctx := internalContext
 	var s *ServiceInstance
 
 	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
@@ -395,14 +397,14 @@ func (m *Model) Load(dir string) error {
 
 	m.Service = New(s)
 
-	return m.resolveReferences()
+	return m.resolveReferences(ctx)
 }
 
 // Create populates the Model with the given ModelConfig
 func (m *Model) Create() error {
+	ctx := internalContext
 	m.Service = New(NewServiceInstance(m.ServiceContent, m.RootFolder))
 
-	ctx := context.Background()
 	client := m.Service.client
 	root := object.NewRootFolder(client)
 

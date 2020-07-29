@@ -17,6 +17,7 @@ limitations under the License.
 package simulator
 
 import (
+	"net"
 	"os"
 	"time"
 
@@ -63,6 +64,10 @@ func NewHostSystem(host mo.HostSystem) *HostSystem {
 	info := *esx.HostHardwareInfo
 	hs.Hardware = &info
 
+	cfg := new(types.HostConfigInfo)
+	deepCopy(hs.Config, cfg)
+	hs.Config = cfg
+
 	config := []struct {
 		ref **types.ManagedObjectReference
 		obj mo.Reference
@@ -87,6 +92,9 @@ func (h *HostSystem) configure(spec types.HostConnectSpec, connected bool) {
 	h.Runtime.ConnectionState = types.HostSystemConnectionStateDisconnected
 	if connected {
 		h.Runtime.ConnectionState = types.HostSystemConnectionStateConnected
+	}
+	if net.ParseIP(spec.HostName) != nil {
+		h.Config.Network.Vnic[0].Spec.Ip.IpAddress = spec.HostName
 	}
 
 	h.Summary.Config.Name = spec.HostName
@@ -147,8 +155,8 @@ func addComputeResource(s *types.ComputeResourceSummary, h *HostSystem) {
 
 // CreateDefaultESX creates a standalone ESX
 // Adds objects of type: Datacenter, Network, ComputeResource, ResourcePool and HostSystem
-func CreateDefaultESX(f *Folder) {
-	dc := NewDatacenter(f)
+func CreateDefaultESX(ctx *Context, f *Folder) {
+	dc := NewDatacenter(ctx, &f.Folder)
 
 	host := NewHostSystem(esx.HostSystem)
 
@@ -171,12 +179,12 @@ func CreateDefaultESX(f *Folder) {
 	Map.PutEntity(cr, pool)
 	pool.Owner = cr.Self
 
-	Map.Get(dc.HostFolder).(*Folder).putChild(cr)
+	folderPutChild(ctx, &Map.Get(dc.HostFolder).(*Folder).Folder, cr)
 }
 
 // CreateStandaloneHost uses esx.HostSystem as a template, applying the given spec
 // and creating the ComputeResource parent and ResourcePool sibling.
-func CreateStandaloneHost(f *Folder, spec types.HostConnectSpec) (*HostSystem, types.BaseMethodFault) {
+func CreateStandaloneHost(ctx *Context, f *Folder, spec types.HostConnectSpec) (*HostSystem, types.BaseMethodFault) {
 	if spec.HostName == "" {
 		return nil, &types.NoHost{}
 	}
@@ -206,7 +214,7 @@ func CreateStandaloneHost(f *Folder, spec types.HostConnectSpec) (*HostSystem, t
 	cr.Host = append(cr.Host, host.Reference())
 	cr.ResourcePool = &pool.Self
 
-	f.putChild(cr)
+	folderPutChild(ctx, &f.Folder, cr)
 	pool.Owner = cr.Self
 	host.Network = cr.Network
 
@@ -222,7 +230,7 @@ func (h *HostSystem) DestroyTask(ctx *Context, req *types.Destroy_Task) soap.Has
 		ctx.postEvent(&types.HostRemovedEvent{HostEvent: h.event()})
 
 		f := Map.getEntityParent(h, "Folder").(*Folder)
-		f.removeChild(h.Reference())
+		folderRemoveChild(ctx, &f.Folder, h.Reference())
 
 		return nil, nil
 	})

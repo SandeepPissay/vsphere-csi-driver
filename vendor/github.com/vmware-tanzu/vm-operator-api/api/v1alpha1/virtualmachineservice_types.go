@@ -99,7 +99,6 @@ type VirtualMachineServiceStatus struct {
 }
 
 // +genclient
-// +genclient:nonNamespaced
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:shortName=vmservice
 // +kubebuilder:storageversion
@@ -131,5 +130,5 @@ type VirtualMachineServiceList struct {
 }
 
 func init() {
-	SchemeBuilder.Register(&VirtualMachineService{}, &VirtualMachineServiceList{})
+	RegisterTypeWithScheme(&VirtualMachineService{}, &VirtualMachineServiceList{})
 }
