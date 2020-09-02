@@ -19,6 +19,7 @@ package service
 import (
 	"errors"
 	"fmt"
+	pbmtypes "github.com/vmware/govmomi/pbm/types"
 	"io/ioutil"
 	"os"
 	"path"
@@ -140,6 +141,16 @@ func nodeStageBlockVolume(
 	log := logger.GetLogger(ctx)
 	// Block Volume
 	pubCtx := req.GetPublishContext()
+	volHealth, ok := pubCtx[common.VolumeHealth]
+	if ok && volHealth == string(pbmtypes.PbmHealthStatusForEntityRed) {
+		log.Warnf("[nodeStageBlockVolume] Ignoring inaccessible PSP PV: %s", req.VolumeId)
+		if err := gofsutil.Mount(ctx, "tmpfs", req.StagingTargetPath, "tmpfs", "ro", "size=10m"); err != nil {
+			msg := fmt.Sprintf("error mounting tmpfs volume as ro. err: %v", err)
+			log.Error(msg)
+			return nil, status.Errorf(codes.Internal, msg)
+		}
+		return &csi.NodeStageVolumeResponse{}, nil
+	}
 	diskID, err := getDiskID(pubCtx)
 	if err != nil {
 		return nil, err
@@ -346,6 +357,13 @@ func (s *service) NodePublishVolume(
 	ctx = logger.NewContextWithLogger(ctx)
 	log := logger.GetLogger(ctx)
 	log.Infof("NodePublishVolume: called with args %+v", *req)
+	pubCtx := req.GetPublishContext()
+	volHealth, ok := pubCtx[common.VolumeHealth]
+	if ok && volHealth == string(pbmtypes.PbmHealthStatusForEntityRed) {
+		log.Warnf("[NodePublishVolume] Ignoring inaccessible PSP PV: %s", req.VolumeId)
+		return &csi.NodePublishVolumeResponse{}, nil
+	}
+
 	var err error
 	params := nodePublishParams{
 		volID:  req.GetVolumeId(),

@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	pbmtypes "github.com/vmware/govmomi/pbm/types"
 	"math/rand"
 	"path/filepath"
 	"strings"
@@ -609,40 +610,62 @@ func (c *controller) ControllerPublishVolume(ctx context.Context, req *csi.Contr
 			return nil, status.Errorf(codes.Internal, msg)
 		}
 	} else {
-		// Block Volume
-		if strings.Contains(req.VolumeId, ".vmdk") {
-			// in-tree volume support
-			if !containerOrchestratorUtility.IsFSSEnabled(ctx, common.CSIMigration) {
-				// Migration feature switch is disabled
-				msg := fmt.Sprintf("volume-migration feature switch is disabled. Cannot use volume with vmdk path :%q", req.VolumeId)
-				log.Error(msg)
-				return nil, status.Errorf(codes.Internal, msg)
+		// Check if the volume is inaccessible.
+		queryFilter := cnstypes.CnsQueryFilter{
+			VolumeIds: []cnstypes.CnsVolumeId{{Id: req.VolumeId}},
+		}
+		queryResult, err := c.manager.VolumeManager.QueryVolume(ctx, queryFilter)
+		if err != nil {
+			msg := fmt.Sprintf("QueryVolume failed for volumeID: %q. %+v", req.VolumeId, err.Error())
+			log.Error(msg)
+			return nil, status.Error(codes.Internal, msg)
+		}
+		if len(queryResult.Volumes) == 0 {
+			msg := fmt.Sprintf("volumeID %s not found in QueryVolume", req.VolumeId)
+			log.Error(msg)
+			return nil, status.Error(codes.Internal, msg)
+		}
+		if queryResult.Volumes[0].HealthStatus == string(pbmtypes.PbmHealthStatusForEntityRed) {
+			// Volume is inaccessible. So, skip it.
+			// TODO: Ideally we should do this only for PSP PVs that have a specific label/annotation.
+			publishInfo[common.VolumeHealth] = string(pbmtypes.PbmHealthStatusForEntityRed)
+			log.Warnf("Inaccessible PSP PV: %s. Skipping ControllerPublishVolume...", req.VolumeId)
+		} else {
+			// Block Volume
+			if strings.Contains(req.VolumeId, ".vmdk") {
+				// in-tree volume support
+				if !containerOrchestratorUtility.IsFSSEnabled(ctx, common.CSIMigration) {
+					// Migration feature switch is disabled
+					msg := fmt.Sprintf("volume-migration feature switch is disabled. Cannot use volume with vmdk path :%q", req.VolumeId)
+					log.Error(msg)
+					return nil, status.Errorf(codes.Internal, msg)
+				}
+				// Migration feature switch is enabled
+				storagePolicyName := req.VolumeContext[common.AttributeStoragePolicyName]
+				volumePath := req.VolumeId
+				req.VolumeId, err = volumeMigrationService.GetVolumeID(ctx, migration.VolumeSpec{VolumePath: volumePath, StoragePolicyName: storagePolicyName})
+				if err != nil {
+					msg := fmt.Sprintf("failed to get VolumeID from volumeMigrationService for volumePath: %q", volumePath)
+					log.Error(msg)
+					return nil, status.Errorf(codes.Internal, msg)
+				}
 			}
-			// Migration feature switch is enabled
-			storagePolicyName := req.VolumeContext[common.AttributeStoragePolicyName]
-			volumePath := req.VolumeId
-			req.VolumeId, err = volumeMigrationService.GetVolumeID(ctx, migration.VolumeSpec{VolumePath: volumePath, StoragePolicyName: storagePolicyName})
+			node, err := c.nodeMgr.GetNodeByName(ctx, req.NodeId)
 			if err != nil {
-				msg := fmt.Sprintf("failed to get VolumeID from volumeMigrationService for volumePath: %q", volumePath)
+				msg := fmt.Sprintf("failed to find VirtualMachine for node:%q. Error: %v", req.NodeId, err)
 				log.Error(msg)
 				return nil, status.Errorf(codes.Internal, msg)
 			}
-		}
-		node, err := c.nodeMgr.GetNodeByName(ctx, req.NodeId)
-		if err != nil {
-			msg := fmt.Sprintf("failed to find VirtualMachine for node:%q. Error: %v", req.NodeId, err)
-			log.Error(msg)
-			return nil, status.Errorf(codes.Internal, msg)
-		}
-		log.Debugf("Found VirtualMachine for node:%q.", req.NodeId)
-		diskUUID, err := common.AttachVolumeUtil(ctx, c.manager, node, req.VolumeId)
-		if err != nil {
-			msg := fmt.Sprintf("failed to attach disk: %+q with node: %q err %+v", req.VolumeId, req.NodeId, err)
-			log.Error(msg)
-			return nil, status.Errorf(codes.Internal, msg)
+			log.Debugf("Found VirtualMachine for node:%q.", req.NodeId)
+			diskUUID, err := common.AttachVolumeUtil(ctx, c.manager, node, req.VolumeId)
+			if err != nil {
+				msg := fmt.Sprintf("failed to attach disk: %+q with node: %q err %+v", req.VolumeId, req.NodeId, err)
+				log.Error(msg)
+				return nil, status.Errorf(codes.Internal, msg)
+			}
+			publishInfo[common.AttributeFirstClassDiskUUID] = common.FormatDiskUUID(diskUUID)
 		}
 		publishInfo[common.AttributeDiskType] = common.DiskTypeBlockVolume
-		publishInfo[common.AttributeFirstClassDiskUUID] = common.FormatDiskUUID(diskUUID)
 	}
 	return &csi.ControllerPublishVolumeResponse{
 		PublishContext: publishInfo,
@@ -709,6 +732,25 @@ func (c *controller) ControllerUnpublishVolume(ctx context.Context, req *csi.Con
 			log.Error(msg)
 			return nil, status.Errorf(codes.Internal, msg)
 		}
+	}
+	// Check if the volume is inaccessible.
+	queryFilter := cnstypes.CnsQueryFilter{
+		VolumeIds: []cnstypes.CnsVolumeId{{Id: req.VolumeId}},
+	}
+	queryResult, err := c.manager.VolumeManager.QueryVolume(ctx, queryFilter)
+	if err != nil {
+		msg := fmt.Sprintf("QueryVolume failed for volumeID: %q. %+v", req.VolumeId, err.Error())
+		log.Error(msg)
+		return nil, status.Error(codes.Internal, msg)
+	}
+	if len(queryResult.Volumes) == 0 {
+		msg := fmt.Sprintf("volumeID %s not found in QueryVolume", req.VolumeId)
+		log.Error(msg)
+		return nil, status.Error(codes.Internal, msg)
+	}
+	if queryResult.Volumes[0].HealthStatus == string(pbmtypes.PbmHealthStatusForEntityRed) {
+		log.Warnf("[ControllerUnpublishVolume] Ignoring inaccessible PSP PV: %s", req.VolumeId)
+		return &csi.ControllerUnpublishVolumeResponse{}, nil
 	}
 	// Block Volume
 	node, err := c.nodeMgr.GetNodeByName(ctx, req.NodeId)
