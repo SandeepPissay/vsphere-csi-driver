@@ -13,11 +13,24 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package main
+package client
 
-import "sigs.k8s.io/vsphere-csi-driver/cnsctl/cmd"
+import (
+	"context"
+	"fmt"
+	"github.com/vmware/govmomi"
+	"github.com/vmware/govmomi/vim25/soap"
+)
 
-func main() {
-	cmd.InitRoot()
-	cmd.Execute()
+func GetClient(ctx context.Context, vcUser, vcPwd, vcHost string) (*govmomi.Client, error) {
+	url := fmt.Sprintf("https://%s:%s@%s/sdk", vcUser, vcPwd, vcHost)
+	u, err := soap.ParseURL(url)
+	if err != nil {
+		return nil, err
+	}
+	c, err := govmomi.NewClient(ctx, u, true)
+	if err != nil {
+		return nil, err
+	}
+	return c, nil
 }

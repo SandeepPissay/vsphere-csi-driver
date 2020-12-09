@@ -1,5 +1,5 @@
 /*
-Copyright © 2020 NAME HERE <EMAIL ADDRESS>
+Copyright 2020 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -23,22 +23,16 @@ import (
 	"github.com/spf13/viper"
 )
 
-var cfgFile string
-
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "cnsctl",
 	Short: "CLI tool for CNS-CSI.",
 	Long:  "A fast CLI based tool to interact with CNS-CSI for various storage control operations.",
-	// Uncomment the following line if your bare application
-	// has an action associated with it:
-	//	Run: func(cmd *cobra.Command, args []string) { },
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
-
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
@@ -56,13 +50,4 @@ func InitViper() {
 func InitRoot() {
 	InitViper()
 	InitOv()
-	cobra.OnInitialize(initConfig)
-	rootCmd.PersistentFlags().StringVarP(&cfgFile, "kubeconfig", "k", viper.GetString("kubeconfig"), "kubeconfig file")
-}
-
-func initConfig() {
-	if cfgFile == "" {
-		fmt.Println("error: kubeconfig flag or CNSCTL_KUBECONFIG env variable not set!")
-		os.Exit(1)
-	}
 }
