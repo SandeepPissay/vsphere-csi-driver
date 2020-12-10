@@ -78,6 +78,7 @@ var cleanupCmd = &cobra.Command{
 func InitCleanup() {
 	cleanupCmd.PersistentFlags().StringVarP(&datastores, "datastores", "d", viper.GetString("datastores"), "Comma-separated datastore names")
 	cleanupCmd.PersistentFlags().StringVarP(&cfgFile, "kubeconfig", "k", viper.GetString("kubeconfig"), "kubeconfig file")
+	cleanupCmd.PersistentFlags().BoolVarP(&forceDelete, "force", "f", false, "Force delete the volume")
 	ovCmd.AddCommand(cleanupCmd)
 }
 
