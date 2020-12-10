@@ -25,9 +25,10 @@ import (
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "cnsctl",
-	Short: "CLI tool for CNS-CSI.",
-	Long:  "A fast CLI based tool to interact with CNS-CSI for various storage control operations.",
+	Use:     "cnsctl",
+	Short:   "CLI tool for CNS-CSI.",
+	Long:    "A fast CLI based tool to interact with CNS-CSI for various storage control operations.",
+	Version: "v0.0.3",
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.

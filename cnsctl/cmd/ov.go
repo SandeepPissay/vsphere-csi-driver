@@ -41,10 +41,10 @@ func InitOv() {
 	InitRm()
 	InitCleanup()
 
-	ovCmd.PersistentFlags().StringVarP(&vcHost, "host", "H", viper.GetString("host"), "vCenter host")
-	ovCmd.PersistentFlags().StringVarP(&vcUser, "user", "u", viper.GetString("user"), "vCenter user")
-	ovCmd.PersistentFlags().StringVarP(&vcPwd, "password", "p", viper.GetString("password"), "vCenter password")
-	ovCmd.PersistentFlags().StringVarP(&datacenter, "datacenter", "D", viper.GetString("datacenter"), "Datacenter name")
+	ovCmd.PersistentFlags().StringVarP(&vcHost, "host", "H", viper.GetString("host"), "vCenter host (alternatively use CNSCTL_HOST env variable)")
+	ovCmd.PersistentFlags().StringVarP(&vcUser, "user", "u", viper.GetString("user"), "vCenter user (alternatively use CNSCTL_USER env variable)")
+	ovCmd.PersistentFlags().StringVarP(&vcPwd, "password", "p", viper.GetString("password"), "vCenter password (alternatively use CNSCTL_PASSWORD env variable)")
+	ovCmd.PersistentFlags().StringVarP(&datacenter, "datacenter", "D", viper.GetString("datacenter"), "datacenter name (alternatively use CNSCTL_DATACENTER env variable)")
 
 	rootCmd.AddCommand(ovCmd)
 }

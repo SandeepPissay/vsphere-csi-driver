@@ -29,7 +29,7 @@ import (
 
 type OrphanVolumeRequest struct {
 	KubeConfigFile string
-	VcClient *govmomi.Client
+	VcClient       *govmomi.Client
 	Datacenter     string
 	Datastores     []string
 }

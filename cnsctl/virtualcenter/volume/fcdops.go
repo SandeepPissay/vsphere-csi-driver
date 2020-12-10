@@ -22,6 +22,7 @@ import (
 	"github.com/vmware/govmomi/find"
 	"github.com/vmware/govmomi/object"
 	"github.com/vmware/govmomi/vim25/methods"
+	"github.com/vmware/govmomi/vim25/mo"
 	"github.com/vmware/govmomi/vim25/types"
 	"github.com/vmware/govmomi/vslm"
 )
@@ -36,18 +37,18 @@ type DeleteFcdRequest struct {
 // Deletes the FCD.
 // If forceDelete is true and if the FCD is attached to a VM, it detaches it and then deletes it.
 // If forceDelete is false, the FCD is not deleted.
-func DeleteFcd(ctx context.Context, req *DeleteFcdRequest, forceDelete string) error {
+func DeleteFcd(ctx context.Context, req *DeleteFcdRequest, forceDelete string) (bool, error) {
 	finder := find.NewFinder(req.Client.Client, false)
 	dcObj, err := finder.Datacenter(ctx, req.Datacenter)
 	if err != nil {
 		fmt.Printf("Unable to find datacenter: %s\n", req.Datacenter)
-		return err
+		return false, err
 	}
 	finder.SetDatacenter(dcObj)
 	dsObj, err := finder.Datastore(ctx, req.Datastore)
 	if err != nil {
 		fmt.Printf("Unable to find datastore: %s\n", req.Datastore)
-		return err
+		return false, err
 	}
 	m := vslm.NewObjectManager(req.Client.Client)
 	retObjAsso := &types.RetrieveVStorageObjectAssociations{
@@ -62,13 +63,20 @@ func DeleteFcd(ctx context.Context, req *DeleteFcdRequest, forceDelete string) e
 	res, err := methods.RetrieveVStorageObjectAssociations(ctx, req.Client.RoundTripper, retObjAsso)
 	if err != nil {
 		fmt.Printf("Failed to get VM associations for FCD: %s\n", req.FcdId)
-		return err
+		return false, err
 	}
 	if len(res.Returnval) > 0 && len(res.Returnval[0].VmDiskAssociations) > 0 {
 		vmId := res.Returnval[0].VmDiskAssociations[0].VmId
 		if forceDelete == "false" {
-			fmt.Printf("FCD %s is attached to VM %s. Ignoring delete operation.\n", req.FcdId, vmId)
-			return nil
+			vmObj := object.NewVirtualMachine(req.Client.Client, types.ManagedObjectReference{Type: "VirtualMachine", Value: vmId})
+			var vmMo mo.VirtualMachine
+			err := vmObj.Properties(ctx, vmObj.Reference(), []string{"name"}, &vmMo)
+			if err != nil {
+				fmt.Printf("FCD %s is attached to VM. Failed to get the VM name.\n", req.FcdId)
+				return false, err
+			}
+			fmt.Printf("FCD %s is attached to VM %+v. Ignoring delete operation.\n", req.FcdId, vmMo.Name)
+			return false, nil
 		}
 		fmt.Printf("FCD %s is attached to VM %s. Detaching the FCD..\n", req.FcdId, vmId)
 		vm := object.NewVirtualMachine(req.Client.Client, types.ManagedObjectReference{
@@ -78,20 +86,20 @@ func DeleteFcd(ctx context.Context, req *DeleteFcdRequest, forceDelete string) e
 		err = vm.DetachDisk(ctx, req.FcdId)
 		if err != nil {
 			fmt.Printf("Failed to detach FCD %s from VM %s\n", req.FcdId, vmId)
-			return err
+			return false, err
 		}
 	}
 
 	task, err := m.Delete(ctx, dsObj, req.FcdId)
 	if err != nil {
 		fmt.Printf("Unable to delete the FCD: %s\n", req.FcdId)
-		return err
+		return false, err
 	}
 	_, err = task.WaitForResult(ctx)
 	if err != nil {
 		fmt.Printf("Error while waiting for task result: %+v\n", err)
-		return err
+		return false, err
 	}
 	fmt.Printf("Deleted FCD %s successfully\n", req.FcdId)
-	return nil
+	return true, nil
 }

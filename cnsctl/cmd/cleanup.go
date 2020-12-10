@@ -62,29 +62,29 @@ var cleanupCmd = &cobra.Command{
 		totalOrphans := 0
 		for _, fcdInfo := range res.Fcds {
 			if fcdInfo.IsOrphan == true {
-				totalOrphans++
 				fmt.Printf("Found orphan volume: %+v\n", fcdInfo)
-				deleteVolume(ctx, vcClient, []string{fcdInfo.FcdId}, fcdInfo.Datastore, cmd.Flag("datacenter").Value.String(), cmd.Flag("force").Value.String())
+				deleteCount := deleteVolume(ctx, vcClient, []string{fcdInfo.FcdId}, fcdInfo.Datastore, cmd.Flag("datacenter").Value.String(), cmd.Flag("force").Value.String())
+				totalOrphans += deleteCount
 			}
 		}
 		if totalOrphans > 0 {
 			fmt.Printf("Cleaned up %d orphan volumes.\n", totalOrphans)
 		} else {
-			fmt.Printf("No orphan volumes found.\n")
+			fmt.Printf("Orphan volumes were not found or they were not cleaned up.\n")
 		}
 	},
 }
 
 func InitCleanup() {
-	cleanupCmd.PersistentFlags().StringVarP(&datastores, "datastores", "d", viper.GetString("datastores"), "Comma-separated datastore names")
-	cleanupCmd.PersistentFlags().StringVarP(&cfgFile, "kubeconfig", "k", viper.GetString("kubeconfig"), "kubeconfig file")
-	cleanupCmd.PersistentFlags().BoolVarP(&forceDelete, "force", "f", false, "Force delete the volume")
+	cleanupCmd.PersistentFlags().StringVarP(&datastores, "datastores", "d", viper.GetString("datastores"), "comma-separated datastore names (alternatively use CNSCTL_DATASTORES env variable)")
+	cleanupCmd.PersistentFlags().StringVarP(&cfgFile, "kubeconfig", "k", viper.GetString("kubeconfig"), "kubeconfig file (alternatively use CNSCTL_KUBECONFIG env variable)")
+	cleanupCmd.PersistentFlags().BoolVarP(&forceDelete, "force", "f", false, "force delete the volumes")
 	ovCmd.AddCommand(cleanupCmd)
 }
 
 func validateCleanupFlags() {
 	if datastores == "" {
-		fmt.Printf("error: datastores flag or CNSCTL_DATASTORES env variable must be set for 'ls' sub-command\n")
+		fmt.Printf("error: datastores flag or CNSCTL_DATASTORES env variable must be set for 'cleanup' sub-command\n")
 		os.Exit(1)
 	}
 	if cfgFile == "" {

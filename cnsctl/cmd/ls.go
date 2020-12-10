@@ -30,6 +30,7 @@ import (
 )
 
 var datastores, cfgFile string
+var all bool
 
 // lsCmd represents the ls command
 var lsCmd = &cobra.Command{
@@ -68,9 +69,18 @@ var lsCmd = &cobra.Command{
 		fmt.Fprintf(w, "Total volumes: %d\n", totalVols)
 		fmt.Fprintf(w, "Total orphan volumes: %d\n", totalOrphans)
 		if totalVols > 0 {
-			fmt.Fprintf(w, "DATASTORE\tFCD_ID\tIS_ORPHAN\tPV_NAME\n")
-			for _, fcdInfo := range res.Fcds {
-				fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", fcdInfo.Datastore, fcdInfo.FcdId, strconv.FormatBool(fcdInfo.IsOrphan), fcdInfo.PvName)
+			if cmd.Flag("all").Value.String() == "true" {
+				fmt.Fprintf(w, "DATASTORE\tVOLUME_ID\tIS_ORPHAN\tPV_NAME\n")
+				for _, fcdInfo := range res.Fcds {
+					fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", fcdInfo.Datastore, fcdInfo.FcdId, strconv.FormatBool(fcdInfo.IsOrphan), fcdInfo.PvName)
+				}
+			} else {
+				fmt.Fprintf(w, "DATASTORE\tORPHAN_VOLUME\n")
+				for _, fcdInfo := range res.Fcds {
+					if fcdInfo.IsOrphan {
+						fmt.Fprintf(w, "%s\t%s\n", fcdInfo.Datastore, fcdInfo.FcdId)
+					}
+				}
 			}
 		}
 		w.Flush()
@@ -78,8 +88,9 @@ var lsCmd = &cobra.Command{
 }
 
 func InitLs() {
-	lsCmd.PersistentFlags().StringVarP(&datastores, "datastores", "d", viper.GetString("datastores"), "Comma-separated datastore names")
-	lsCmd.PersistentFlags().StringVarP(&cfgFile, "kubeconfig", "k", viper.GetString("kubeconfig"), "kubeconfig file")
+	lsCmd.PersistentFlags().StringVarP(&datastores, "datastores", "d", viper.GetString("datastores"), "comma-separated datastore names (alternatively use CNSCTL_DATASTORES env variable)")
+	lsCmd.PersistentFlags().StringVarP(&cfgFile, "kubeconfig", "k", viper.GetString("kubeconfig"), "kubeconfig file (alternatively use CNSCTL_KUBECONFIG env variable)")
+	lsCmd.PersistentFlags().BoolVarP(&all, "all", "a", false, "Show orphan and used volumes")
 	ovCmd.AddCommand(lsCmd)
 }
 
