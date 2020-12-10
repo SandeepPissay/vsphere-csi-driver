@@ -33,8 +33,10 @@ type DeleteFcdRequest struct {
 	Datacenter string
 }
 
-// Deletes the FCD. If the FCD is attached to a VM, it detaches it and then deletes it.
-func DeleteFcd(ctx context.Context, req *DeleteFcdRequest) error {
+// Deletes the FCD.
+// If forceDelete is true and if the FCD is attached to a VM, it detaches it and then deletes it.
+// If forceDelete is false, the FCD is not deleted.
+func DeleteFcd(ctx context.Context, req *DeleteFcdRequest, forceDelete string) error {
 	finder := find.NewFinder(req.Client.Client, false)
 	dcObj, err := finder.Datacenter(ctx, req.Datacenter)
 	if err != nil {
@@ -64,7 +66,11 @@ func DeleteFcd(ctx context.Context, req *DeleteFcdRequest) error {
 	}
 	if len(res.Returnval) > 0 && len(res.Returnval[0].VmDiskAssociations) > 0 {
 		vmId := res.Returnval[0].VmDiskAssociations[0].VmId
-		fmt.Printf("FCD %s is attached to VM %s\n. Detaching the FCD..", req.FcdId, vmId)
+		if forceDelete == "false" {
+			fmt.Printf("FCD %s is attached to VM %s. Ignoring delete operation.\n", req.FcdId, vmId)
+			return nil
+		}
+		fmt.Printf("FCD %s is attached to VM %s. Detaching the FCD..\n", req.FcdId, vmId)
 		vm := object.NewVirtualMachine(req.Client.Client, types.ManagedObjectReference{
 			Type:  "VirtualMachine",
 			Value: vmId,

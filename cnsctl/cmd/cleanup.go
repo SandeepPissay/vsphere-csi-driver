@@ -22,68 +22,66 @@ import (
 	"os"
 	"sigs.k8s.io/vsphere-csi-driver/cnsctl/ov"
 	"sigs.k8s.io/vsphere-csi-driver/cnsctl/virtualcenter/client"
-	"strconv"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 )
 
-var datastores, cfgFile string
-
-// lsCmd represents the ls command
-var lsCmd = &cobra.Command{
-	Use:   "ls",
-	Short: "List Orphan volumes",
-	Long:  "List Orphan volumes",
+// cleanupCmd represents the cleanup command
+var cleanupCmd = &cobra.Command{
+	Use:   "cleanup",
+	Short: "Identifies orphan volumes and deletes them",
+	Long:  "Identifies orphan volumes and deletes them",
 	Run: func(cmd *cobra.Command, args []string) {
 		validateOvFlags()
-		validateLsFlags()
+		validateCleanupFlags()
 
+		if len(args) != 0 {
+			fmt.Printf("error: no arguments allowed for cleanup\n")
+			os.Exit(1)
+		}
 		ctx := context.Background()
 		vcClient, err := client.GetClient(ctx, cmd.Flag("user").Value.String(), cmd.Flag("password").Value.String(), cmd.Flag("host").Value.String())
 		if err != nil {
 			fmt.Printf("error: failed to get vcClient: %+v\n", err)
 			os.Exit(1)
 		}
+
 		req := &ov.OrphanVolumeRequest{
 			KubeConfigFile: cmd.Flag("kubeconfig").Value.String(),
 			VcClient:       vcClient,
 			Datacenter:     cmd.Flag("datacenter").Value.String(),
 			Datastores:     strings.Split(cmd.Flag("datastores").Value.String(), ","),
 		}
+
 		res, err := ov.GetOrphanVolumes(ctx, req)
 		if err != nil {
 			fmt.Printf("Failed to get orphan volumes. Err: %+v\n", err)
 			os.Exit(1)
 		}
-		var totalVols, totalOrphans int
+		totalOrphans := 0
 		for _, fcdInfo := range res.Fcds {
-			totalVols++
-			if fcdInfo.IsOrphan {
+			if fcdInfo.IsOrphan == true {
 				totalOrphans++
+				fmt.Printf("Found orphan volume: %+v\n", fcdInfo)
+				deleteVolume(ctx, vcClient, []string{fcdInfo.FcdId}, fcdInfo.Datastore, cmd.Flag("datacenter").Value.String(), cmd.Flag("force").Value.String())
 			}
 		}
-		w := tabwriter.NewWriter(os.Stdout, 0, 10, 1, ' ', tabwriter.TabIndent)
-		fmt.Fprintf(w, "Total volumes: %d\n", totalVols)
-		fmt.Fprintf(w, "Total orphan volumes: %d\n", totalOrphans)
-		if totalVols > 0 {
-			fmt.Fprintf(w, "DATASTORE\tFCD_ID\tIS_ORPHAN\tPV_NAME\n")
-			for _, fcdInfo := range res.Fcds {
-				fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", fcdInfo.Datastore, fcdInfo.FcdId, strconv.FormatBool(fcdInfo.IsOrphan), fcdInfo.PvName)
-			}
+		if totalOrphans > 0 {
+			fmt.Printf("Cleaned up %d orphan volumes.\n", totalOrphans)
+		} else {
+			fmt.Printf("No orphan volumes found.\n")
 		}
-		w.Flush()
 	},
 }
 
-func InitLs() {
-	lsCmd.PersistentFlags().StringVarP(&datastores, "datastores", "d", viper.GetString("datastores"), "Comma-separated datastore names")
-	lsCmd.PersistentFlags().StringVarP(&cfgFile, "kubeconfig", "k", viper.GetString("kubeconfig"), "kubeconfig file")
-	ovCmd.AddCommand(lsCmd)
+func InitCleanup() {
+	cleanupCmd.PersistentFlags().StringVarP(&datastores, "datastores", "d", viper.GetString("datastores"), "Comma-separated datastore names")
+	cleanupCmd.PersistentFlags().StringVarP(&cfgFile, "kubeconfig", "k", viper.GetString("kubeconfig"), "kubeconfig file")
+	ovCmd.AddCommand(cleanupCmd)
 }
 
-func validateLsFlags() {
+func validateCleanupFlags() {
 	if datastores == "" {
 		fmt.Printf("error: datastores flag or CNSCTL_DATASTORES env variable must be set for 'ls' sub-command\n")
 		os.Exit(1)

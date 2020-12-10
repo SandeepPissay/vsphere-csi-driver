@@ -19,12 +19,14 @@ import (
 	"context"
 	"fmt"
 	"github.com/spf13/cobra"
+	"github.com/vmware/govmomi"
 	"os"
 	"sigs.k8s.io/vsphere-csi-driver/cnsctl/virtualcenter/client"
 	"sigs.k8s.io/vsphere-csi-driver/cnsctl/virtualcenter/volume"
 )
 
 var datastore string
+var forceDelete bool
 
 // rmCmd represents the rm command
 var rmCmd = &cobra.Command{
@@ -38,33 +40,35 @@ var rmCmd = &cobra.Command{
 			fmt.Printf("error: no volumes specified to be deleted.\n")
 			os.Exit(1)
 		}
-
 		ctx := context.Background()
 		vcClient, err := client.GetClient(ctx, cmd.Flag("user").Value.String(), cmd.Flag("password").Value.String(), cmd.Flag("host").Value.String())
 		if err != nil {
 			fmt.Printf("error: failed to get vcClient: %+v\n", err)
 			os.Exit(1)
 		}
-
-		for _, vol := range args {
-			fmt.Printf("Trying to delete volume: %s\n", vol)
-			deleteFcdRequest := &volume.DeleteFcdRequest{
-				Client:     vcClient,
-				FcdId:      vol,
-				Datastore:  cmd.Flag("datastore").Value.String(),
-				Datacenter: cmd.Flag("datacenter").Value.String(),
-			}
-			err = volume.DeleteFcd(ctx, deleteFcdRequest)
-			if err != nil {
-				fmt.Printf("error: failed to delete FCD: %s. err: %+v.\nContinuing to delete other volumes if any...\n", vol, err)
-			}
-		}
-
+		deleteVolume(ctx, vcClient, args, cmd.Flag("datastore").Value.String(), cmd.Flag("datacenter").Value.String(), cmd.Flag("force").Value.String())
 	},
+}
+
+func deleteVolume(ctx context.Context, vcClient *govmomi.Client, fcds []string, ds string, dc string, forceDelete string) {
+	for _, vol := range fcds {
+		fmt.Printf("Trying to delete volume: %s\n", vol)
+		deleteFcdRequest := &volume.DeleteFcdRequest{
+			Client:     vcClient,
+			FcdId:      vol,
+			Datastore:  ds,
+			Datacenter: dc,
+		}
+		err := volume.DeleteFcd(ctx, deleteFcdRequest, forceDelete)
+		if err != nil {
+			fmt.Printf("error: failed to delete FCD: %s. err: %+v.\nContinuing to delete other volumes if any...\n", vol, err)
+		}
+	}
 }
 
 func InitRm() {
 	rmCmd.PersistentFlags().StringVarP(&datastore, "datastore", "d", "", "Datastore name")
+	rmCmd.PersistentFlags().BoolVarP(&forceDelete, "force", "f", false, "Force delete the volume")
 	ovCmd.AddCommand(rmCmd)
 }
 

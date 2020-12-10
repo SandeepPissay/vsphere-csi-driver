@@ -39,6 +39,7 @@ var ovCmd = &cobra.Command{
 func InitOv() {
 	InitLs()
 	InitRm()
+	InitCleanup()
 
 	ovCmd.PersistentFlags().StringVarP(&vcHost, "host", "H", viper.GetString("host"), "vCenter host")
 	ovCmd.PersistentFlags().StringVarP(&vcUser, "user", "u", viper.GetString("user"), "vCenter user")

@@ -24,15 +24,12 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
-	"sigs.k8s.io/vsphere-csi-driver/cnsctl/virtualcenter/client"
 	csitypes "sigs.k8s.io/vsphere-csi-driver/pkg/csi/types"
 )
 
 type OrphanVolumeRequest struct {
 	KubeConfigFile string
-	VcUser         string
-	VcPwd          string
-	VcHost         string
+	VcClient *govmomi.Client
 	Datacenter     string
 	Datastores     []string
 }
@@ -60,11 +57,7 @@ func GetOrphanVolumes(ctx context.Context, req *OrphanVolumeRequest) (*OrphanVol
 		fmt.Printf("KubeClient creation failed %v\n", err)
 		return nil, err
 	}
-	vcClient, err := client.GetClient(ctx, req.VcUser, req.VcPwd, req.VcHost)
-	if err != nil {
-		return nil, err
-	}
-	return GetOrphanVolumesWithClients(ctx, kubeClient, vcClient, req.Datacenter, req.Datastores)
+	return GetOrphanVolumesWithClients(ctx, kubeClient, req.VcClient, req.Datacenter, req.Datastores)
 }
 
 func GetOrphanVolumesWithClients(ctx context.Context, kubeClient kubernetes.Interface, vcClient *govmomi.Client, dc string, dss []string) (*OrphanVolumeResult, error) {
