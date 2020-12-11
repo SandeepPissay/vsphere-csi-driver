@@ -62,7 +62,7 @@ vsanDatastore 757dc5cc-2c61-451c-9574-781ab5fa33e6
 
 Example: List all volumes(in-use and orphan volumes)
 ```sh
-$ cnsctl ov ls -a -d=vsanDatastore,nfs0-1
+$ cnsctl -d=vsanDatastore,nfs0-1 ov ls -a
 Listing all PVs in the Kubernetes cluster...Found 2 PVs in the Kubernetes cluster
 Listing FCDs under datastore: vsanDatastore
 Found 4 FCDs under datastore: vsanDatastore
