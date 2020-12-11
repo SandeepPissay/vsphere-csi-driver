@@ -27,8 +27,8 @@ import (
 var rootCmd = &cobra.Command{
 	Use:     "cnsctl",
 	Short:   "CLI tool for CNS-CSI.",
-	Long:    "A fast CLI based tool to interact with CNS solution for various storage control operations.",
-	Version: "v0.0.3",
+	Long:    "A fast CLI based tool storage operations on Cloud Native Storage solution in VMware vSphere.",
+	Version: "v0.0.4",
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
