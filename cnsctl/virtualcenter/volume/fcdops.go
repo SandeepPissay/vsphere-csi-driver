@@ -67,18 +67,18 @@ func DeleteFcd(ctx context.Context, req *DeleteFcdRequest, forceDelete string) (
 	}
 	if len(res.Returnval) > 0 && len(res.Returnval[0].VmDiskAssociations) > 0 {
 		vmId := res.Returnval[0].VmDiskAssociations[0].VmId
+		vmObj := object.NewVirtualMachine(req.Client.Client, types.ManagedObjectReference{Type: "VirtualMachine", Value: vmId})
+		var vmMo mo.VirtualMachine
+		err := vmObj.Properties(ctx, vmObj.Reference(), []string{"name"}, &vmMo)
+		if err != nil {
+			fmt.Printf("FCD %s is attached to VM. Failed to get the VM name.\n", req.FcdId)
+			return false, err
+		}
 		if forceDelete == "false" {
-			vmObj := object.NewVirtualMachine(req.Client.Client, types.ManagedObjectReference{Type: "VirtualMachine", Value: vmId})
-			var vmMo mo.VirtualMachine
-			err := vmObj.Properties(ctx, vmObj.Reference(), []string{"name"}, &vmMo)
-			if err != nil {
-				fmt.Printf("FCD %s is attached to VM. Failed to get the VM name.\n", req.FcdId)
-				return false, err
-			}
-			fmt.Printf("FCD %s is attached to VM %+v. Ignoring delete operation.\n", req.FcdId, vmMo.Name)
+			fmt.Printf("FCD %s is attached to VM: %s. Ignoring delete operation.\n", req.FcdId, vmMo.Name)
 			return false, nil
 		}
-		fmt.Printf("FCD %s is attached to VM %s. Detaching the FCD..\n", req.FcdId, vmId)
+		fmt.Printf("FCD %s is attached to VM: %s. Detaching the FCD before deleting it.\n", req.FcdId, vmMo.Name)
 		vm := object.NewVirtualMachine(req.Client.Client, types.ManagedObjectReference{
 			Type:  "VirtualMachine",
 			Value: vmId,
