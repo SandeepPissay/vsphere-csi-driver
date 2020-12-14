@@ -37,6 +37,7 @@ These sub-commands takes various flags and can work with environment variables. 
 - cnsctl will permanently remove detached and attached orphaned volumes. So use "ls" sub-command to validate if the orphan volumes identified are correct.
 - cnsctl requires the vSphere CSI driver to be in maintenance mode(set the replica count of vSphere CSI controller to 0 and wait until the CSI controller pod is terminated). This is to make sure that there are no concurrent volume operations going on while the tool is being used.
 - cnsctl assumes that the volumes(aka FCDs) found on the datastore and not used in the Kubernetes cluster as orphans, and will delete them. So, make sure that Kubernetes is the only user of the datastore.
+- cnsctl assumes that the VCP to CSI migration is not used in the Kubernetes cluster. And the vSphere volumes(vmdks) are not registered as CNS volumes.
 ### ls sub-command
 Use this sub-command to show the orphan volumes on the datastore(s). This is a read-only operation and does not delete orphan volumes.
 
