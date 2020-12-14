@@ -66,24 +66,33 @@ var lsCmd = &cobra.Command{
 			}
 		}
 		w := tabwriter.NewWriter(os.Stdout, 0, 10, 1, ' ', tabwriter.TabIndent)
-		fmt.Fprintf(w, "Total volumes: %d\n", totalVols)
-		fmt.Fprintf(w, "Total orphan volumes: %d\n", totalOrphans)
 		if totalVols > 0 {
 			if cmd.Flag("all").Value.String() == "true" {
-				fmt.Fprintf(w, "DATASTORE\tVOLUME_ID\tIS_ORPHAN\tPV_NAME\n")
-				for _, fcdInfo := range res.Fcds {
-					fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", fcdInfo.Datastore, fcdInfo.FcdId, strconv.FormatBool(fcdInfo.IsOrphan), fcdInfo.PvName)
-				}
-			} else {
-				fmt.Fprintf(w, "DATASTORE\tORPHAN_VOLUME\n")
-				for _, fcdInfo := range res.Fcds {
-					if fcdInfo.IsOrphan {
-						fmt.Fprintf(w, "%s\t%s\n", fcdInfo.Datastore, fcdInfo.FcdId)
+				if totalVols > 0 {
+					fmt.Fprintf(w, "\nDATASTORE\tVOLUME_ID\tIS_ORPHAN\tPV_NAME\n")
+					for _, fcdInfo := range res.Fcds {
+						fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", fcdInfo.Datastore, fcdInfo.FcdId, strconv.FormatBool(fcdInfo.IsOrphan), fcdInfo.PvName)
 					}
+				} else {
+					fmt.Printf("Volumes not found.\n")
+				}
+			} else if cmd.Flag("all").Value.String() == "false" {
+				if totalOrphans > 0 {
+					fmt.Fprintf(w, "\nDATASTORE\tORPHAN_VOLUME\n")
+					for _, fcdInfo := range res.Fcds {
+						if fcdInfo.IsOrphan {
+							fmt.Fprintf(w, "%s\t%s\n", fcdInfo.Datastore, fcdInfo.FcdId)
+						}
+					}
+				} else {
+					fmt.Printf("Orphan volumes not found.\n")
 				}
 			}
 		}
 		w.Flush()
+		fmt.Printf("\n----------------------- Summary ------------------------------\n")
+		fmt.Printf("Total volumes: %d\n", totalVols)
+		fmt.Printf("Total orphan volumes: %d\n", totalOrphans)
 	},
 }
 
