@@ -30,7 +30,7 @@ import (
 )
 
 var datastores, cfgFile string
-var all bool
+var all, long bool
 
 // lsCmd represents the ls command
 var lsCmd = &cobra.Command{
@@ -52,6 +52,7 @@ var lsCmd = &cobra.Command{
 			VcClient:       vcClient,
 			Datacenter:     cmd.Flag("datacenter").Value.String(),
 			Datastores:     strings.Split(cmd.Flag("datastores").Value.String(), ","),
+			LongListing:    cmd.Flag("long-list").Value.String() == "true",
 		}
 		res, err := ov.GetOrphanVolumes(ctx, req)
 		if err != nil {
@@ -67,7 +68,7 @@ var lsCmd = &cobra.Command{
 		}
 		w := tabwriter.NewWriter(os.Stdout, 0, 10, 1, ' ', tabwriter.TabIndent)
 		if totalVols > 0 {
-			if cmd.Flag("all").Value.String() == "true" {
+			if cmd.Flag("all").Value.String() == "true" && cmd.Flag("long-list").Value.String() == "false" {
 				if totalVols > 0 {
 					fmt.Fprintf(w, "\nDATASTORE\tVOLUME_ID\tIS_ORPHAN\tPV_NAME\n")
 					for _, fcdInfo := range res.Fcds {
@@ -76,7 +77,28 @@ var lsCmd = &cobra.Command{
 				} else {
 					fmt.Printf("Volumes not found.\n")
 				}
-			} else if cmd.Flag("all").Value.String() == "false" {
+			} else if cmd.Flag("all").Value.String() == "true" && cmd.Flag("long-list").Value.String() == "true" {
+				if totalVols > 0 {
+					fmt.Fprintf(w, "\nDATASTORE\tVOLUME_ID\tCREATE_TIME\tCAPACITY_MB\tIS_ORPHAN\tPV_NAME\n")
+					for _, fcdInfo := range res.Fcds {
+						fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\t%s\n", fcdInfo.Datastore, fcdInfo.FcdId,
+							fcdInfo.CreateTime.String(), fcdInfo.CapacityInMB, strconv.FormatBool(fcdInfo.IsOrphan), fcdInfo.PvName)
+					}
+				} else {
+					fmt.Printf("Volumes not found.\n")
+				}
+			} else if cmd.Flag("all").Value.String() == "false" && cmd.Flag("long-list").Value.String() == "true" {
+				if totalOrphans > 0 {
+					fmt.Fprintf(w, "\nDATASTORE\tORPHAN_VOLUME\tCREATE_TIME\tCAPACITY_MB\n")
+					for _, fcdInfo := range res.Fcds {
+						if fcdInfo.IsOrphan {
+							fmt.Fprintf(w, "%s\t%s\t%s\t%d\n", fcdInfo.Datastore, fcdInfo.FcdId, fcdInfo.CreateTime.String(), fcdInfo.CapacityInMB)
+						}
+					}
+				} else {
+					fmt.Printf("Orphan volumes not found.\n")
+				}
+			} else {
 				if totalOrphans > 0 {
 					fmt.Fprintf(w, "\nDATASTORE\tORPHAN_VOLUME\n")
 					for _, fcdInfo := range res.Fcds {
@@ -91,8 +113,8 @@ var lsCmd = &cobra.Command{
 		}
 		w.Flush()
 		fmt.Printf("\n----------------------- Summary ------------------------------\n")
-		fmt.Printf("Total volumes: %d\n", totalVols)
-		fmt.Printf("Total orphan volumes: %d\n", totalOrphans)
+		fmt.Printf("Total FCDs on the datastore(s): %d\n", totalVols)
+		fmt.Printf("Total orphan volumes on the datastore(s): %d\n", totalOrphans)
 	},
 }
 
@@ -100,6 +122,7 @@ func InitLs() {
 	lsCmd.PersistentFlags().StringVarP(&datastores, "datastores", "d", viper.GetString("datastores"), "comma-separated datastore names (alternatively use CNSCTL_DATASTORES env variable)")
 	lsCmd.PersistentFlags().StringVarP(&cfgFile, "kubeconfig", "k", viper.GetString("kubeconfig"), "kubeconfig file (alternatively use CNSCTL_KUBECONFIG env variable)")
 	lsCmd.PersistentFlags().BoolVarP(&all, "all", "a", false, "Show orphan and used volumes")
+	lsCmd.PersistentFlags().BoolVarP(&long, "long-list", "l", false, "Show additional details of orphan volumes")
 	ovCmd.AddCommand(lsCmd)
 }
 

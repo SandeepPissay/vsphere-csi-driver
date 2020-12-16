@@ -20,11 +20,13 @@ import (
 	"fmt"
 	"github.com/vmware/govmomi"
 	"github.com/vmware/govmomi/find"
+	"github.com/vmware/govmomi/vim25/types"
 	"github.com/vmware/govmomi/vslm"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	csitypes "sigs.k8s.io/vsphere-csi-driver/pkg/csi/types"
+	"time"
 )
 
 type OrphanVolumeRequest struct {
@@ -32,13 +34,16 @@ type OrphanVolumeRequest struct {
 	VcClient       *govmomi.Client
 	Datacenter     string
 	Datastores     []string
+	LongListing    bool
 }
 
 type FcdInfo struct {
-	FcdId     string
-	Datastore string
-	PvName    string
-	IsOrphan  bool
+	FcdId        string
+	Datastore    string
+	PvName       string
+	IsOrphan     bool
+	CreateTime   time.Time
+	CapacityInMB int64
 }
 
 type OrphanVolumeResult struct {
@@ -57,10 +62,10 @@ func GetOrphanVolumes(ctx context.Context, req *OrphanVolumeRequest) (*OrphanVol
 		fmt.Printf("KubeClient creation failed %v\n", err)
 		return nil, err
 	}
-	return GetOrphanVolumesWithClients(ctx, kubeClient, req.VcClient, req.Datacenter, req.Datastores)
+	return GetOrphanVolumesWithClients(ctx, kubeClient, req)
 }
 
-func GetOrphanVolumesWithClients(ctx context.Context, kubeClient kubernetes.Interface, vcClient *govmomi.Client, dc string, dss []string) (*OrphanVolumeResult, error) {
+func GetOrphanVolumesWithClients(ctx context.Context, kubeClient kubernetes.Interface, req *OrphanVolumeRequest) (*OrphanVolumeResult, error) {
 	res := &OrphanVolumeResult{
 		Fcds: make([]FcdInfo, 0),
 	}
@@ -78,15 +83,15 @@ func GetOrphanVolumesWithClients(ctx context.Context, kubeClient kubernetes.Inte
 		}
 	}
 
-	finder := find.NewFinder(vcClient.Client, false)
-	dcObj, err := finder.Datacenter(ctx, dc)
+	finder := find.NewFinder(req.VcClient.Client, false)
+	dcObj, err := finder.Datacenter(ctx, req.Datacenter)
 	if err != nil {
-		fmt.Printf("Unable to find datacenter: %s\n", dc)
+		fmt.Printf("Unable to find datacenter: %s\n", req.Datacenter)
 		return nil, err
 	}
-	m := vslm.NewObjectManager(vcClient.Client)
+	m := vslm.NewObjectManager(req.VcClient.Client)
 	finder.SetDatacenter(dcObj)
-	for _, ds := range dss {
+	for _, ds := range req.Datastores {
 		fmt.Printf("Listing FCDs under datastore: %s\n", ds)
 		dsObj, err := finder.Datastore(ctx, ds)
 		if err != nil {
@@ -100,19 +105,27 @@ func GetOrphanVolumesWithClients(ctx context.Context, kubeClient kubernetes.Inte
 		}
 		fmt.Printf("Found %d FCDs under datastore: %s\n", len(fcds), ds)
 		for _, fcd := range fcds {
+			fcdInfo := FcdInfo{
+				FcdId: fcd.Id,
+				Datastore: ds,
+			}
+			var vso *types.VStorageObject
+			if req.LongListing {
+				vso, err = m.Retrieve(ctx, dsObj, fcd.Id)
+				if err != nil {
+					fmt.Printf("Failed to retrieve VStorageObject for FCD: %s\n", fcd.Id)
+					return nil, err
+				}
+				fcdInfo.CreateTime = vso.Config.CreateTime
+				fcdInfo.CapacityInMB = vso.Config.CapacityInMB
+			}
 			if pv, ok := volumeHandleToPvMap[fcd.Id]; !ok {
-				res.Fcds = append(res.Fcds, FcdInfo{
-					FcdId:     fcd.Id,
-					Datastore: ds,
-					IsOrphan:  true,
-				})
+				fcdInfo.IsOrphan = true
+				res.Fcds = append(res.Fcds, fcdInfo)
 			} else {
-				res.Fcds = append(res.Fcds, FcdInfo{
-					FcdId:     fcd.Id,
-					Datastore: ds,
-					PvName:    pv,
-					IsOrphan:  false,
-				})
+				fcdInfo.PvName = pv
+				fcdInfo.IsOrphan = false
+				res.Fcds = append(res.Fcds, fcdInfo)
 			}
 		}
 	}

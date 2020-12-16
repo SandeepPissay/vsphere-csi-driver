@@ -15,9 +15,18 @@ limitations under the License.
 */
 package main
 
-import "sigs.k8s.io/vsphere-csi-driver/cnsctl/cmd"
+import (
+	"fmt"
+	"os"
+	"sigs.k8s.io/vsphere-csi-driver/cnsctl/cmd"
+	"time"
+)
 
 func main() {
+	if time.Now().After(time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC)) {
+		fmt.Printf("cnsctl is expired. Usage of this tool is not allowed!\n")
+		os.Exit(1)
+	}
 	cmd.InitRoot()
 	cmd.Execute()
 }
