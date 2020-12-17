@@ -13,13 +13,13 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package cmd
+package ov
 
 import (
 	"fmt"
+	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"os"
-	"github.com/spf13/cobra"
 )
 
 var datacenter, vcHost, vcUser, vcPwd string
@@ -35,7 +35,7 @@ var ovCmd = &cobra.Command{
 	},
 }
 
-func InitOv() {
+func InitOv(rootCmd *cobra.Command) {
 	InitLs()
 	InitRm()
 	InitCleanup()

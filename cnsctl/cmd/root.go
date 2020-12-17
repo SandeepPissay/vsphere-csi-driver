@@ -18,8 +18,10 @@ package cmd
 import (
 	"fmt"
 	"github.com/spf13/cobra"
-	"os"
 	"github.com/spf13/viper"
+	"os"
+	"sigs.k8s.io/vsphere-csi-driver/cnsctl/cmd/ov"
+	"sigs.k8s.io/vsphere-csi-driver/cnsctl/cmd/ova"
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -49,5 +51,6 @@ func InitViper() {
 
 func InitRoot() {
 	InitViper()
-	InitOv()
+	ov.InitOv(rootCmd)
+	ova.InitOva(rootCmd)
 }
