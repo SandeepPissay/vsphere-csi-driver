@@ -60,22 +60,25 @@ func GetOrphanVolumeAttachments(ctx context.Context, req *OrphanVolumeAttachment
 	}
 	res := &OrphanVolumeAttachmentResult{
 		VAInfo:        make([]VolumeAttachmentInfo, 0, len(vaList.Items)),
-		TotalVA:       len(vaList.Items),
+		TotalVA:       0,
 		TotalOrphanVA: 0,
 	}
 	for _, va := range vaList.Items {
-		vaInfo := VolumeAttachmentInfo{
-			VAName:           va.Name,
-			PVName:           *va.Spec.Source.PersistentVolumeName,
-			AttachedNode:     va.Spec.NodeName,
-			AttachmentStatus: va.Status.Attached,
-			IsOrphan:         false,
+		if va.Spec.Attacher == "csi.vsphere.vmware.com" {
+			vaInfo := VolumeAttachmentInfo{
+				VAName:           va.Name,
+				PVName:           *va.Spec.Source.PersistentVolumeName,
+				AttachedNode:     va.Spec.NodeName,
+				AttachmentStatus: va.Status.Attached,
+				IsOrphan:         false,
+			}
+			if _, ok := pvMap[*va.Spec.Source.PersistentVolumeName]; !ok {
+				vaInfo.IsOrphan = true
+				res.TotalOrphanVA++
+			}
+			res.VAInfo = append(res.VAInfo, vaInfo)
+			res.TotalVA++
 		}
-		if _, ok := pvMap[*va.Spec.Source.PersistentVolumeName]; !ok {
-			vaInfo.IsOrphan = true
-			res.TotalOrphanVA++
-		}
-		res.VAInfo = append(res.VAInfo, vaInfo)
 	}
 	return res, nil
 }
@@ -102,12 +105,13 @@ func DeleteVolumeAttachments(ctx context.Context, kubeClient *clientset.Clientse
 			err = kubeClient.StorageV1().VolumeAttachments().Delete(ctx, vaInfo.VAName, v1.DeleteOptions{
 				GracePeriodSeconds: &grace,
 			})
-			if err != nil {
-				fmt.Printf("Unable to delete VolumeAttachment: %s for PV %s. Err: %+v. Ignoring deletion of this VolumeAttachment..\n", vaInfo.VAName, vaInfo.PVName, err)
+			if apierrors.IsNotFound(err) {
+				fmt.Printf("VolumeAttachment %s for PV %s is not found. Err: %+v. Likely that it is deleted.\n", vaInfo.VAName, vaInfo.PVName, err)
+				deleteCount++
 				continue
 			}
-			if apierrors.IsNotFound(err) {
-				fmt.Printf("VolumeAttachment %s for PV %s is not found. Err: %+v. Ignoring deletion of this VolumeAttachment..\n", vaInfo.VAName, vaInfo.PVName, err)
+			if err != nil {
+				fmt.Printf("Unable to delete VolumeAttachment: %s for PV %s. Err: %+v. Ignoring deletion of this VolumeAttachment..\n", vaInfo.VAName, vaInfo.PVName, err)
 				continue
 			}
 			fmt.Printf("Deleted VolumeAttachment: %s for PV %s\n", vaInfo.VAName, vaInfo.PVName)
