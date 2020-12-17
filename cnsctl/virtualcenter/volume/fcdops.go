@@ -22,9 +22,9 @@ import (
 	"github.com/vmware/govmomi/find"
 	"github.com/vmware/govmomi/object"
 	"github.com/vmware/govmomi/vim25/methods"
-	"github.com/vmware/govmomi/vim25/mo"
 	"github.com/vmware/govmomi/vim25/types"
 	"github.com/vmware/govmomi/vslm"
+	"sigs.k8s.io/vsphere-csi-driver/cnsctl/virtualcenter/vm"
 )
 
 type DeleteFcdRequest struct {
@@ -67,11 +67,9 @@ func DeleteFcd(ctx context.Context, req *DeleteFcdRequest, forceDelete string) (
 	}
 	if len(res.Returnval) > 0 && len(res.Returnval[0].VmDiskAssociations) > 0 {
 		vmId := res.Returnval[0].VmDiskAssociations[0].VmId
-		vmObj := object.NewVirtualMachine(req.Client.Client, types.ManagedObjectReference{Type: "VirtualMachine", Value: vmId})
-		var vmMo mo.VirtualMachine
-		err := vmObj.Properties(ctx, vmObj.Reference(), []string{"name"}, &vmMo)
+		vmMo, err := vm.GetVirtualMachine(ctx, req.Client.Client, vmId)
 		if err != nil {
-			fmt.Printf("FCD %s is attached to VM. Failed to get the VM name.\n", req.FcdId)
+			fmt.Printf("FCD %s is attached to VM. Failed to get the VM. Err: %+v\n", req.FcdId, err)
 			return false, err
 		}
 		if forceDelete == "false" {

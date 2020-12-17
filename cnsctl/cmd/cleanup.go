@@ -62,12 +62,21 @@ var cleanupCmd = &cobra.Command{
 		totalOrphans := 0
 		for _, fcdInfo := range res.Fcds {
 			if fcdInfo.IsOrphan == true {
-				fmt.Printf("Found orphan volume: %+v\n", fcdInfo)
-				deleteCount := deleteVolume(ctx, vcClient, []string{fcdInfo.FcdId}, fcdInfo.Datastore, cmd.Flag("datacenter").Value.String(), cmd.Flag("force").Value.String())
-				totalOrphans += deleteCount
+				totalOrphans++
 			}
 		}
-		if totalOrphans > 0 {
+		totalCleanedOrphans := 0
+		currOrphan := 1
+		for _, fcdInfo := range res.Fcds {
+			if fcdInfo.IsOrphan == true {
+				fmt.Printf("(%d/%d) Cleaning orphan volume: %+v\n", currOrphan, totalOrphans, fcdInfo)
+				currOrphan++
+				deleteCount := deleteVolume(ctx, vcClient, []string{fcdInfo.FcdId}, fcdInfo.Datastore, cmd.Flag("datacenter").Value.String(), cmd.Flag("force").Value.String())
+				totalCleanedOrphans += deleteCount
+			}
+		}
+		fmt.Printf("\n----------------------- Summary ------------------------------\n")
+		if totalCleanedOrphans > 0 {
 			fmt.Printf("Cleaned up %d orphan volumes.\n", totalOrphans)
 		} else {
 			fmt.Printf("Orphan volumes were not found or they were not cleaned up.\n")

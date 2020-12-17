@@ -20,11 +20,13 @@ import (
 	"fmt"
 	"github.com/vmware/govmomi"
 	"github.com/vmware/govmomi/find"
+	"github.com/vmware/govmomi/vim25/methods"
 	"github.com/vmware/govmomi/vim25/types"
 	"github.com/vmware/govmomi/vslm"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
+	"sigs.k8s.io/vsphere-csi-driver/cnsctl/virtualcenter/vm"
 	csitypes "sigs.k8s.io/vsphere-csi-driver/pkg/csi/types"
 	"time"
 )
@@ -38,12 +40,14 @@ type OrphanVolumeRequest struct {
 }
 
 type FcdInfo struct {
-	FcdId        string
-	Datastore    string
-	PvName       string
-	IsOrphan     bool
-	CreateTime   time.Time
-	CapacityInMB int64
+	FcdId          string
+	Datastore      string
+	PvName         string
+	IsOrphan       bool
+	CreateTime     time.Time
+	CapacityInMB   int64
+	IsAttached     bool
+	AttachedVmName string
 }
 
 type OrphanVolumeResult struct {
@@ -104,9 +108,40 @@ func GetOrphanVolumesWithClients(ctx context.Context, kubeClient kubernetes.Inte
 			return nil, err
 		}
 		fmt.Printf("Found %d FCDs under datastore: %s\n", len(fcds), ds)
+
+		fcdVmMap := make(map[string]string)
+		if req.LongListing {
+			retObjSpecs := make([]types.RetrieveVStorageObjSpec, 0, len(fcds))
+			for _, fcd := range fcds {
+				retObjSpecs = append(retObjSpecs, types.RetrieveVStorageObjSpec{
+					Id:        fcd,
+					Datastore: dsObj.Reference(),
+				})
+			}
+			retObjAsso := &types.RetrieveVStorageObjectAssociations{
+				This: m.Reference(),
+				Ids:  retObjSpecs,
+			}
+			resObjAsso, err := methods.RetrieveVStorageObjectAssociations(ctx, req.VcClient.RoundTripper, retObjAsso)
+			if err != nil {
+				fmt.Printf("Failed to get VM associations for retObjAsso: %+v\n", retObjAsso)
+				return nil, err
+			}
+			for _, res := range resObjAsso.Returnval {
+				if res.Fault == nil && len(res.VmDiskAssociations) > 0 {
+					vmMo, err := vm.GetVirtualMachine(ctx, req.VcClient.Client, res.VmDiskAssociations[0].VmId)
+					if err != nil {
+						fmt.Printf("FCD %s is attached to VM. Failed to get the VM. Err: %+v\n", res.Id.Id, err)
+						return nil, err
+					}
+					fcdVmMap[res.Id.Id] = vmMo.Name
+				}
+			}
+		}
+
 		for _, fcd := range fcds {
 			fcdInfo := FcdInfo{
-				FcdId: fcd.Id,
+				FcdId:     fcd.Id,
 				Datastore: ds,
 			}
 			var vso *types.VStorageObject
@@ -118,6 +153,10 @@ func GetOrphanVolumesWithClients(ctx context.Context, kubeClient kubernetes.Inte
 				}
 				fcdInfo.CreateTime = vso.Config.CreateTime
 				fcdInfo.CapacityInMB = vso.Config.CapacityInMB
+				if vmName, ok := fcdVmMap[fcd.Id]; ok {
+					fcdInfo.IsAttached = true
+					fcdInfo.AttachedVmName = vmName
+				}
 			}
 			if pv, ok := volumeHandleToPvMap[fcd.Id]; !ok {
 				fcdInfo.IsOrphan = true

@@ -59,11 +59,16 @@ var lsCmd = &cobra.Command{
 			fmt.Printf("Failed to get orphan volumes. Err: %+v\n", err)
 			os.Exit(1)
 		}
-		var totalVols, totalOrphans int
+		var totalVols, totalOrphans, totalAttachedOrphans, totalDetachedOrphans int
 		for _, fcdInfo := range res.Fcds {
 			totalVols++
 			if fcdInfo.IsOrphan {
 				totalOrphans++
+			}
+			if fcdInfo.IsAttached {
+				totalAttachedOrphans++
+			} else {
+				totalDetachedOrphans++
 			}
 		}
 		w := tabwriter.NewWriter(os.Stdout, 0, 10, 1, ' ', tabwriter.TabIndent)
@@ -79,9 +84,10 @@ var lsCmd = &cobra.Command{
 				}
 			} else if cmd.Flag("all").Value.String() == "true" && cmd.Flag("long-list").Value.String() == "true" {
 				if totalVols > 0 {
-					fmt.Fprintf(w, "\nDATASTORE\tVOLUME_ID\tCREATE_TIME\tCAPACITY_MB\tIS_ORPHAN\tPV_NAME\n")
+					fmt.Fprintf(w, "\nDATASTORE\tVOLUME_ID\tIS_ATTACHED\tATTACHED_VM\tCREATE_TIME\tCAPACITY_MB\tIS_ORPHAN\tPV_NAME\n")
 					for _, fcdInfo := range res.Fcds {
-						fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\t%s\n", fcdInfo.Datastore, fcdInfo.FcdId,
+						fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%d\t%s\t%s\n", fcdInfo.Datastore, fcdInfo.FcdId,
+							strconv.FormatBool(fcdInfo.IsAttached), fcdInfo.AttachedVmName,
 							fcdInfo.CreateTime.String(), fcdInfo.CapacityInMB, strconv.FormatBool(fcdInfo.IsOrphan), fcdInfo.PvName)
 					}
 				} else {
@@ -89,10 +95,12 @@ var lsCmd = &cobra.Command{
 				}
 			} else if cmd.Flag("all").Value.String() == "false" && cmd.Flag("long-list").Value.String() == "true" {
 				if totalOrphans > 0 {
-					fmt.Fprintf(w, "\nDATASTORE\tORPHAN_VOLUME\tCREATE_TIME\tCAPACITY_MB\n")
+					fmt.Fprintf(w, "\nDATASTORE\tORPHAN_VOLUME\tIS_ATTACHED\tATTACHED_VM\tCREATE_TIME\tCAPACITY_MB\n")
 					for _, fcdInfo := range res.Fcds {
 						if fcdInfo.IsOrphan {
-							fmt.Fprintf(w, "%s\t%s\t%s\t%d\n", fcdInfo.Datastore, fcdInfo.FcdId, fcdInfo.CreateTime.String(), fcdInfo.CapacityInMB)
+							fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%d\n", fcdInfo.Datastore, fcdInfo.FcdId,
+								strconv.FormatBool(fcdInfo.IsAttached), fcdInfo.AttachedVmName,
+								fcdInfo.CreateTime.String(), fcdInfo.CapacityInMB)
 						}
 					}
 				} else {
@@ -115,6 +123,8 @@ var lsCmd = &cobra.Command{
 		fmt.Printf("\n----------------------- Summary ------------------------------\n")
 		fmt.Printf("Total FCDs on the datastore(s): %d\n", totalVols)
 		fmt.Printf("Total orphan volumes on the datastore(s): %d\n", totalOrphans)
+		fmt.Printf("Total attached orphan volumes on the datastore(s): %d\n", totalAttachedOrphans)
+		fmt.Printf("Total detached orphan volumes on the datastore(s): %d\n", totalDetachedOrphans)
 	},
 }
 
@@ -122,7 +132,7 @@ func InitLs() {
 	lsCmd.PersistentFlags().StringVarP(&datastores, "datastores", "d", viper.GetString("datastores"), "comma-separated datastore names (alternatively use CNSCTL_DATASTORES env variable)")
 	lsCmd.PersistentFlags().StringVarP(&cfgFile, "kubeconfig", "k", viper.GetString("kubeconfig"), "kubeconfig file (alternatively use CNSCTL_KUBECONFIG env variable)")
 	lsCmd.PersistentFlags().BoolVarP(&all, "all", "a", false, "Show orphan and used volumes")
-	lsCmd.PersistentFlags().BoolVarP(&long, "long-list", "l", false, "Show additional details of orphan volumes")
+	lsCmd.PersistentFlags().BoolVarP(&long, "long-list", "l", false, "Show additional details of the volumes")
 	ovCmd.AddCommand(lsCmd)
 }
 
