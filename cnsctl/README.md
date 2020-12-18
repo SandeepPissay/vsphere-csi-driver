@@ -113,3 +113,38 @@ Deleted FCD d8f5c732-16c6-4337-ba6b-afe11d97a3ac successfully
 Cleaned up 2 orphan volumes.
 ```
 cleanup sub-command does not remove orphan volumes that are attached to a VM. To force delete such attached orphan volumes, use --force flag. This will detach the orphan volume before removing them permanently.
+
+## Orphan Volume Attachment(ova)
+Use this command to identify and delete orphan volume attachment custom resource(CR) in the Kubernetes cluster. Orphan volume attachment are those volume attachment CRs that are pointing to a persistent volume(PV) that does not exist in the Kubernetes cluster. CSI uses volume attachment CR to attach a persistent volume to a node. It is possible that we will end up with stale orphan volume attachment CRs in few corner cases like manual intervention in deleting PVs.
+
+### ls sub-command
+Use this sub-command to show the orphan volume attachment CRs in the Kubernetes cluster. This is a read-only operation and does not delete orphan volume attachment CRs.
+
+Example: List orphan volume attachment CRs
+```sh
+$ export CNSCTL_KUBECONFIG=/root/.kube/config
+$ cnsctl ova ls
+Found 0 PVs in the Kubernetes cluster
+
+ORPHAN_VOLUME_ATTACHMENT_NAME                                        PV_NAME                                  ATTACH_NODE IS_ATTACHED
+csi-05b25499532888adb9ba4d8ef1f8574affeaf38d9201875d92dd217d6e7a3295 pvc-3736e2a1-babc-4301-8882-0b65d1664bec k8s-node1   true
+
+----------------------- Summary ------------------------------
+Total volume attachment CRs found: 1
+Total orphan volume attachment CRs found: 1
+```
+Use -a flag to this sub-command to list orphan and in-use volume attachment CRs.
+
+### cleanup sub-command
+Use cleanup sub-command to remove the orphan volume attachment CRs. Note that this removes all the finalizers on the orphan volume attachment CR before deleting the CR.
+```sh
+$ cnsctl ova cleanup
+Found 0 PVs in the Kubernetes cluster
+(1/1) Trying to delete VolumeAttachment: csi-05b25499532888adb9ba4d8ef1f8574affeaf38d9201875d92dd217d6e7a3295 for PV pvc-3736e2a1-babc-4301-8882-0b65d1664bec
+VolumeAttachment csi-05b25499532888adb9ba4d8ef1f8574affeaf38d9201875d92dd217d6e7a3295 for PV pvc-3736e2a1-babc-4301-8882-0b65d1664bec got deleted after removing finalizers.
+
+----------------------- Summary ------------------------------
+Total volume attachment CRs found: 1
+Total orphan volume attachment CRs found: 1
+Total orphan volume attachment deleted: 1
+```
