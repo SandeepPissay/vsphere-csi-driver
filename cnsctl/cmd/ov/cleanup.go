@@ -77,7 +77,7 @@ var cleanupCmd = &cobra.Command{
 		}
 		fmt.Printf("\n----------------------- Summary ------------------------------\n")
 		if totalCleanedOrphans > 0 {
-			fmt.Printf("Cleaned up %d orphan volumes.\n", totalOrphans)
+			fmt.Printf("Total orphan volumes cleaned up: %d\n", totalCleanedOrphans)
 		} else {
 			fmt.Printf("Orphan volumes were not found or they were not cleaned up.\n")
 		}
