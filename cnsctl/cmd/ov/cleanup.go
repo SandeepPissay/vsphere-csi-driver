@@ -69,7 +69,7 @@ var cleanupCmd = &cobra.Command{
 		currOrphan := 1
 		for _, fcdInfo := range res.Fcds {
 			if fcdInfo.IsOrphan == true {
-				fmt.Printf("(%d/%d) Cleaning orphan volume: %+v\n", currOrphan, totalOrphans, fcdInfo)
+				fmt.Printf("(%d/%d) Cleaning orphan volume: FCD: %s Datastore: %s\n", currOrphan, totalOrphans, fcdInfo.FcdId, fcdInfo.Datastore)
 				currOrphan++
 				deleteCount := deleteVolume(ctx, vcClient, []string{fcdInfo.FcdId}, fcdInfo.Datastore, cmd.Flag("datacenter").Value.String(), cmd.Flag("force").Value.String())
 				totalCleanedOrphans += deleteCount

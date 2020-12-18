@@ -106,7 +106,7 @@ func DeleteVolumeAttachments(ctx context.Context, kubeClient *clientset.Clientse
 				GracePeriodSeconds: &grace,
 			})
 			if apierrors.IsNotFound(err) {
-				fmt.Printf("VolumeAttachment %s for PV %s is not found. Err: %+v. Likely that it is deleted.\n", vaInfo.VAName, vaInfo.PVName, err)
+				fmt.Printf("VolumeAttachment %s for PV %s got deleted after removing finalizers.\n", vaInfo.VAName, vaInfo.PVName)
 				deleteCount++
 				continue
 			}
