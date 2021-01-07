@@ -23,7 +23,7 @@ import (
 )
 
 func main() {
-	if time.Now().After(time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC)) {
+	if time.Now().After(time.Date(2021, 3, 1, 0, 0, 0, 0, time.UTC)) {
 		fmt.Printf("cnsctl is expired. Usage of this tool is not allowed!\n")
 		os.Exit(1)
 	}
