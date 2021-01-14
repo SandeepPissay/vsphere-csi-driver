@@ -5,7 +5,7 @@ cnsctl is a fast CLI based tool for storage operations on Cloud Native Storage s
 Use "-h" option to know the supported commands flags. Example -
 ```sh
 $ cnsctl -h
-A fast CLI based tool to interact with CNS-CSI for various storage control operations.
+A fast CLI based tool storage operations on Cloud Native Storage solution in VMware vSphere.
 
 Usage:
   cnsctl [command]
@@ -13,6 +13,7 @@ Usage:
 Available Commands:
   help        Help about any command
   ov          Orphan volume commands
+  ova         Commands on orphan volume attachment CRs in Kubernetes
 
 Flags:
   -h, --help      help for cnsctl
