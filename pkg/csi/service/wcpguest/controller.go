@@ -18,6 +18,10 @@ package wcpguest
 
 import (
 	"fmt"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"net/http"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -69,6 +73,18 @@ type controller struct {
 func New() csitypes.CnsController {
 	return &controller{}
 }
+
+var (
+	csiInfo = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "gc_csi_info",
+		Help: "CSI Info",
+	}, []string{"version"})
+
+	volumeOps = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "gc_csi_volume_ops",
+		Help: "GC Volume Operations",
+	}, []string{"optype", "status"})
+)
 
 // Init is initializing controller struct
 func (c *controller) Init(config *cnsconfig.Config) error {
@@ -148,6 +164,18 @@ func (c *controller) Init(config *cnsconfig.Config) error {
 		log.Errorf("Failed to watch on path: %q. err=%v", cnsconfig.DefaultpvCSIProviderPath, err)
 		return err
 	}
+	go func() {
+		csiInfo.WithLabelValues("v0.0.1.alpha_vmware.79-7ecdcb1").Set(1)
+		for {
+			log.Info("Starting the http server to expose Prometheus metrics..")
+			http.Handle("/metrics", promhttp.Handler())
+			err = http.ListenAndServe(":2112", nil)
+			if err != nil {
+				log.Warnf("Http server that exposes the Prometheus exited with err: %+v", err)
+			}
+			log.Info("Restarting http server to expose Prometheus metrics..")
+		}
+	}()
 	return nil
 }
 
@@ -187,7 +215,6 @@ func (c *controller) ReloadConfiguration() {
 // in CreateVolumeRequest
 func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) (
 	*csi.CreateVolumeResponse, error) {
-
 	ctx = logger.NewContextWithLogger(ctx)
 	log := logger.GetLogger(ctx)
 	log.Infof("CreateVolume: called with args %+v", *req)
@@ -195,6 +222,7 @@ func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 	if err != nil {
 		msg := fmt.Sprintf("Validation for CreateVolume Request: %+v has failed. Error: %+v", *req, err)
 		log.Error(msg)
+		volumeOps.WithLabelValues("create", "fail").Inc()
 		return nil, err
 	}
 	// Get PVC name and disk size for the supervisor cluster
@@ -227,11 +255,13 @@ func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 			if err != nil {
 				msg := fmt.Sprintf("Failed to create pvc with name: %s on namespace: %s in supervisorCluster. Error: %+v", supervisorPVCName, c.supervisorNamespace, err)
 				log.Error(msg)
+				volumeOps.WithLabelValues("create", "fail").Inc()
 				return nil, status.Errorf(codes.Internal, msg)
 			}
 		} else {
 			msg := fmt.Sprintf("Failed to get pvc with name: %s on namespace: %s from supervisorCluster. Error: %+v", supervisorPVCName, c.supervisorNamespace, err)
 			log.Error(msg)
+			volumeOps.WithLabelValues("create", "fail").Inc()
 			return nil, status.Errorf(codes.Internal, msg)
 		}
 	}
@@ -239,6 +269,7 @@ func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 	if !isBound {
 		msg := fmt.Sprintf("Failed to create volume on namespace: %s  in supervisor cluster. Error: %+v", c.supervisorNamespace, err)
 		log.Error(msg)
+		volumeOps.WithLabelValues("create", "fail").Inc()
 		return nil, status.Errorf(codes.Internal, msg)
 	}
 	attributes := make(map[string]string)
@@ -250,6 +281,7 @@ func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 			VolumeContext: attributes,
 		},
 	}
+	volumeOps.WithLabelValues("create", "pass").Inc()
 	return resp, nil
 }
 
@@ -265,19 +297,23 @@ func (c *controller) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequ
 	if err != nil {
 		msg := fmt.Sprintf("Validation for Delete Volume Request: %+v has failed. Error: %+v", *req, err)
 		log.Error(msg)
+		volumeOps.WithLabelValues("delete", "fail").Inc()
 		return nil, err
 	}
 	err = c.supervisorClient.CoreV1().PersistentVolumeClaims(c.supervisorNamespace).Delete(ctx, req.VolumeId, *metav1.NewDeleteOptions(0))
 	if err != nil {
 		if errors.IsNotFound(err) {
 			log.Debugf("PVC: %q not found in the Supervisor cluster. Assuming this volume to be deleted.", req.VolumeId)
+			volumeOps.WithLabelValues("delete", "notfound").Inc()
 			return &csi.DeleteVolumeResponse{}, nil
 		}
 		msg := fmt.Sprintf("DeleteVolume Request: %+v has failed. Error: %+v", *req, err)
 		log.Error(msg)
+		volumeOps.WithLabelValues("delete", "fail").Inc()
 		return nil, status.Errorf(codes.Internal, msg)
 	}
 	log.Infof("DeleteVolume: Volume deleted successfully. VolumeID: %q", req.VolumeId)
+	volumeOps.WithLabelValues("delete", "pass").Inc()
 	return &csi.DeleteVolumeResponse{}, nil
 }
 
