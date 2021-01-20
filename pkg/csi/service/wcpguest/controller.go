@@ -80,9 +80,10 @@ var (
 		Help: "CSI Info",
 	}, []string{"version"})
 
-	volumeOps = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "gc_csi_volume_ops",
-		Help: "GC Volume Operations",
+	volumeOpsLatency = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Name:        "gc_csi_volume_ops_histogram",
+		Help:        "GC volume operations histogram",
+		Buckets:     []float64{1, 2, 3, 5, 10, 20, 30, 60, 120, 180, 300},
 	}, []string{"optype", "status"})
 )
 
@@ -215,6 +216,7 @@ func (c *controller) ReloadConfiguration() {
 // in CreateVolumeRequest
 func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) (
 	*csi.CreateVolumeResponse, error) {
+	start := time.Now()
 	ctx = logger.NewContextWithLogger(ctx)
 	log := logger.GetLogger(ctx)
 	log.Infof("CreateVolume: called with args %+v", *req)
@@ -222,7 +224,7 @@ func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 	if err != nil {
 		msg := fmt.Sprintf("Validation for CreateVolume Request: %+v has failed. Error: %+v", *req, err)
 		log.Error(msg)
-		volumeOps.WithLabelValues("create", "fail").Inc()
+		volumeOpsLatency.WithLabelValues("create", "fail").Observe(time.Since(start).Seconds())
 		return nil, err
 	}
 	// Get PVC name and disk size for the supervisor cluster
@@ -255,13 +257,13 @@ func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 			if err != nil {
 				msg := fmt.Sprintf("Failed to create pvc with name: %s on namespace: %s in supervisorCluster. Error: %+v", supervisorPVCName, c.supervisorNamespace, err)
 				log.Error(msg)
-				volumeOps.WithLabelValues("create", "fail").Inc()
+				volumeOpsLatency.WithLabelValues("create", "fail").Observe(time.Since(start).Seconds())
 				return nil, status.Errorf(codes.Internal, msg)
 			}
 		} else {
 			msg := fmt.Sprintf("Failed to get pvc with name: %s on namespace: %s from supervisorCluster. Error: %+v", supervisorPVCName, c.supervisorNamespace, err)
 			log.Error(msg)
-			volumeOps.WithLabelValues("create", "fail").Inc()
+			volumeOpsLatency.WithLabelValues("create", "fail").Observe(time.Since(start).Seconds())
 			return nil, status.Errorf(codes.Internal, msg)
 		}
 	}
@@ -269,7 +271,7 @@ func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 	if !isBound {
 		msg := fmt.Sprintf("Failed to create volume on namespace: %s  in supervisor cluster. Error: %+v", c.supervisorNamespace, err)
 		log.Error(msg)
-		volumeOps.WithLabelValues("create", "fail").Inc()
+		volumeOpsLatency.WithLabelValues("create", "fail").Observe(time.Since(start).Seconds())
 		return nil, status.Errorf(codes.Internal, msg)
 	}
 	attributes := make(map[string]string)
@@ -281,14 +283,14 @@ func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 			VolumeContext: attributes,
 		},
 	}
-	volumeOps.WithLabelValues("create", "pass").Inc()
+	volumeOpsLatency.WithLabelValues("create", "pass").Observe(time.Since(start).Seconds())
 	return resp, nil
 }
 
 // DeleteVolume is deleting CNS Volume specified in DeleteVolumeRequest
 func (c *controller) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest) (
 	*csi.DeleteVolumeResponse, error) {
-
+	start := time.Now()
 	ctx = logger.NewContextWithLogger(ctx)
 	log := logger.GetLogger(ctx)
 	log.Infof("DeleteVolume: called with args: %+v", *req)
@@ -297,23 +299,23 @@ func (c *controller) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequ
 	if err != nil {
 		msg := fmt.Sprintf("Validation for Delete Volume Request: %+v has failed. Error: %+v", *req, err)
 		log.Error(msg)
-		volumeOps.WithLabelValues("delete", "fail").Inc()
+		volumeOpsLatency.WithLabelValues("delete", "fail").Observe(time.Since(start).Seconds())
 		return nil, err
 	}
 	err = c.supervisorClient.CoreV1().PersistentVolumeClaims(c.supervisorNamespace).Delete(ctx, req.VolumeId, *metav1.NewDeleteOptions(0))
 	if err != nil {
 		if errors.IsNotFound(err) {
 			log.Debugf("PVC: %q not found in the Supervisor cluster. Assuming this volume to be deleted.", req.VolumeId)
-			volumeOps.WithLabelValues("delete", "notfound").Inc()
+			volumeOpsLatency.WithLabelValues("delete", "notFound").Observe(time.Since(start).Seconds())
 			return &csi.DeleteVolumeResponse{}, nil
 		}
 		msg := fmt.Sprintf("DeleteVolume Request: %+v has failed. Error: %+v", *req, err)
 		log.Error(msg)
-		volumeOps.WithLabelValues("delete", "fail").Inc()
+		volumeOpsLatency.WithLabelValues("delete", "fail").Observe(time.Since(start).Seconds())
 		return nil, status.Errorf(codes.Internal, msg)
 	}
 	log.Infof("DeleteVolume: Volume deleted successfully. VolumeID: %q", req.VolumeId)
-	volumeOps.WithLabelValues("delete", "pass").Inc()
+	volumeOpsLatency.WithLabelValues("delete", "pass").Observe(time.Since(start).Seconds())
 	return &csi.DeleteVolumeResponse{}, nil
 }
 
