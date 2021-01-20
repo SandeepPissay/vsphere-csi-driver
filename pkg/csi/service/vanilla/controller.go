@@ -85,7 +85,7 @@ func New() csitypes.CnsController {
 }
 
 // Init is initializing controller struct
-func (c *controller) Init(config *config.Config) error {
+func (c *controller) Init(config *config.Config, version string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	ctx = logger.NewContextWithLogger(ctx)

@@ -118,7 +118,7 @@ func (s *service) BeforeServe(
 			log.Errorf("Failed to read config. Error: %+v", err)
 			return err
 		}
-		if err := s.cnscs.Init(cfg); err != nil {
+		if err := s.cnscs.Init(cfg, Version); err != nil {
 			log.Errorf("Failed to init controller. Error: %+v", err)
 			return err
 		}

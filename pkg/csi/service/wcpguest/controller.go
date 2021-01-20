@@ -80,15 +80,15 @@ var (
 		Help: "CSI Info",
 	}, []string{"version"})
 
-	volumeOpsLatency = promauto.NewHistogramVec(prometheus.HistogramOpts{
+	volumeControlOpsHistVec = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:        "gc_csi_volume_ops_histogram",
 		Help:        "GC volume operations histogram",
-		Buckets:     []float64{1, 2, 3, 5, 10, 20, 30, 60, 120, 180, 300},
+		Buckets:     []float64{1, 2, 3, 5, 10, 15, 20, 30, 60, 120, 180, 300},
 	}, []string{"optype", "status"})
 )
 
 // Init is initializing controller struct
-func (c *controller) Init(config *cnsconfig.Config) error {
+func (c *controller) Init(config *cnsconfig.Config, version string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	ctx = logger.NewContextWithLogger(ctx)
@@ -166,7 +166,7 @@ func (c *controller) Init(config *cnsconfig.Config) error {
 		return err
 	}
 	go func() {
-		csiInfo.WithLabelValues("v0.0.1.alpha_vmware.79-7ecdcb1").Set(1)
+		csiInfo.WithLabelValues(version).Set(1)
 		for {
 			log.Info("Starting the http server to expose Prometheus metrics..")
 			http.Handle("/metrics", promhttp.Handler())
@@ -224,7 +224,7 @@ func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 	if err != nil {
 		msg := fmt.Sprintf("Validation for CreateVolume Request: %+v has failed. Error: %+v", *req, err)
 		log.Error(msg)
-		volumeOpsLatency.WithLabelValues("create", "fail").Observe(time.Since(start).Seconds())
+		volumeControlOpsHistVec.WithLabelValues("create", "fail").Observe(time.Since(start).Seconds())
 		return nil, err
 	}
 	// Get PVC name and disk size for the supervisor cluster
@@ -257,13 +257,13 @@ func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 			if err != nil {
 				msg := fmt.Sprintf("Failed to create pvc with name: %s on namespace: %s in supervisorCluster. Error: %+v", supervisorPVCName, c.supervisorNamespace, err)
 				log.Error(msg)
-				volumeOpsLatency.WithLabelValues("create", "fail").Observe(time.Since(start).Seconds())
+				volumeControlOpsHistVec.WithLabelValues("create", "fail").Observe(time.Since(start).Seconds())
 				return nil, status.Errorf(codes.Internal, msg)
 			}
 		} else {
 			msg := fmt.Sprintf("Failed to get pvc with name: %s on namespace: %s from supervisorCluster. Error: %+v", supervisorPVCName, c.supervisorNamespace, err)
 			log.Error(msg)
-			volumeOpsLatency.WithLabelValues("create", "fail").Observe(time.Since(start).Seconds())
+			volumeControlOpsHistVec.WithLabelValues("create", "fail").Observe(time.Since(start).Seconds())
 			return nil, status.Errorf(codes.Internal, msg)
 		}
 	}
@@ -271,7 +271,7 @@ func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 	if !isBound {
 		msg := fmt.Sprintf("Failed to create volume on namespace: %s  in supervisor cluster. Error: %+v", c.supervisorNamespace, err)
 		log.Error(msg)
-		volumeOpsLatency.WithLabelValues("create", "fail").Observe(time.Since(start).Seconds())
+		volumeControlOpsHistVec.WithLabelValues("create", "fail").Observe(time.Since(start).Seconds())
 		return nil, status.Errorf(codes.Internal, msg)
 	}
 	attributes := make(map[string]string)
@@ -283,7 +283,7 @@ func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 			VolumeContext: attributes,
 		},
 	}
-	volumeOpsLatency.WithLabelValues("create", "pass").Observe(time.Since(start).Seconds())
+	volumeControlOpsHistVec.WithLabelValues("create", "pass").Observe(time.Since(start).Seconds())
 	return resp, nil
 }
 
@@ -299,23 +299,23 @@ func (c *controller) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequ
 	if err != nil {
 		msg := fmt.Sprintf("Validation for Delete Volume Request: %+v has failed. Error: %+v", *req, err)
 		log.Error(msg)
-		volumeOpsLatency.WithLabelValues("delete", "fail").Observe(time.Since(start).Seconds())
+		volumeControlOpsHistVec.WithLabelValues("delete", "fail").Observe(time.Since(start).Seconds())
 		return nil, err
 	}
 	err = c.supervisorClient.CoreV1().PersistentVolumeClaims(c.supervisorNamespace).Delete(ctx, req.VolumeId, *metav1.NewDeleteOptions(0))
 	if err != nil {
 		if errors.IsNotFound(err) {
 			log.Debugf("PVC: %q not found in the Supervisor cluster. Assuming this volume to be deleted.", req.VolumeId)
-			volumeOpsLatency.WithLabelValues("delete", "notFound").Observe(time.Since(start).Seconds())
+			volumeControlOpsHistVec.WithLabelValues("delete", "notFound").Observe(time.Since(start).Seconds())
 			return &csi.DeleteVolumeResponse{}, nil
 		}
 		msg := fmt.Sprintf("DeleteVolume Request: %+v has failed. Error: %+v", *req, err)
 		log.Error(msg)
-		volumeOpsLatency.WithLabelValues("delete", "fail").Observe(time.Since(start).Seconds())
+		volumeControlOpsHistVec.WithLabelValues("delete", "fail").Observe(time.Since(start).Seconds())
 		return nil, status.Errorf(codes.Internal, msg)
 	}
 	log.Infof("DeleteVolume: Volume deleted successfully. VolumeID: %q", req.VolumeId)
-	volumeOpsLatency.WithLabelValues("delete", "pass").Observe(time.Since(start).Seconds())
+	volumeControlOpsHistVec.WithLabelValues("delete", "pass").Observe(time.Since(start).Seconds())
 	return &csi.DeleteVolumeResponse{}, nil
 }
 
@@ -323,7 +323,7 @@ func (c *controller) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequ
 // volume id and node name is retrieved from ControllerPublishVolumeRequest
 func (c *controller) ControllerPublishVolume(ctx context.Context, req *csi.ControllerPublishVolumeRequest) (
 	*csi.ControllerPublishVolumeResponse, error) {
-
+	start := time.Now()
 	ctx = logger.NewContextWithLogger(ctx)
 	log := logger.GetLogger(ctx)
 	log.Infof("ControllerPublishVolume: called with args %+v", *req)
@@ -331,6 +331,7 @@ func (c *controller) ControllerPublishVolume(ctx context.Context, req *csi.Contr
 	if err != nil {
 		msg := fmt.Sprintf("Validation for PublishVolume Request: %+v has failed. Error: %v", *req, err)
 		log.Error(msg)
+		volumeControlOpsHistVec.WithLabelValues("attach", "fail").Observe(time.Since(start).Seconds())
 		return nil, status.Errorf(codes.Internal, msg)
 	}
 
@@ -342,6 +343,7 @@ func (c *controller) ControllerPublishVolume(ctx context.Context, req *csi.Contr
 	if err := c.vmOperatorClient.Get(ctx, vmKey, virtualMachine); err != nil {
 		msg := fmt.Sprintf("Failed to get VirtualMachines for the node: %q. Error: %+v", req.NodeId, err)
 		log.Error(msg)
+		volumeControlOpsHistVec.WithLabelValues("attach", "fail").Observe(time.Since(start).Seconds())
 		return nil, status.Errorf(codes.Internal, msg)
 	}
 	log.Debugf("Found virtualMachine instance for node: %q", req.NodeId)
@@ -385,6 +387,7 @@ func (c *controller) ControllerPublishVolume(ctx context.Context, req *csi.Contr
 			if err := c.vmOperatorClient.Get(ctx, vmKey, virtualMachine); err != nil {
 				msg := fmt.Sprintf("Failed to get VirtualMachines for the node: %q. Error: %+v", req.NodeId, err)
 				log.Error(msg)
+				volumeControlOpsHistVec.WithLabelValues("attach", "fail").Observe(time.Since(start).Seconds())
 				return nil, status.Errorf(codes.Internal, msg)
 			}
 			log.Debugf("Found virtualMachine instance for node: %q", req.NodeId)
@@ -392,6 +395,7 @@ func (c *controller) ControllerPublishVolume(ctx context.Context, req *csi.Contr
 		if err != nil {
 			msg := fmt.Sprintf("Time out to update VirtualMachines %q with Error: %+v", virtualMachine.Name, err)
 			log.Error(msg)
+			volumeControlOpsHistVec.WithLabelValues("attach", "fail").Observe(time.Since(start).Seconds())
 			return nil, status.Errorf(codes.Internal, msg)
 		}
 	}
@@ -406,6 +410,7 @@ func (c *controller) ControllerPublishVolume(ctx context.Context, req *csi.Contr
 		if err != nil {
 			msg := fmt.Sprintf("failed to watch virtualMachine %q with Error: %v", virtualMachine.Name, err)
 			log.Error(msg)
+			volumeControlOpsHistVec.WithLabelValues("attach", "fail").Observe(time.Since(start).Seconds())
 			return nil, status.Errorf(codes.Internal, msg)
 		}
 		defer watchVirtualMachine.Stop()
@@ -419,6 +424,7 @@ func (c *controller) ControllerPublishVolume(ctx context.Context, req *csi.Contr
 			if !ok {
 				msg := fmt.Sprintf("Watch on virtualmachine %q timed out", virtualMachine.Name)
 				log.Error(msg)
+				volumeControlOpsHistVec.WithLabelValues("attach", "fail").Observe(time.Since(start).Seconds())
 				return nil, status.Errorf(codes.Internal, msg)
 			}
 			if vm.Name != virtualMachine.Name {
@@ -435,6 +441,7 @@ func (c *controller) ControllerPublishVolume(ctx context.Context, req *csi.Contr
 						if volume.Error != "" {
 							msg := fmt.Sprintf("observed Error: %q is set on the volume %q on virtualmachine %q", volume.Error, volume.Name, vm.Name)
 							log.Error(msg)
+							volumeControlOpsHistVec.WithLabelValues("attach", "fail").Observe(time.Since(start).Seconds())
 							return nil, status.Errorf(codes.Internal, msg)
 						}
 					}
@@ -456,6 +463,7 @@ func (c *controller) ControllerPublishVolume(ctx context.Context, req *csi.Contr
 		PublishContext: publishInfo,
 	}
 	log.Infof("ControllerPublishVolume: Volume attached successfully %q", req.VolumeId)
+	volumeControlOpsHistVec.WithLabelValues("attach", "pass").Observe(time.Since(start).Seconds())
 	return resp, nil
 }
 
@@ -464,6 +472,7 @@ func (c *controller) ControllerPublishVolume(ctx context.Context, req *csi.Contr
 func (c *controller) ControllerUnpublishVolume(ctx context.Context, req *csi.ControllerUnpublishVolumeRequest) (
 	*csi.ControllerUnpublishVolumeResponse, error) {
 
+	start := time.Now()
 	ctx = logger.NewContextWithLogger(ctx)
 	log := logger.GetLogger(ctx)
 	log.Infof("ControllerUnpublishVolume: called with args %+v", *req)
@@ -471,6 +480,7 @@ func (c *controller) ControllerUnpublishVolume(ctx context.Context, req *csi.Con
 	if err != nil {
 		msg := fmt.Sprintf("Validation for UnpublishVolume Request: %+v has failed. Error: %v", *req, err)
 		log.Error(msg)
+		volumeControlOpsHistVec.WithLabelValues("detach", "fail").Observe(time.Since(start).Seconds())
 		return nil, err
 	}
 
@@ -484,6 +494,7 @@ func (c *controller) ControllerUnpublishVolume(ctx context.Context, req *csi.Con
 	if err := c.vmOperatorClient.Get(ctx, vmKey, virtualMachine); err != nil {
 		msg := fmt.Sprintf("Failed to get VirtualMachines for node: %q. Error: %+v", req.NodeId, err)
 		log.Error(msg)
+		volumeControlOpsHistVec.WithLabelValues("detach", "fail").Observe(time.Since(start).Seconds())
 		return nil, status.Errorf(codes.Internal, msg)
 	}
 	log.Debugf("Found VirtualMachine for node: %q.", req.NodeId)
@@ -506,6 +517,7 @@ func (c *controller) ControllerUnpublishVolume(ctx context.Context, req *csi.Con
 		if err := c.vmOperatorClient.Get(ctx, vmKey, virtualMachine); err != nil {
 			msg := fmt.Sprintf("Failed to get VirtualMachines for node: %q. Error: %+v", req.NodeId, err)
 			log.Error(msg)
+			volumeControlOpsHistVec.WithLabelValues("detach", "fail").Observe(time.Since(start).Seconds())
 			return nil, status.Errorf(codes.Internal, msg)
 		}
 		log.Debugf("Found VirtualMachine for node: %q.", req.NodeId)
@@ -513,6 +525,7 @@ func (c *controller) ControllerUnpublishVolume(ctx context.Context, req *csi.Con
 	if err != nil {
 		msg := fmt.Sprintf("Time out to update VirtualMachines %q with Error: %+v", virtualMachine.Name, err)
 		log.Error(msg)
+		volumeControlOpsHistVec.WithLabelValues("detach", "fail").Observe(time.Since(start).Seconds())
 		return nil, status.Errorf(codes.Internal, msg)
 	}
 
@@ -525,11 +538,13 @@ func (c *controller) ControllerUnpublishVolume(ctx context.Context, req *csi.Con
 	if err != nil {
 		msg := fmt.Sprintf("Failed to watch VirtualMachine %q with Error: %v", virtualMachine.Name, err)
 		log.Error(msg)
+		volumeControlOpsHistVec.WithLabelValues("detach", "fail").Observe(time.Since(start).Seconds())
 		return nil, status.Errorf(codes.Internal, msg)
 	}
 	if watchVirtualMachine == nil {
 		msg := fmt.Sprintf("watchVirtualMachine for %q is nil", virtualMachine.Name)
 		log.Error(msg)
+		volumeControlOpsHistVec.WithLabelValues("detach", "fail").Observe(time.Since(start).Seconds())
 		return nil, status.Errorf(codes.Internal, msg)
 
 	}
@@ -545,6 +560,7 @@ func (c *controller) ControllerUnpublishVolume(ctx context.Context, req *csi.Con
 		if !ok {
 			msg := fmt.Sprintf("Watch on virtualmachine %q timed out", virtualMachine.Name)
 			log.Error(msg)
+			volumeControlOpsHistVec.WithLabelValues("detach", "fail").Observe(time.Since(start).Seconds())
 			return nil, status.Errorf(codes.Internal, msg)
 		}
 		if vm.Name != virtualMachine.Name {
@@ -559,6 +575,7 @@ func (c *controller) ControllerUnpublishVolume(ctx context.Context, req *csi.Con
 				if volume.Attached && volume.Error != "" {
 					msg := fmt.Sprintf("Failed to detach volume %q from VirtualMachine %q with Error: %v", volume.Name, virtualMachine.Name, volume.Error)
 					log.Error(msg)
+					volumeControlOpsHistVec.WithLabelValues("detach", "fail").Observe(time.Since(start).Seconds())
 					return nil, status.Errorf(codes.Internal, msg)
 				}
 				break
@@ -567,6 +584,7 @@ func (c *controller) ControllerUnpublishVolume(ctx context.Context, req *csi.Con
 
 	}
 	log.Infof("ControllerUnpublishVolume: Volume detached successfully %q", req.VolumeId)
+	volumeControlOpsHistVec.WithLabelValues("detach", "pass").Observe(time.Since(start).Seconds())
 	return &csi.ControllerUnpublishVolumeResponse{}, nil
 }
 
@@ -574,17 +592,20 @@ func (c *controller) ControllerUnpublishVolume(ctx context.Context, req *csi.Con
 // volume id and size is retrieved from ControllerExpandVolumeRequest
 func (c *controller) ControllerExpandVolume(ctx context.Context, req *csi.ControllerExpandVolumeRequest) (
 	*csi.ControllerExpandVolumeResponse, error) {
+	start := time.Now()
 	ctx = logger.NewContextWithLogger(ctx)
 	log := logger.GetLogger(ctx)
 	if !c.coCommonInterface.IsFSSEnabled(ctx, common.VolumeExtend) {
 		msg := "ExpandVolume feature is disabled on the cluster."
 		log.Warn(msg)
+		volumeControlOpsHistVec.WithLabelValues("expand", "fail").Observe(time.Since(start).Seconds())
 		return nil, status.Error(codes.Unimplemented, msg)
 	}
 	log.Infof("ControllerExpandVolume: called with args %+v", *req)
 
 	err := validateGuestClusterControllerExpandVolumeRequest(ctx, req)
 	if err != nil {
+		volumeControlOpsHistVec.WithLabelValues("expand", "fail").Observe(time.Since(start).Seconds())
 		return nil, err
 	}
 
@@ -596,6 +617,7 @@ func (c *controller) ControllerExpandVolume(ctx context.Context, req *csi.Contro
 	if err != nil {
 		msg := fmt.Sprintf("failed to list virtualmachines with error: %+v", err)
 		log.Error(msg)
+		volumeControlOpsHistVec.WithLabelValues("expand", "fail").Observe(time.Since(start).Seconds())
 		return nil, status.Error(codes.Internal, msg)
 	}
 
@@ -604,6 +626,7 @@ func (c *controller) ControllerExpandVolume(ctx context.Context, req *csi.Contro
 			if vmVolume.Name == volumeID && vmVolume.Attached {
 				msg := fmt.Sprintf("failed to expand volume: %q. Volume is attached to pod. Only offline volume expansion is supported", volumeID)
 				log.Error(msg)
+				volumeControlOpsHistVec.WithLabelValues("expand", "fail").Observe(time.Since(start).Seconds())
 				return nil, status.Error(codes.FailedPrecondition, msg)
 			}
 		}
@@ -614,6 +637,7 @@ func (c *controller) ControllerExpandVolume(ctx context.Context, req *csi.Contro
 	if err != nil {
 		msg := fmt.Sprintf("failed to retrieve supervisor PVC %q in %q namespace. Error: %+v", volumeID, c.supervisorNamespace, err)
 		log.Error(msg)
+		volumeControlOpsHistVec.WithLabelValues("expand", "fail").Observe(time.Since(start).Seconds())
 		return nil, status.Error(codes.Internal, msg)
 	}
 
@@ -629,6 +653,7 @@ func (c *controller) ControllerExpandVolume(ctx context.Context, req *csi.Contro
 		if err != nil {
 			msg := fmt.Sprintf("failed to update supervisor PVC %q in %q namespace. Error: %+v", volumeID, c.supervisorNamespace, err)
 			log.Error(msg)
+			volumeControlOpsHistVec.WithLabelValues("expand", "fail").Observe(time.Since(start).Seconds())
 			return nil, status.Error(codes.Internal, msg)
 		}
 	} else {
@@ -641,6 +666,7 @@ func (c *controller) ControllerExpandVolume(ctx context.Context, req *csi.Contro
 	if err != nil {
 		msg := fmt.Sprintf("failed to expand volume %s in namespace %s of supervisor cluster. Error: %+v", volumeID, c.supervisorNamespace, err)
 		log.Error(msg)
+		volumeControlOpsHistVec.WithLabelValues("expand", "fail").Observe(time.Since(start).Seconds())
 		return nil, status.Error(codes.Internal, msg)
 	}
 
@@ -654,6 +680,7 @@ func (c *controller) ControllerExpandVolume(ctx context.Context, req *csi.Contro
 		CapacityBytes:         volSizeBytes,
 		NodeExpansionRequired: nodeExpansionRequired,
 	}
+	volumeControlOpsHistVec.WithLabelValues("expand", "pass").Observe(time.Since(start).Seconds())
 	return resp, nil
 }
 
