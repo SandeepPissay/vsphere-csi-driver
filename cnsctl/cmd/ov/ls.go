@@ -64,10 +64,12 @@ var lsCmd = &cobra.Command{
 			totalVols++
 			if fcdInfo.IsOrphan {
 				totalOrphans++
-				if fcdInfo.IsAttached {
-					totalAttachedOrphans++
-				} else {
-					totalDetachedOrphans++
+				if cmd.Flag("long-list").Value.String() == "true" {
+					if fcdInfo.IsAttached {
+						totalAttachedOrphans++
+					} else {
+						totalDetachedOrphans++
+					}
 				}
 			}
 		}
@@ -123,8 +125,10 @@ var lsCmd = &cobra.Command{
 		fmt.Printf("\n----------------------- Summary ------------------------------\n")
 		fmt.Printf("Total FCDs on the datastore(s): %d\n", totalVols)
 		fmt.Printf("Total orphan volumes on the datastore(s): %d\n", totalOrphans)
-		fmt.Printf("Total attached orphan volumes on the datastore(s): %d\n", totalAttachedOrphans)
-		fmt.Printf("Total detached orphan volumes on the datastore(s): %d\n", totalDetachedOrphans)
+		if cmd.Flag("long-list").Value.String() == "true" {
+			fmt.Printf("Total attached orphan volumes on the datastore(s): %d\n", totalAttachedOrphans)
+			fmt.Printf("Total detached orphan volumes on the datastore(s): %d\n", totalDetachedOrphans)
+		}
 	},
 }
 

@@ -26,6 +26,7 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
+	"math"
 	"sigs.k8s.io/vsphere-csi-driver/cnsctl/virtualcenter/vm"
 	csitypes "sigs.k8s.io/vsphere-csi-driver/pkg/csi/types"
 	"time"
@@ -44,6 +45,7 @@ type FcdInfo struct {
 	Datastore      string
 	PvName         string
 	IsOrphan       bool
+	// Set only for long listing
 	CreateTime     time.Time
 	CapacityInMB   int64
 	IsAttached     bool
@@ -144,28 +146,28 @@ func GetOrphanVolumesWithClients(ctx context.Context, kubeClient kubernetes.Inte
 				FcdId:     fcd.Id,
 				Datastore: ds,
 			}
-			var vso *types.VStorageObject
+			if pv, ok := volumeHandleToPvMap[fcd.Id]; !ok {
+				fcdInfo.IsOrphan = true
+			} else {
+				fcdInfo.PvName = pv
+				fcdInfo.IsOrphan = false
+			}
+
 			if req.LongListing {
-				vso, err = m.Retrieve(ctx, dsObj, fcd.Id)
-				if err != nil {
-					fmt.Printf("Failed to retrieve VStorageObject for FCD: %s\n", fcd.Id)
-					return nil, err
-				}
-				fcdInfo.CreateTime = vso.Config.CreateTime
-				fcdInfo.CapacityInMB = vso.Config.CapacityInMB
 				if vmName, ok := fcdVmMap[fcd.Id]; ok {
 					fcdInfo.IsAttached = true
 					fcdInfo.AttachedVmName = vmName
 				}
+				vso, err := m.Retrieve(ctx, dsObj, fcd.Id)
+				if err != nil {
+					fmt.Printf("Failed to retrieve VStorageObject for FCD: %s. Continuing for other FCDs...\n", fcd.Id)
+					fcdInfo.CapacityInMB = math.MinInt64
+				} else {
+					fcdInfo.CreateTime = vso.Config.CreateTime
+					fcdInfo.CapacityInMB = vso.Config.CapacityInMB
+				}
 			}
-			if pv, ok := volumeHandleToPvMap[fcd.Id]; !ok {
-				fcdInfo.IsOrphan = true
-				res.Fcds = append(res.Fcds, fcdInfo)
-			} else {
-				fcdInfo.PvName = pv
-				fcdInfo.IsOrphan = false
-				res.Fcds = append(res.Fcds, fcdInfo)
-			}
+			res.Fcds = append(res.Fcds, fcdInfo)
 		}
 	}
 	return res, nil
