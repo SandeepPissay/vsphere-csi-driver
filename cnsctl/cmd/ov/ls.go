@@ -64,11 +64,11 @@ var lsCmd = &cobra.Command{
 			totalVols++
 			if fcdInfo.IsOrphan {
 				totalOrphans++
-			}
-			if fcdInfo.IsAttached {
-				totalAttachedOrphans++
-			} else {
-				totalDetachedOrphans++
+				if fcdInfo.IsAttached {
+					totalAttachedOrphans++
+				} else {
+					totalDetachedOrphans++
+				}
 			}
 		}
 		w := tabwriter.NewWriter(os.Stdout, 0, 10, 1, ' ', tabwriter.TabIndent)
