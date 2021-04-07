@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	opentracing2 "github.com/opentracing/opentracing-go"
 	"sync"
 	"time"
 
@@ -167,6 +168,10 @@ func (m *defaultManager) ResetManager(ctx context.Context, vcenter *cnsvsphere.V
 
 // CreateVolume creates a new volume given its spec.
 func (m *defaultManager) CreateVolume(ctx context.Context, spec *cnstypes.CnsVolumeCreateSpec) (*CnsVolumeInfo, error) {
+	var sp opentracing2.Span
+	sp, ctx = opentracing2.StartSpanFromContext(ctx, "CnsCreateVolume")
+	defer sp.Finish()
+
 	internalCreateVolume := func() (*CnsVolumeInfo, error) {
 		log := logger.GetLogger(ctx)
 		err := validateManager(ctx, m)
@@ -316,9 +321,12 @@ func (m *defaultManager) CreateVolume(ctx context.Context, spec *cnstypes.CnsVol
 	if err != nil {
 		prometheus.CnsControlOpsHistVec.WithLabelValues(prometheus.PrometheusCnsCreateVolumeOpType,
 			prometheus.PrometheusFailStatus).Observe(time.Since(start).Seconds())
+		sp.LogKV("event", "CnsCreateVolume fail")
 	} else {
 		prometheus.CnsControlOpsHistVec.WithLabelValues(prometheus.PrometheusCnsCreateVolumeOpType,
 			prometheus.PrometheusPassStatus).Observe(time.Since(start).Seconds())
+		sp.LogKV("event", "CnsCreateVolume success")
+		sp.SetTag("volumeId", resp.VolumeID)
 	}
 
 	return resp, err
@@ -326,6 +334,12 @@ func (m *defaultManager) CreateVolume(ctx context.Context, spec *cnstypes.CnsVol
 
 // AttachVolume attaches a volume to a virtual machine given the spec.
 func (m *defaultManager) AttachVolume(ctx context.Context, vm *cnsvsphere.VirtualMachine, volumeID string) (string, error) {
+	var sp opentracing2.Span
+	sp, ctx = opentracing2.StartSpanFromContext(ctx, "CnsAttachVolume")
+	defer sp.Finish()
+	sp.SetTag("VM", vm.Reference().Value)
+	sp.SetTag("volumeId", volumeID)
+
 	internalAttachVolume := func() (string, error) {
 		log := logger.GetLogger(ctx)
 		err := validateManager(ctx, m)
@@ -400,15 +414,23 @@ func (m *defaultManager) AttachVolume(ctx context.Context, vm *cnsvsphere.Virtua
 	if err != nil {
 		prometheus.CnsControlOpsHistVec.WithLabelValues(prometheus.PrometheusCnsAttachVolumeOpType,
 			prometheus.PrometheusFailStatus).Observe(time.Since(start).Seconds())
+		sp.LogKV("event", "CnsAttachVolume fail")
 	} else {
 		prometheus.CnsControlOpsHistVec.WithLabelValues(prometheus.PrometheusCnsAttachVolumeOpType,
 			prometheus.PrometheusPassStatus).Observe(time.Since(start).Seconds())
+		sp.LogKV("event", "CnsAttachVolume success")
 	}
 	return resp, err
 }
 
 // DetachVolume detaches a volume from the virtual machine given the spec.
 func (m *defaultManager) DetachVolume(ctx context.Context, vm *cnsvsphere.VirtualMachine, volumeID string) error {
+	var sp opentracing2.Span
+	sp, ctx = opentracing2.StartSpanFromContext(ctx, "CnsDetachVolume")
+	defer sp.Finish()
+	sp.SetTag("VM", vm.Reference().Value)
+	sp.SetTag("volumeId", volumeID)
+
 	internalDetachVolume := func() error {
 		log := logger.GetLogger(ctx)
 		err := validateManager(ctx, m)
@@ -500,15 +522,21 @@ func (m *defaultManager) DetachVolume(ctx context.Context, vm *cnsvsphere.Virtua
 	if err != nil {
 		prometheus.CnsControlOpsHistVec.WithLabelValues(prometheus.PrometheusCnsDetachVolumeOpType,
 			prometheus.PrometheusFailStatus).Observe(time.Since(start).Seconds())
+		sp.LogKV("event", "CnsDetachVolume fail")
 	} else {
 		prometheus.CnsControlOpsHistVec.WithLabelValues(prometheus.PrometheusCnsDetachVolumeOpType,
 			prometheus.PrometheusPassStatus).Observe(time.Since(start).Seconds())
+		sp.LogKV("event", "CnsDetachVolume success")
 	}
 	return err
 }
 
 // DeleteVolume deletes a volume given its spec.
 func (m *defaultManager) DeleteVolume(ctx context.Context, volumeID string, deleteDisk bool) error {
+	var sp opentracing2.Span
+	sp, ctx = opentracing2.StartSpanFromContext(ctx, "CnsDeleteVolume")
+	defer sp.Finish()
+
 	internalDeleteVolume := func() error {
 		log := logger.GetLogger(ctx)
 		err := validateManager(ctx, m)
@@ -569,9 +597,11 @@ func (m *defaultManager) DeleteVolume(ctx context.Context, volumeID string, dele
 	if err != nil {
 		prometheus.CnsControlOpsHistVec.WithLabelValues(prometheus.PrometheusCnsDeleteVolumeOpType,
 			prometheus.PrometheusFailStatus).Observe(time.Since(start).Seconds())
+		sp.LogKV("event", "CnsDeleteVolume fail")
 	} else {
 		prometheus.CnsControlOpsHistVec.WithLabelValues(prometheus.PrometheusCnsDeleteVolumeOpType,
 			prometheus.PrometheusPassStatus).Observe(time.Since(start).Seconds())
+		sp.LogKV("event", "CnsDeleteVolume success")
 	}
 	return err
 }

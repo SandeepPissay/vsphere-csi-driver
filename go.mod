@@ -17,11 +17,13 @@ require (
 	github.com/google/uuid v1.2.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.2.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway v1.14.5 // indirect
+	github.com/jaegertracing/jaeger-client-go v2.25.0+incompatible
 	github.com/kr/text v0.2.0 // indirect
 	github.com/kubernetes-csi/csi-lib-utils v0.7.0
 	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
 	github.com/onsi/ginkgo v1.15.0
 	github.com/onsi/gomega v1.10.5
+	github.com/opentracing/opentracing-go v1.2.0
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.9.0
 	github.com/rexray/gocsi v1.2.2
@@ -29,6 +31,8 @@ require (
 	github.com/spf13/viper v1.7.1
 	github.com/stretchr/testify v1.6.1 // indirect
 	github.com/thecodeteam/gofsutil v0.1.2 // indirect
+	github.com/uber/jaeger-client-go v2.25.0+incompatible
+	github.com/uber/jaeger-lib v2.4.1+incompatible
 	github.com/vmware-tanzu/vm-operator-api v0.1.3
 	github.com/vmware/govmomi v0.24.1
 	go.uber.org/zap v1.16.0

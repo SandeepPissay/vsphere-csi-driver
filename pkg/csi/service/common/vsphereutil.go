@@ -19,6 +19,7 @@ package common
 import (
 	"errors"
 	"fmt"
+	opentracing2 "github.com/opentracing/opentracing-go"
 
 	"github.com/davecgh/go-spew/spew"
 	cnstypes "github.com/vmware/govmomi/cns/types"
@@ -34,6 +35,10 @@ import (
 // CreateBlockVolumeUtil is the helper function to create CNS block volume.
 func CreateBlockVolumeUtil(ctx context.Context, clusterFlavor cnstypes.CnsClusterFlavor, manager *Manager, spec *CreateVolumeSpec, sharedDatastores []*vsphere.DatastoreInfo) (*cnsvolume.CnsVolumeInfo, error) {
 	log := logger.GetLogger(ctx)
+	var sp opentracing2.Span
+	sp, ctx = opentracing2.StartSpanFromContext(ctx, "CreateBlockVolumeUtil")
+	defer sp.Finish()
+
 	vc, err := GetVCenter(ctx, manager)
 	if err != nil {
 		log.Errorf("failed to get vCenter from Manager, err: %+v", err)
