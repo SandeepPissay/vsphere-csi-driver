@@ -19,8 +19,11 @@ package wcp
 import (
 	"errors"
 	"fmt"
+	opentracing2 "github.com/opentracing/opentracing-go"
+	opentracinglog "github.com/opentracing/opentracing-go/log"
 	"net/http"
 	"path/filepath"
+	"sigs.k8s.io/vsphere-csi-driver/pkg/common/opentracing"
 	"strings"
 	"time"
 
@@ -77,6 +80,15 @@ func (c *controller) Init(config *cnsconfig.Config, version string) error {
 	defer cancel()
 	ctx = logger.NewContextWithLogger(ctx)
 	log := logger.GetLogger(ctx)
+
+	log.Infof("Initializing CNS controller")
+	opentracing.InitJaeger("vsphere-csi", config)
+	_, span := opentracing.StartSpan(ctx, "init-csi-controller")
+	defer span.Finish()
+
+	span.LogFields(
+		opentracinglog.String("event", "init-csi-controller"),
+	)
 
 	log.Infof("Initializing WCP CSI controller")
 	var err error
@@ -177,6 +189,7 @@ func (c *controller) Init(config *cnsconfig.Config, version string) error {
 			log.Info("Restarting http server to expose Prometheus metrics..")
 		}
 	}()
+	span.LogKV("event", "end of init-csi-controller")
 	return nil
 }
 
@@ -248,7 +261,12 @@ func (c *controller) ReloadConfiguration() error {
 // createBlockVolume creates a block volume based on the CreateVolumeRequest.
 func (c *controller) createBlockVolume(ctx context.Context, req *csi.CreateVolumeRequest) (
 	*csi.CreateVolumeResponse, error) {
+
 	log := logger.GetLogger(ctx)
+
+	var sp opentracing2.Span
+	sp, ctx = opentracing2.StartSpanFromContext(ctx, "createBlockVolume")
+	defer sp.Finish()
 	// Volume Size - Default is 10 GiB
 	volSizeBytes := int64(common.DefaultGbDiskSize * common.GbInBytes)
 	if req.GetCapacityRange() != nil && req.GetCapacityRange().RequiredBytes != 0 {
@@ -445,7 +463,14 @@ func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 
 	start := time.Now()
 	volumeType := prometheus.PrometheusUnknownVolumeType
-	createVolumeInternal := func() (
+	spanCtx, span := opentracing.StartSpan(ctx, "CsiCreateVolume")
+	defer span.Finish()
+	span.SetTag("volumeName", req.Name)
+
+	span.LogFields(
+		opentracinglog.String("event", "create-volume start"),
+	)
+	createVolumeInternal := func(ctx context.Context) (
 		*csi.CreateVolumeResponse, error) {
 		ctx = logger.NewContextWithLogger(ctx)
 		log := logger.GetLogger(ctx)
@@ -475,13 +500,16 @@ func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 		}
 		return c.createBlockVolume(ctx, req)
 	}
-	resp, err := createVolumeInternal()
+	resp, err := createVolumeInternal(spanCtx)
 	if err != nil {
 		prometheus.CsiControlOpsHistVec.WithLabelValues(volumeType, prometheus.PrometheusCreateVolumeOpType,
 			prometheus.PrometheusFailStatus).Observe(time.Since(start).Seconds())
+		span.LogKV("event", "create-volume fail")
 	} else {
 		prometheus.CsiControlOpsHistVec.WithLabelValues(volumeType, prometheus.PrometheusCreateVolumeOpType,
 			prometheus.PrometheusPassStatus).Observe(time.Since(start).Seconds())
+		span.LogKV("event", "create-volume success")
+		span.SetTag("volumeId", resp.Volume.VolumeId)
 	}
 	return resp, err
 }
@@ -493,7 +521,16 @@ func (c *controller) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequ
 	start := time.Now()
 	volumeType := prometheus.PrometheusUnknownVolumeType
 
-	deleteVolumeInternal := func() (
+	spCtx, span := opentracing.StartSpan(ctx, "CsiDeleteVolume")
+	defer span.Finish()
+	span.SetTag("volumeId", req.VolumeId)
+
+	span.LogFields(
+		opentracinglog.String("event", "delete-volume start"),
+	)
+
+
+	deleteVolumeInternal := func(ctx context.Context) (
 		*csi.DeleteVolumeResponse, error) {
 		ctx = logger.NewContextWithLogger(ctx)
 		log := logger.GetLogger(ctx)
@@ -514,13 +551,15 @@ func (c *controller) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequ
 		}
 		return &csi.DeleteVolumeResponse{}, nil
 	}
-	resp, err := deleteVolumeInternal()
+	resp, err := deleteVolumeInternal(spCtx)
 	if err != nil {
 		prometheus.CsiControlOpsHistVec.WithLabelValues(volumeType, prometheus.PrometheusDeleteVolumeOpType,
 			prometheus.PrometheusFailStatus).Observe(time.Since(start).Seconds())
+		span.LogKV("event", "delete-volume fail")
 	} else {
 		prometheus.CsiControlOpsHistVec.WithLabelValues(volumeType, prometheus.PrometheusDeleteVolumeOpType,
 			prometheus.PrometheusPassStatus).Observe(time.Since(start).Seconds())
+		span.LogKV("event", "delete-volume success")
 	}
 	return resp, err
 }
@@ -531,108 +570,123 @@ func (c *controller) ControllerPublishVolume(ctx context.Context, req *csi.Contr
 	*csi.ControllerPublishVolumeResponse, error) {
 	ctx = logger.NewContextWithLogger(ctx)
 	log := logger.GetLogger(ctx)
-	log.Infof("ControllerPublishVolume: called with args %+v", *req)
-	err := validateWCPControllerPublishVolumeRequest(ctx, req)
-	if err != nil {
-		msg := fmt.Sprintf("Validation for PublishVolume Request: %+v has failed. Error: %v", *req, err)
-		log.Errorf(msg)
-		return nil, err
-	}
+	spCtx, span := opentracing.StartSpan(ctx, "CsiAttachVolume")
+	defer span.Finish()
+	span.SetTag("volumeId", req.VolumeId)
+	span.SetTag("nodeId", req.NodeId)
 
-	vmuuid, err := getVMUUIDFromK8sCloudOperatorService(ctx, req.VolumeId, req.NodeId)
-	if err != nil {
-		msg := fmt.Sprintf("Failed to get the pod vmuuid annotation from the k8sCloudOperator service when processing attach for volumeID: %s on node: %s. Error: %+v", req.VolumeId, req.NodeId, err)
-		log.Error(msg)
-		return nil, status.Errorf(codes.Internal, msg)
-	}
+	span.LogFields(
+		opentracinglog.String("event", "attach-volume start"),
+	)
+	controllerPublishVolumeInternal := func (ctx context.Context) (*csi.ControllerPublishVolumeResponse, error) {
+		log.Infof("ControllerPublishVolume: called with args %+v", *req)
 
-	vcdcMap, err := getDatacenterFromConfig(c.manager.CnsConfig)
-	if err != nil {
-		msg := fmt.Sprintf("failed to get datacenter from config with error: %+v", err)
-		log.Error(msg)
-		return nil, status.Errorf(codes.Internal, msg)
-	}
-	var vCenterHost, dcMorefValue string
-	for key, value := range vcdcMap {
-		vCenterHost = key
-		dcMorefValue = value
-	}
-	vc, err := c.manager.VcenterManager.GetVirtualCenter(ctx, vCenterHost)
-	if err != nil {
-		msg := fmt.Sprintf("Cannot get virtual center %s from virtualcentermanager while attaching disk with error %+v",
-			vc.Config.Host, err)
-		log.Error(msg)
-		return nil, status.Errorf(codes.Internal, msg)
-	}
+		err := validateWCPControllerPublishVolumeRequest(ctx, req)
+		if err != nil {
+			msg := fmt.Sprintf("Validation for PublishVolume Request: %+v has failed. Error: %v", *req, err)
+			log.Errorf(msg)
+			return nil, err
+		}
 
-	// Connect to VC
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	err = vc.Connect(ctx)
-	if err != nil {
-		msg := fmt.Sprintf("failed to connect to Virtual Center: %s", vc.Config.Host)
-		log.Error(msg)
-		return nil, status.Errorf(codes.Internal, msg)
-	}
+		vmuuid, err := getVMUUIDFromK8sCloudOperatorService(ctx, req.VolumeId, req.NodeId)
+		if err != nil {
+			msg := fmt.Sprintf("Failed to get the pod vmuuid annotation from the k8sCloudOperator service when processing attach for volumeID: %s on node: %s. Error: %+v", req.VolumeId, req.NodeId, err)
+			log.Error(msg)
+			return nil, status.Errorf(codes.Internal, msg)
+		}
 
-	podVM, err := getVMByInstanceUUIDInDatacenter(ctx, vc, dcMorefValue, vmuuid)
-	if err != nil {
-		msg := fmt.Sprintf("failed to the PodVM Moref from the PodVM UUID: %s in datacenter: %s with err: %+v", vmuuid, dcMorefValue, err)
-		log.Error(msg)
-		return nil, status.Errorf(codes.Internal, msg)
-	}
+		vcdcMap, err := getDatacenterFromConfig(c.manager.CnsConfig)
+		if err != nil {
+			msg := fmt.Sprintf("failed to get datacenter from config with error: %+v", err)
+			log.Error(msg)
+			return nil, status.Errorf(codes.Internal, msg)
+		}
+		var vCenterHost, dcMorefValue string
+		for key, value := range vcdcMap {
+			vCenterHost = key
+			dcMorefValue = value
+		}
+		vc, err := c.manager.VcenterManager.GetVirtualCenter(ctx, vCenterHost)
+		if err != nil {
+			msg := fmt.Sprintf("Cannot get virtual center %s from virtualcentermanager while attaching disk with error %+v",
+				vc.Config.Host, err)
+			log.Error(msg)
+			return nil, status.Errorf(codes.Internal, msg)
+		}
 
-	// Attach the volume to the node
-	diskUUID, err := common.AttachVolumeUtil(ctx, c.manager, podVM, req.VolumeId)
-	if err != nil {
-		if commonco.ContainerOrchestratorUtility.IsFSSEnabled(ctx, common.FakeAttach) {
-			log.Infof("Volume attachment failed. Checking if it can be fake attached")
-			var capabilities []*csi.VolumeCapability
-			capabilities = append(capabilities, req.VolumeCapability)
-			if !common.IsFileVolumeRequest(ctx, capabilities) { //Block volume
-				allowed, err := commonco.ContainerOrchestratorUtility.IsFakeAttachAllowed(ctx, req.VolumeId, c.manager.VolumeManager)
-				if err != nil {
-					msg := fmt.Sprintf("failed to determine if volume: %s can be fake attached. Error: %+v", req.VolumeId, err)
-					log.Error(msg)
-					return nil, status.Errorf(codes.Internal, msg)
-				}
+		// Connect to VC
+		err = vc.Connect(ctx)
+		if err != nil {
+			msg := fmt.Sprintf("failed to connect to Virtual Center: %s", vc.Config.Host)
+			log.Error(msg)
+			return nil, status.Errorf(codes.Internal, msg)
+		}
 
-				if allowed {
-					// Mark the volume as fake attached before returning response
-					err := commonco.ContainerOrchestratorUtility.MarkFakeAttached(ctx, req.VolumeId)
+		podVM, err := getVMByInstanceUUIDInDatacenter(ctx, vc, dcMorefValue, vmuuid)
+		if err != nil {
+			msg := fmt.Sprintf("failed to the PodVM Moref from the PodVM UUID: %s in datacenter: %s with err: %+v", vmuuid, dcMorefValue, err)
+			log.Error(msg)
+			return nil, status.Errorf(codes.Internal, msg)
+		}
+
+		// Attach the volume to the node
+		diskUUID, err := common.AttachVolumeUtil(ctx, c.manager, podVM, req.VolumeId)
+		if err != nil {
+			if commonco.ContainerOrchestratorUtility.IsFSSEnabled(ctx, common.FakeAttach) {
+				log.Infof("Volume attachment failed. Checking if it can be fake attached")
+				var capabilities []*csi.VolumeCapability
+				capabilities = append(capabilities, req.VolumeCapability)
+				if !common.IsFileVolumeRequest(ctx, capabilities) { //Block volume
+					allowed, err := commonco.ContainerOrchestratorUtility.IsFakeAttachAllowed(ctx, req.VolumeId, c.manager.VolumeManager)
 					if err != nil {
-						msg := fmt.Sprintf("failed to mark volume: %s as fake attached. Error: %+v", req.VolumeId, err)
+						msg := fmt.Sprintf("failed to determine if volume: %s can be fake attached. Error: %+v", req.VolumeId, err)
 						log.Error(msg)
 						return nil, status.Errorf(codes.Internal, msg)
 					}
 
-					publishInfo := make(map[string]string)
-					publishInfo[common.AttributeDiskType] = common.DiskTypeBlockVolume
-					publishInfo[common.AttributeFakeAttached] = "true"
+					if allowed {
+						// Mark the volume as fake attached before returning response
+						err := commonco.ContainerOrchestratorUtility.MarkFakeAttached(ctx, req.VolumeId)
+						if err != nil {
+							msg := fmt.Sprintf("failed to mark volume: %s as fake attached. Error: %+v", req.VolumeId, err)
+							log.Error(msg)
+							return nil, status.Errorf(codes.Internal, msg)
+						}
 
-					resp := &csi.ControllerPublishVolumeResponse{
-						PublishContext: publishInfo,
+						publishInfo := make(map[string]string)
+						publishInfo[common.AttributeDiskType] = common.DiskTypeBlockVolume
+						publishInfo[common.AttributeFakeAttached] = "true"
+
+						resp := &csi.ControllerPublishVolumeResponse{
+							PublishContext: publishInfo,
+						}
+						log.Infof("Volume %s has been fake attached", req.VolumeId)
+						return resp, nil
 					}
-					log.Infof("Volume %s has been fake attached", req.VolumeId)
-					return resp, nil
 				}
+
+				log.Infof("Volume %s is not eligible to be fake attached", req.VolumeId)
 			}
-
-			log.Infof("Volume %s is not eligible to be fake attached", req.VolumeId)
+			msg := fmt.Sprintf("failed to attach volume with volumeID: %s. Error: %+v", req.VolumeId, err)
+			log.Error(msg)
+			return nil, status.Errorf(codes.Internal, msg)
 		}
-		msg := fmt.Sprintf("failed to attach volume with volumeID: %s. Error: %+v", req.VolumeId, err)
-		log.Error(msg)
-		return nil, status.Errorf(codes.Internal, msg)
-	}
 
-	publishInfo := make(map[string]string)
-	publishInfo[common.AttributeDiskType] = common.DiskTypeBlockVolume
-	publishInfo[common.AttributeFirstClassDiskUUID] = common.FormatDiskUUID(diskUUID)
-	resp := &csi.ControllerPublishVolumeResponse{
-		PublishContext: publishInfo,
+		publishInfo := make(map[string]string)
+		publishInfo[common.AttributeDiskType] = common.DiskTypeBlockVolume
+		publishInfo[common.AttributeFirstClassDiskUUID] = common.FormatDiskUUID(diskUUID)
+		resp := &csi.ControllerPublishVolumeResponse{
+			PublishContext: publishInfo,
+		}
+		return resp, nil
 	}
-
-	return resp, nil
+	resp, err := controllerPublishVolumeInternal(spCtx)
+	if err != nil {
+		span.LogKV("event", "attach-volume fail")
+	} else {
+		span.LogKV("event", "attach-volume success")
+	}
+	return resp, err
 }
 
 // ControllerUnpublishVolume detaches a volume from the Node VM.
@@ -641,23 +695,43 @@ func (c *controller) ControllerUnpublishVolume(ctx context.Context, req *csi.Con
 	*csi.ControllerUnpublishVolumeResponse, error) {
 	ctx = logger.NewContextWithLogger(ctx)
 	log := logger.GetLogger(ctx)
-	log.Infof("ControllerUnpublishVolume: called with args %+v", *req)
-	err := validateWCPControllerUnpublishVolumeRequest(ctx, req)
-	if err != nil {
-		msg := fmt.Sprintf("Validation for UnpublishVolume Request: %+v has failed. Error: %v", *req, err)
-		log.Error(msg)
-		return nil, err
-	}
+	spanCtx, span := opentracing.StartSpan(ctx, "CsiDetachVolume")
+	defer span.Finish()
+	span.SetTag("volumeId", req.VolumeId)
+	span.SetTag("nodeId", req.NodeId)
 
-	if commonco.ContainerOrchestratorUtility.IsFSSEnabled(ctx, common.FakeAttach) {
-		// Check if the volume was fake attached and unmark it as not fake attached
-		if err := commonco.ContainerOrchestratorUtility.ClearFakeAttached(ctx, req.VolumeId); err != nil {
-			msg := fmt.Sprintf("Failed to unmark volume as not fake attached. Error: %v", err)
+	span.LogFields(
+		opentracinglog.String("event", "attach-volume start"),
+	)
+
+	internalControllerUnpublishVolume := func(ctx context.Context) (
+		*csi.ControllerUnpublishVolumeResponse, error) {
+
+		log.Infof("ControllerUnpublishVolume: called with args %+v", *req)
+		err := validateWCPControllerUnpublishVolumeRequest(ctx, req)
+		if err != nil {
+			msg := fmt.Sprintf("Validation for UnpublishVolume Request: %+v has failed. Error: %v", *req, err)
 			log.Error(msg)
 			return nil, err
 		}
+
+		if commonco.ContainerOrchestratorUtility.IsFSSEnabled(ctx, common.FakeAttach) {
+			// Check if the volume was fake attached and unmark it as not fake attached
+			if err := commonco.ContainerOrchestratorUtility.ClearFakeAttached(ctx, req.VolumeId); err != nil {
+				msg := fmt.Sprintf("Failed to unmark volume as not fake attached. Error: %v", err)
+				log.Error(msg)
+				return nil, err
+			}
+		}
+		return &csi.ControllerUnpublishVolumeResponse{}, nil
 	}
-	return &csi.ControllerUnpublishVolumeResponse{}, nil
+	resp, err := internalControllerUnpublishVolume(spanCtx)
+	if err != nil {
+		span.LogKV("event", "detach-volume fail")
+	} else {
+		span.LogKV("event", "detach-volume success")
+	}
+	return resp, err
 }
 
 // ValidateVolumeCapabilities returns the capabilities of the volume.

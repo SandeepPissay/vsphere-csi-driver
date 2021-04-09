@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	opentracing2 "github.com/opentracing/opentracing-go"
 	"strconv"
 	"strings"
 
@@ -222,6 +223,10 @@ func GetsvMotionPlanFromK8sCloudOperatorService(ctx context.Context, storagePool
 // getVMUUIDFromK8sCloudOperatorService gets the vmuuid from K8sCloudOperator gRPC service
 func getVMUUIDFromK8sCloudOperatorService(ctx context.Context, volumeID string, nodeName string) (string, error) {
 	log := logger.GetLogger(ctx)
+	var sp opentracing2.Span
+	sp, ctx = opentracing2.StartSpanFromContext(ctx, "getVMUUIDFromK8sCloudOperatorService")
+	defer sp.Finish()
+
 	conn, err := getK8sCloudOperatorClientConnection(ctx)
 	if err != nil {
 		log.Errorf("Failed to establish the connection to k8s cloud operator service when processing attach for volumeID: %s. Error: %+v", volumeID, err)

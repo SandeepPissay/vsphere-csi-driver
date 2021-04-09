@@ -337,7 +337,7 @@ func (m *defaultManager) AttachVolume(ctx context.Context, vm *cnsvsphere.Virtua
 	var sp opentracing2.Span
 	sp, ctx = opentracing2.StartSpanFromContext(ctx, "CnsAttachVolume")
 	defer sp.Finish()
-	sp.SetTag("VM", vm.Reference().Value)
+	sp.SetTag("vmMoid", vm.Reference().Value)
 	sp.SetTag("volumeId", volumeID)
 
 	internalAttachVolume := func() (string, error) {
@@ -428,7 +428,7 @@ func (m *defaultManager) DetachVolume(ctx context.Context, vm *cnsvsphere.Virtua
 	var sp opentracing2.Span
 	sp, ctx = opentracing2.StartSpanFromContext(ctx, "CnsDetachVolume")
 	defer sp.Finish()
-	sp.SetTag("VM", vm.Reference().Value)
+	sp.SetTag("vmMoid", vm.Reference().Value)
 	sp.SetTag("volumeId", volumeID)
 
 	internalDetachVolume := func() error {

@@ -632,7 +632,7 @@ func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 	*csi.CreateVolumeResponse, error) {
 	start := time.Now()
 	volumeType := prometheus.PrometheusUnknownVolumeType
-	spanCtx, span := opentracing.StartSpan(ctx, "create-volume")
+	spanCtx, span := opentracing.StartSpan(ctx, "CsiCreateVolume")
 	defer span.Finish()
 	span.SetTag("volumeName", req.Name)
 
@@ -677,6 +677,7 @@ func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 		prometheus.CsiControlOpsHistVec.WithLabelValues(volumeType, prometheus.PrometheusCreateVolumeOpType,
 			prometheus.PrometheusPassStatus).Observe(time.Since(start).Seconds())
 		span.LogKV("event", "create-volume success")
+		span.SetTag("volumeId", resp.Volume.VolumeId)
 	}
 	return resp, err
 }
@@ -686,7 +687,7 @@ func (c *controller) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequ
 	*csi.DeleteVolumeResponse, error) {
 	start := time.Now()
 	volumeType := prometheus.PrometheusUnknownVolumeType
-	spCtx, span := opentracing.StartSpan(ctx, "delete-volume")
+	spCtx, span := opentracing.StartSpan(ctx, "CsiDeleteVolume")
 	defer span.Finish()
 	span.SetTag("volumeId", req.VolumeId)
 
@@ -766,7 +767,7 @@ func (c *controller) ControllerPublishVolume(ctx context.Context, req *csi.Contr
 	*csi.ControllerPublishVolumeResponse, error) {
 	start := time.Now()
 	volumeType := prometheus.PrometheusUnknownVolumeType
-	spanCtx, span := opentracing.StartSpan(ctx, "attach-volume")
+	spanCtx, span := opentracing.StartSpan(ctx, "CsiAttachVolume")
 	defer span.Finish()
 	span.SetTag("volumeId", req.VolumeId)
 	span.SetTag("nodeId", req.NodeId)
@@ -896,7 +897,7 @@ func (c *controller) ControllerUnpublishVolume(ctx context.Context, req *csi.Con
 	*csi.ControllerUnpublishVolumeResponse, error) {
 	start := time.Now()
 	volumeType := prometheus.PrometheusUnknownVolumeType
-	spanCtx, span := opentracing.StartSpan(ctx, "detach-volume")
+	spanCtx, span := opentracing.StartSpan(ctx, "CsiDetachVolume")
 	defer span.Finish()
 	span.SetTag("volumeId", req.VolumeId)
 	span.SetTag("nodeId", req.NodeId)
