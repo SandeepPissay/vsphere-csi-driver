@@ -18,8 +18,10 @@ package wcpguest
 
 import (
 	"fmt"
+	opentracinglog "github.com/opentracing/opentracing-go/log"
 	"net/http"
 	"path/filepath"
+	"sigs.k8s.io/vsphere-csi-driver/pkg/common/opentracing"
 	"strconv"
 	"strings"
 	"time"
@@ -85,6 +87,14 @@ func (c *controller) Init(config *cnsconfig.Config, version string) error {
 	defer cancel()
 	ctx = logger.NewContextWithLogger(ctx)
 	log := logger.GetLogger(ctx)
+
+	opentracing.InitJaeger(config)
+	_, span := opentracing.StartSpan(ctx, "init-csi-controller")
+	defer span.Finish()
+
+	span.LogFields(
+		opentracinglog.String("event", "init-csi-controller"),
+	)
 
 	log.Infof("Initializing WCPGC CSI controller")
 	var err error
@@ -180,6 +190,7 @@ func (c *controller) Init(config *cnsconfig.Config, version string) error {
 			log.Info("Restarting http server to expose Prometheus metrics..")
 		}
 	}()
+	span.LogKV("event", "end of init-csi-controller")
 	return nil
 }
 
@@ -228,7 +239,14 @@ func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 
 	start := time.Now()
 	volumeType := prometheus.PrometheusUnknownVolumeType
-	createVolumeInternal := func() (
+	spanCtx, span := opentracing.StartSpan(ctx, "PvCsiCreateVolume")
+	defer span.Finish()
+	span.SetTag("volumeName", req.Name)
+
+	span.LogFields(
+		opentracinglog.String("event", "create-volume start"),
+	)
+	createVolumeInternal := func(ctx context.Context) (
 		*csi.CreateVolumeResponse, error) {
 
 		ctx = logger.NewContextWithLogger(ctx)
@@ -312,13 +330,16 @@ func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 		}
 		return resp, nil
 	}
-	resp, err := createVolumeInternal()
+	resp, err := createVolumeInternal(spanCtx)
 	if err != nil {
 		prometheus.CsiControlOpsHistVec.WithLabelValues(volumeType, prometheus.PrometheusCreateVolumeOpType,
 			prometheus.PrometheusFailStatus).Observe(time.Since(start).Seconds())
+		span.LogKV("event", "create-volume fail")
 	} else {
 		prometheus.CsiControlOpsHistVec.WithLabelValues(volumeType, prometheus.PrometheusCreateVolumeOpType,
 			prometheus.PrometheusPassStatus).Observe(time.Since(start).Seconds())
+		span.LogKV("event", "create-volume success")
+		span.SetTag("volumeId", resp.Volume.VolumeId)
 	}
 	return resp, err
 }
@@ -329,8 +350,14 @@ func (c *controller) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequ
 
 	start := time.Now()
 	volumeType := prometheus.PrometheusUnknownVolumeType
+	spCtx, span := opentracing.StartSpan(ctx, "PvCsiDeleteVolume")
+	defer span.Finish()
+	span.SetTag("volumeId", req.VolumeId)
+	span.LogFields(
+		opentracinglog.String("event", "delete-volume start"),
+	)
 
-	deleteVolumeInternal := func() (
+	deleteVolumeInternal := func(ctx context.Context) (
 		*csi.DeleteVolumeResponse, error) {
 		ctx = logger.NewContextWithLogger(ctx)
 		log := logger.GetLogger(ctx)
@@ -372,13 +399,15 @@ func (c *controller) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequ
 		log.Infof("DeleteVolume: Volume deleted successfully. VolumeID: %q", req.VolumeId)
 		return &csi.DeleteVolumeResponse{}, nil
 	}
-	resp, err := deleteVolumeInternal()
+	resp, err := deleteVolumeInternal(spCtx)
 	if err != nil {
 		prometheus.CsiControlOpsHistVec.WithLabelValues(volumeType, prometheus.PrometheusDeleteVolumeOpType,
 			prometheus.PrometheusFailStatus).Observe(time.Since(start).Seconds())
+		span.LogKV("event", "delete-volume fail")
 	} else {
 		prometheus.CsiControlOpsHistVec.WithLabelValues(volumeType, prometheus.PrometheusDeleteVolumeOpType,
 			prometheus.PrometheusPassStatus).Observe(time.Since(start).Seconds())
+		span.LogKV("event", "delete-volume success")
 	}
 	return resp, err
 }
@@ -389,8 +418,17 @@ func (c *controller) ControllerPublishVolume(ctx context.Context, req *csi.Contr
 	*csi.ControllerPublishVolumeResponse, error) {
 	start := time.Now()
 	volumeType := prometheus.PrometheusUnknownVolumeType
+	spCtx, span := opentracing.StartSpan(ctx, "PvCsiAttachVolume")
+	defer span.Finish()
+	span.SetTag("volumeId", req.VolumeId)
+	span.SetTag("nodeId", req.NodeId)
 
-	controllerPublishVolumeInternal := func() (
+	span.LogFields(
+		opentracinglog.String("event", "attach-volume start"),
+	)
+
+
+	controllerPublishVolumeInternal := func(ctx context.Context) (
 		*csi.ControllerPublishVolumeResponse, error) {
 
 		ctx = logger.NewContextWithLogger(ctx)
@@ -420,13 +458,15 @@ func (c *controller) ControllerPublishVolume(ctx context.Context, req *csi.Contr
 		// Block volumes support
 		return controllerPublishForBlockVolume(ctx, req, c)
 	}
-	resp, err := controllerPublishVolumeInternal()
+	resp, err := controllerPublishVolumeInternal(spCtx)
 	if err != nil {
 		prometheus.CsiControlOpsHistVec.WithLabelValues(volumeType, prometheus.PrometheusAttachVolumeOpType,
 			prometheus.PrometheusFailStatus).Observe(time.Since(start).Seconds())
+		span.LogKV("event", "attach-volume fail")
 	} else {
 		prometheus.CsiControlOpsHistVec.WithLabelValues(volumeType, prometheus.PrometheusAttachVolumeOpType,
 			prometheus.PrometheusPassStatus).Observe(time.Since(start).Seconds())
+		span.LogKV("event", "attach-volume success")
 	}
 	return resp, err
 }
@@ -696,8 +736,17 @@ func (c *controller) ControllerUnpublishVolume(ctx context.Context, req *csi.Con
 
 	start := time.Now()
 	volumeType := prometheus.PrometheusUnknownVolumeType
+	spanCtx, span := opentracing.StartSpan(ctx, "PvCsiDetachVolume")
+	defer span.Finish()
+	span.SetTag("volumeId", req.VolumeId)
+	span.SetTag("nodeId", req.NodeId)
 
-	controllerUnpublishVolumeInternal := func() (
+	span.LogFields(
+		opentracinglog.String("event", "attach-volume start"),
+	)
+
+
+	controllerUnpublishVolumeInternal := func(ctx context.Context) (
 		*csi.ControllerUnpublishVolumeResponse, error) {
 		ctx = logger.NewContextWithLogger(ctx)
 		log := logger.GetLogger(ctx)
@@ -733,13 +782,15 @@ func (c *controller) ControllerUnpublishVolume(ctx context.Context, req *csi.Con
 		volumeType = prometheus.PrometheusBlockVolumeType
 		return controllerUnpublishForBlockVolume(ctx, req, c)
 	}
-	resp, err := controllerUnpublishVolumeInternal()
+	resp, err := controllerUnpublishVolumeInternal(spanCtx)
 	if err != nil {
 		prometheus.CsiControlOpsHistVec.WithLabelValues(volumeType, prometheus.PrometheusDetachVolumeOpType,
 			prometheus.PrometheusFailStatus).Observe(time.Since(start).Seconds())
+		span.LogKV("event", "detach-volume fail")
 	} else {
 		prometheus.CsiControlOpsHistVec.WithLabelValues(volumeType, prometheus.PrometheusDetachVolumeOpType,
 			prometheus.PrometheusPassStatus).Observe(time.Since(start).Seconds())
+		span.LogKV("event", "detach-volume success")
 	}
 	return resp, err
 }

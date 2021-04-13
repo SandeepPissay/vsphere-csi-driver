@@ -82,7 +82,7 @@ func (c *controller) Init(config *cnsconfig.Config, version string) error {
 	log := logger.GetLogger(ctx)
 
 	log.Infof("Initializing CNS controller")
-	opentracing.InitJaeger("vsphere-csi", config)
+	opentracing.InitJaeger(config)
 	_, span := opentracing.StartSpan(ctx, "init-csi-controller")
 	defer span.Finish()
 
@@ -570,6 +570,9 @@ func (c *controller) ControllerPublishVolume(ctx context.Context, req *csi.Contr
 	*csi.ControllerPublishVolumeResponse, error) {
 	ctx = logger.NewContextWithLogger(ctx)
 	log := logger.GetLogger(ctx)
+	start := time.Now()
+	volumeType := prometheus.PrometheusBlockVolumeType
+
 	spCtx, span := opentracing.StartSpan(ctx, "CsiAttachVolume")
 	defer span.Finish()
 	span.SetTag("volumeId", req.VolumeId)
@@ -682,8 +685,12 @@ func (c *controller) ControllerPublishVolume(ctx context.Context, req *csi.Contr
 	}
 	resp, err := controllerPublishVolumeInternal(spCtx)
 	if err != nil {
+		prometheus.CsiControlOpsHistVec.WithLabelValues(volumeType, prometheus.PrometheusAttachVolumeOpType,
+			prometheus.PrometheusFailStatus).Observe(time.Since(start).Seconds())
 		span.LogKV("event", "attach-volume fail")
 	} else {
+		prometheus.CsiControlOpsHistVec.WithLabelValues(volumeType, prometheus.PrometheusAttachVolumeOpType,
+			prometheus.PrometheusPassStatus).Observe(time.Since(start).Seconds())
 		span.LogKV("event", "attach-volume success")
 	}
 	return resp, err
@@ -695,6 +702,8 @@ func (c *controller) ControllerUnpublishVolume(ctx context.Context, req *csi.Con
 	*csi.ControllerUnpublishVolumeResponse, error) {
 	ctx = logger.NewContextWithLogger(ctx)
 	log := logger.GetLogger(ctx)
+	start := time.Now()
+	volumeType := prometheus.PrometheusBlockVolumeType
 	spanCtx, span := opentracing.StartSpan(ctx, "CsiDetachVolume")
 	defer span.Finish()
 	span.SetTag("volumeId", req.VolumeId)
@@ -727,8 +736,12 @@ func (c *controller) ControllerUnpublishVolume(ctx context.Context, req *csi.Con
 	}
 	resp, err := internalControllerUnpublishVolume(spanCtx)
 	if err != nil {
+		prometheus.CsiControlOpsHistVec.WithLabelValues(volumeType, prometheus.PrometheusDetachVolumeOpType,
+			prometheus.PrometheusFailStatus).Observe(time.Since(start).Seconds())
 		span.LogKV("event", "detach-volume fail")
 	} else {
+		prometheus.CsiControlOpsHistVec.WithLabelValues(volumeType, prometheus.PrometheusDetachVolumeOpType,
+			prometheus.PrometheusPassStatus).Observe(time.Since(start).Seconds())
 		span.LogKV("event", "detach-volume success")
 	}
 	return resp, err

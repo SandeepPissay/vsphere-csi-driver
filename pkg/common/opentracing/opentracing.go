@@ -14,7 +14,7 @@ import (
 var clusterId string
 
 // InitJaeger returns an instance of Jaeger Tracer that samples 100% of traces and logs all spans to stdout.
-func InitJaeger(service string, csiconfig *cnsconfig.Config){
+func InitJaeger(csiconfig *cnsconfig.Config){
 	cfg, _ := config.FromEnv()
 	var err error
 	tracer, _, err := cfg.NewTracer(config.Logger(log.StdLogger), config.Metrics(jprom.New()))

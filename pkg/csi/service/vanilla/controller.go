@@ -80,7 +80,7 @@ func (c *controller) Init(config *cnsconfig.Config, version string) error {
 	log := logger.GetLogger(ctx)
 
 	log.Infof("Initializing CNS controller")
-	opentracing.InitJaeger("vsphere-csi", config)
+	opentracing.InitJaeger(config)
 	_, span := opentracing.StartSpan(ctx, "init-csi-controller")
 	defer span.Finish()
 
