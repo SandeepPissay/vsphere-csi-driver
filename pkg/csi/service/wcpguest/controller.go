@@ -387,31 +387,48 @@ func (c *controller) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequ
 // volume id and node name is retrieved from ControllerPublishVolumeRequest
 func (c *controller) ControllerPublishVolume(ctx context.Context, req *csi.ControllerPublishVolumeRequest) (
 	*csi.ControllerPublishVolumeResponse, error) {
+	start := time.Now()
+	volumeType := prometheus.PrometheusUnknownVolumeType
 
-	ctx = logger.NewContextWithLogger(ctx)
-	log := logger.GetLogger(ctx)
-	log.Infof("ControllerPublishVolume: called with args %+v", *req)
-	// Check whether the request is for a block or file volume
-	isFileVolumeRequest := common.IsFileVolumeRequest(ctx, []*csi.VolumeCapability{req.GetVolumeCapability()})
+	controllerPublishVolumeInternal := func() (
+		*csi.ControllerPublishVolumeResponse, error) {
 
-	err := validateGuestClusterControllerPublishVolumeRequest(ctx, req)
-	if err != nil {
-		msg := fmt.Sprintf("Validation for PublishVolume Request: %+v has failed. Error: %v", *req, err)
-		log.Error(msg)
-		return nil, status.Errorf(codes.Internal, msg)
-	}
+		ctx = logger.NewContextWithLogger(ctx)
+		log := logger.GetLogger(ctx)
+		log.Infof("ControllerPublishVolume: called with args %+v", *req)
+		// Check whether the request is for a block or file volume
+		isFileVolumeRequest := common.IsFileVolumeRequest(ctx, []*csi.VolumeCapability{req.GetVolumeCapability()})
 
-	// File volumes support
-	if isFileVolumeRequest {
-		// Check the feature state for file volume support
-		if !commonco.ContainerOrchestratorUtility.IsFSSEnabled(ctx, common.FileVolume) {
-			// Feature is disabled on the cluster
-			return nil, status.Error(codes.InvalidArgument, "File volume not supported.")
+		err := validateGuestClusterControllerPublishVolumeRequest(ctx, req)
+		if err != nil {
+			msg := fmt.Sprintf("Validation for PublishVolume Request: %+v has failed. Error: %v", *req, err)
+			log.Error(msg)
+			return nil, status.Errorf(codes.Internal, msg)
 		}
-		return controllerPublishForFileVolume(ctx, req, c)
+
+		// File volumes support
+		if isFileVolumeRequest {
+			volumeType = prometheus.PrometheusFileVolumeType
+			// Check the feature state for file volume support
+			if !commonco.ContainerOrchestratorUtility.IsFSSEnabled(ctx, common.FileVolume) {
+				// Feature is disabled on the cluster
+				return nil, status.Error(codes.InvalidArgument, "File volume not supported.")
+			}
+			return controllerPublishForFileVolume(ctx, req, c)
+		}
+		volumeType = prometheus.PrometheusFileVolumeType
+		// Block volumes support
+		return controllerPublishForBlockVolume(ctx, req, c)
 	}
-	// Block volumes support
-	return controllerPublishForBlockVolume(ctx, req, c)
+	resp, err := controllerPublishVolumeInternal()
+	if err != nil {
+		prometheus.CsiControlOpsHistVec.WithLabelValues(volumeType, prometheus.PrometheusAttachVolumeOpType,
+			prometheus.PrometheusFailStatus).Observe(time.Since(start).Seconds())
+	} else {
+		prometheus.CsiControlOpsHistVec.WithLabelValues(volumeType, prometheus.PrometheusAttachVolumeOpType,
+			prometheus.PrometheusPassStatus).Observe(time.Since(start).Seconds())
+	}
+	return resp, err
 }
 
 // controllerPublishForBlockVolume is a helper mthod for handling ControllerPublishVolume request for Block volumes
@@ -677,37 +694,54 @@ func controllerPublishForFileVolume(ctx context.Context, req *csi.ControllerPubl
 func (c *controller) ControllerUnpublishVolume(ctx context.Context, req *csi.ControllerUnpublishVolumeRequest) (
 	*csi.ControllerUnpublishVolumeResponse, error) {
 
-	ctx = logger.NewContextWithLogger(ctx)
-	log := logger.GetLogger(ctx)
-	log.Infof("ControllerUnpublishVolume: called with args %+v", *req)
-	err := validateGuestClusterControllerUnpublishVolumeRequest(ctx, req)
-	if err != nil {
-		msg := fmt.Sprintf("Validation for UnpublishVolume Request: %+v has failed. Error: %v", *req, err)
-		log.Error(msg)
-		return nil, err
-	}
+	start := time.Now()
+	volumeType := prometheus.PrometheusUnknownVolumeType
 
-	// Retrieve Supervisor PVC
-	svPVC, err := c.supervisorClient.CoreV1().PersistentVolumeClaims(c.supervisorNamespace).Get(ctx, req.VolumeId, metav1.GetOptions{})
+	controllerUnpublishVolumeInternal := func() (
+		*csi.ControllerUnpublishVolumeResponse, error) {
+		ctx = logger.NewContextWithLogger(ctx)
+		log := logger.GetLogger(ctx)
+		log.Infof("ControllerUnpublishVolume: called with args %+v", *req)
+		err := validateGuestClusterControllerUnpublishVolumeRequest(ctx, req)
+		if err != nil {
+			msg := fmt.Sprintf("Validation for UnpublishVolume Request: %+v has failed. Error: %v", *req, err)
+			log.Error(msg)
+			return nil, err
+		}
+
+		// Retrieve Supervisor PVC
+		svPVC, err := c.supervisorClient.CoreV1().PersistentVolumeClaims(c.supervisorNamespace).Get(ctx, req.VolumeId, metav1.GetOptions{})
+		if err != nil {
+			msg := fmt.Sprintf("failed to retrieve supervisor PVC %q in %q namespace. Error: %+v", req.VolumeId, c.supervisorNamespace, err)
+			log.Error(msg)
+			return nil, status.Error(codes.Internal, msg)
+		}
+		var isFileVolume bool
+		for _, accessMode := range svPVC.Spec.AccessModes {
+			if accessMode == corev1.ReadWriteMany || accessMode == corev1.ReadOnlyMany {
+				isFileVolume = true
+			}
+		}
+		if isFileVolume {
+			volumeType = prometheus.PrometheusFileVolumeType
+			if commonco.ContainerOrchestratorUtility.IsFSSEnabled(ctx, common.FileVolume) {
+				return controllerUnpublishForFileVolume(ctx, req, c)
+			}
+			// Feature is disabled on the cluster
+			return nil, status.Error(codes.InvalidArgument, "File volume not supported.")
+		}
+		volumeType = prometheus.PrometheusBlockVolumeType
+		return controllerUnpublishForBlockVolume(ctx, req, c)
+	}
+	resp, err := controllerUnpublishVolumeInternal()
 	if err != nil {
-		msg := fmt.Sprintf("failed to retrieve supervisor PVC %q in %q namespace. Error: %+v", req.VolumeId, c.supervisorNamespace, err)
-		log.Error(msg)
-		return nil, status.Error(codes.Internal, msg)
+		prometheus.CsiControlOpsHistVec.WithLabelValues(volumeType, prometheus.PrometheusDetachVolumeOpType,
+			prometheus.PrometheusFailStatus).Observe(time.Since(start).Seconds())
+	} else {
+		prometheus.CsiControlOpsHistVec.WithLabelValues(volumeType, prometheus.PrometheusDetachVolumeOpType,
+			prometheus.PrometheusPassStatus).Observe(time.Since(start).Seconds())
 	}
-	var isFileVolume bool
-	for _, accessMode := range svPVC.Spec.AccessModes {
-		if accessMode == corev1.ReadWriteMany || accessMode == corev1.ReadOnlyMany {
-			isFileVolume = true
-		}
-	}
-	if isFileVolume {
-		if commonco.ContainerOrchestratorUtility.IsFSSEnabled(ctx, common.FileVolume) {
-			return controllerUnpublishForFileVolume(ctx, req, c)
-		}
-		// Feature is disabled on the cluster
-		return nil, status.Error(codes.InvalidArgument, "File volume not supported.")
-	}
-	return controllerUnpublishForBlockVolume(ctx, req, c)
+	return resp, err
 }
 
 // controllerUnpublishForBlockVolume is helper method to handle ControllerPublishVolume for Block volumes
