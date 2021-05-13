@@ -627,10 +627,21 @@ func (s *service) NodeGetInfo(
 
 	var nodeInfoResponse *csi.NodeGetInfoResponse
 
-	nodeID := os.Getenv("NODE_NAME")
-	if nodeID == "" {
-		return nil, status.Error(codes.Internal, "ENV NODE_NAME is not set")
+	// Get VM UUID
+	nodeID, err := getSystemUUID(ctx)
+	if err != nil {
+		log.Errorf("failed to get system uuid for node VM")
+		return nil, status.Errorf(codes.Internal, err.Error())
 	}
+	if nodeID == "" {
+		return nil, status.Error(codes.Internal, "Could not retrieve VM UUID for the node")
+	}
+	nodeID, err = convertUUID(nodeID)
+	if err != nil {
+		log.Errorf("convertUUID failed with error: %v", err)
+		return nil, status.Errorf(codes.Internal, err.Error())
+	}
+	nodeID = "ProviderID###" + nodeID
 	if cnstypes.CnsClusterFlavor(os.Getenv(csitypes.EnvClusterFlavor)) == cnstypes.CnsClusterFlavorGuest {
 		nodeInfoResponse = &csi.NodeGetInfoResponse{
 			NodeId:             nodeID,
@@ -644,7 +655,7 @@ func (s *service) NodeGetInfo(
 	if cfgPath == "" {
 		cfgPath = cnsconfig.DefaultCloudConfigPath
 	}
-	cfg, err := cnsconfig.GetCnsconfig(ctx, cfgPath)
+	cfg, err = cnsconfig.GetCnsconfig(ctx, cfgPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			log.Infof("Config file not provided to node daemonset. Assuming non-topology aware cluster.")

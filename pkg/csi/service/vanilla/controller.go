@@ -52,6 +52,7 @@ type NodeManagerInterface interface {
 	GetSharedDatastoresInK8SCluster(ctx context.Context) ([]*cnsvsphere.DatastoreInfo, error)
 	GetSharedDatastoresInTopology(ctx context.Context, topologyRequirement *csi.TopologyRequirement, tagManager *tags.Manager, zoneKey string, regionKey string) ([]*cnsvsphere.DatastoreInfo, map[string][]map[string]string, error)
 	GetNodeByName(ctx context.Context, nodeName string) (*cnsvsphere.VirtualMachine, error)
+	GetNodeByUuid(ctx context.Context, nodeUuid string) (*cnsvsphere.VirtualMachine, error)
 	GetAllNodes(ctx context.Context) ([]*cnsvsphere.VirtualMachine, error)
 }
 
@@ -818,7 +819,12 @@ func (c *controller) ControllerPublishVolume(ctx context.Context, req *csi.Contr
 					return nil, status.Errorf(codes.Internal, msg)
 				}
 			}
-			node, err := c.nodeMgr.GetNodeByName(ctx, req.NodeId)
+			var node *cnsvsphere.VirtualMachine
+			if strings.HasPrefix(req.NodeId, "ProviderID###") {
+				node, err = c.nodeMgr.GetNodeByUuid(ctx, strings.Split(req.NodeId, "###")[1])
+			} else {
+				node, err = c.nodeMgr.GetNodeByName(ctx, req.NodeId)
+			}
 			if err != nil {
 				msg := fmt.Sprintf("failed to find VirtualMachine for node:%q. Error: %v", req.NodeId, err)
 				log.Error(msg)
@@ -926,7 +932,12 @@ func (c *controller) ControllerUnpublishVolume(ctx context.Context, req *csi.Con
 		}
 		// Block Volume
 		volumeType = prometheus.PrometheusBlockVolumeType
-		node, err := c.nodeMgr.GetNodeByName(ctx, req.NodeId)
+		var node *cnsvsphere.VirtualMachine
+		if strings.HasPrefix(req.NodeId, "ProviderID###") {
+			node, err = c.nodeMgr.GetNodeByUuid(ctx, strings.Split(req.NodeId, "###")[1])
+		} else {
+			node, err = c.nodeMgr.GetNodeByName(ctx, req.NodeId)
+		}
 		if err != nil {
 			msg := fmt.Sprintf("failed to find VirtualMachine for node:%q. Error: %v", req.NodeId, err)
 			log.Error(msg)
